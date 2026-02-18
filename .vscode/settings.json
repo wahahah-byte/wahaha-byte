@@ -1,0 +1,6 @@
+{
+    "search.followSymlinks": false,
+    "files.watcherExclude": {
+        "**/build/**": true
+    }
+}
