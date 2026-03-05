@@ -1,6 +1,7 @@
 {
     "search.followSymlinks": false,
     "files.watcherExclude": {
-        "**/build/**": true
+        "**/build/**": true,
+        "**/node_modules/**": true
     }
 }
