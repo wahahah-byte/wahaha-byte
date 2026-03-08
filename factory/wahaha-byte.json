@@ -1,0 +1,9 @@
+{
+	"name": "wahaha-byte",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "12040da6-2400-4c87-85b1-d0a6388293cd",
+		"tenantId": "49700b92-73a0-4f34-95dd-3851e48d0980"
+	}
+}
