@@ -1,0 +1,12 @@
+{
+	"name": "Blob To CSV",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobStorage",
+		"typeProperties": {
+			"connectionString": "DefaultEndpointsProtocol=https;AccountName=wahaha;EndpointSuffix=core.windows.net;",
+			"encryptedCredential": "ew0KICAiVmVyc2lvbiI6ICIyMDE3LTExLTMwIiwNCiAgIlByb3RlY3Rpb25Nb2RlIjogIktleSIsDQogICJTZWNyZXRDb250ZW50VHlwZSI6ICJQbGFpbnRleHQiLA0KICAiQ3JlZGVudGlhbElkIjogIkRBVEFGQUNUT1JZQEFDNEQ0Nzk4LTFGNjUtNDMzMC04MDk3LTg1NTYyNDgwRUNFMF9lN2YyNTNmYy02ZTk4LTRhN2QtOTMwNC1mZmM1MmVhOTM1MDgiDQp9"
+		}
+	}
+}
