@@ -1,0 +1,30 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "wahaha-byte"
+		},
+		"Blob To CSV_connectionString": {
+			"value": ""
+		},
+		"OutputSQL_password": {
+			"value": ""
+		},
+		"OutputSQL_properties_typeProperties_server": {
+			"value": "wahaha.database.windows.net"
+		},
+		"OutputSQL_properties_typeProperties_database": {
+			"value": "wahaha-db"
+		},
+		"OutputSQL_properties_typeProperties_userName": {
+			"value": "byte-admin"
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}
