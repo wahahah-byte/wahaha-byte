@@ -1,0 +1,56 @@
+{
+	"name": "MinigamesTbl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "OutputSQL",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SQL_tbl"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "game_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "name",
+				"type": "varchar"
+			},
+			{
+				"name": "description",
+				"type": "varchar"
+			},
+			{
+				"name": "max_points_reward",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "unlock_level",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "type",
+				"type": "varchar"
+			},
+			{
+				"name": "duration_seconds",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "difficulty",
+				"type": "varchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "minigames"
+		}
+	}
+}

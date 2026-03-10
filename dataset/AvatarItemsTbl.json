@@ -1,0 +1,58 @@
+{
+	"name": "AvatarItemsTbl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "OutputSQL",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SQL_tbl"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "item_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "name",
+				"type": "varchar"
+			},
+			{
+				"name": "category",
+				"type": "varchar"
+			},
+			{
+				"name": "slot",
+				"type": "varchar"
+			},
+			{
+				"name": "rarity",
+				"type": "varchar"
+			},
+			{
+				"name": "cost",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "description",
+				"type": "varchar"
+			},
+			{
+				"name": "preview_asset_url",
+				"type": "varchar"
+			},
+			{
+				"name": "is_available",
+				"type": "bit"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "avatar_items"
+		}
+	}
+}

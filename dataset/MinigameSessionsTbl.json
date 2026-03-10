@@ -1,0 +1,58 @@
+{
+	"name": "MinigameSessionsTbl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "OutputSQL",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SQL_tbl"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "session_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "user_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "game_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "score",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "points_earned",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "played_at",
+				"type": "date"
+			},
+			{
+				"name": "duration_seconds",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "outcome",
+				"type": "varchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "minigame_sessions"
+		}
+	}
+}

@@ -1,0 +1,58 @@
+{
+	"name": "StreaksTbl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "OutputSQL",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SQL_tbl"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "streak_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "user_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "streak_type",
+				"type": "varchar"
+			},
+			{
+				"name": "current_count",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "longest_count",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "last_activity_date",
+				"type": "date"
+			},
+			{
+				"name": "bonus_multiplier",
+				"type": "decimal",
+				"precision": 4,
+				"scale": 1
+			},
+			{
+				"name": "is_active",
+				"type": "bit"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "streaks"
+		}
+	}
+}
