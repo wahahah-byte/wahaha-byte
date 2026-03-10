@@ -12,7 +12,9 @@
 		"type": "DelimitedText",
 		"typeProperties": {
 			"location": {
-				"type": "AzureBlobStorageLocation"
+				"type": "AzureBlobStorageLocation",
+				"fileName": "streaks.csv",
+				"container": "input"
 			},
 			"columnDelimiter": ",",
 			"escapeChar": "\\",
