@@ -1,5 +1,5 @@
 {
-	"name": "TasksTbl",
+	"name": "StreaksTbl",
 	"properties": {
 		"linkedServiceName": {
 			"referenceName": "OutputSQL",
@@ -12,7 +12,7 @@
 		"type": "AzureSqlTable",
 		"schema": [
 			{
-				"name": "task_id",
+				"name": "streak_id",
 				"type": "int",
 				"precision": 10
 			},
@@ -22,54 +22,37 @@
 				"precision": 10
 			},
 			{
-				"name": "title",
+				"name": "streak_type",
 				"type": "varchar"
 			},
 			{
-				"name": "description",
-				"type": "varchar"
-			},
-			{
-				"name": "category",
-				"type": "varchar"
-			},
-			{
-				"name": "priority",
-				"type": "varchar"
-			},
-			{
-				"name": "status",
-				"type": "varchar"
-			},
-			{
-				"name": "point_value",
+				"name": "current_count",
 				"type": "int",
 				"precision": 10
 			},
 			{
-				"name": "due_date",
+				"name": "longest_count",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "last_activity_date",
 				"type": "date"
 			},
 			{
-				"name": "created_at",
-				"type": "date"
+				"name": "bonus_multiplier",
+				"type": "decimal",
+				"precision": 4,
+				"scale": 1
 			},
 			{
-				"name": "completed_at",
-				"type": "date"
-			},
-			{
-				"name": "is_recurring",
+				"name": "is_active",
 				"type": "bit"
-			},
-			{
-				"name": "recurrence_rule",
-				"type": "varchar"
 			}
 		],
 		"typeProperties": {
 			"schema": "dbo",
-			"table": "tasks"
+			"table": "streaks"
 		}
 	},
 	"type": "Microsoft.DataFactory/factories/datasets"

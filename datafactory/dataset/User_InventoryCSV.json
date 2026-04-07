@@ -1,0 +1,48 @@
+{
+	"name": "User_InventoryCSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Blob To CSV",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "CSV"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "user_inventory.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "inventory_id",
+				"type": "String"
+			},
+			{
+				"name": "user_id",
+				"type": "String"
+			},
+			{
+				"name": "item_id",
+				"type": "String"
+			},
+			{
+				"name": "acquired_at",
+				"type": "String"
+			},
+			{
+				"name": "is_equipped",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

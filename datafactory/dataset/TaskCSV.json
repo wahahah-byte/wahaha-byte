@@ -1,76 +1,80 @@
 {
-	"name": "TasksTbl",
+	"name": "TaskCSV",
 	"properties": {
 		"linkedServiceName": {
-			"referenceName": "OutputSQL",
+			"referenceName": "Blob To CSV",
 			"type": "LinkedServiceReference"
 		},
 		"folder": {
-			"name": "SQL_tbl"
+			"name": "CSV"
 		},
 		"annotations": [],
-		"type": "AzureSqlTable",
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "tasks.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
 		"schema": [
 			{
 				"name": "task_id",
-				"type": "int",
-				"precision": 10
+				"type": "String"
 			},
 			{
 				"name": "user_id",
-				"type": "int",
-				"precision": 10
+				"type": "String"
 			},
 			{
 				"name": "title",
-				"type": "varchar"
+				"type": "String"
 			},
 			{
 				"name": "description",
-				"type": "varchar"
+				"type": "String"
 			},
 			{
 				"name": "category",
-				"type": "varchar"
+				"type": "String"
 			},
 			{
 				"name": "priority",
-				"type": "varchar"
+				"type": "String"
 			},
 			{
 				"name": "status",
-				"type": "varchar"
+				"type": "String"
 			},
 			{
 				"name": "point_value",
-				"type": "int",
-				"precision": 10
+				"type": "String"
 			},
 			{
 				"name": "due_date",
-				"type": "date"
+				"type": "String"
 			},
 			{
 				"name": "created_at",
-				"type": "date"
+				"type": "String"
 			},
 			{
 				"name": "completed_at",
-				"type": "date"
+				"type": "String"
 			},
 			{
 				"name": "is_recurring",
-				"type": "bit"
+				"type": "String"
 			},
 			{
 				"name": "recurrence_rule",
-				"type": "varchar"
+				"type": "String"
 			}
-		],
-		"typeProperties": {
-			"schema": "dbo",
-			"table": "tasks"
-		}
+		]
 	},
 	"type": "Microsoft.DataFactory/factories/datasets"
 }

@@ -1,0 +1,44 @@
+{
+	"name": "UserInventoryTbl",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "OutputSQL",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "SQL_tbl"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "inventory_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "user_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "item_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "acquired_at",
+				"type": "date"
+			},
+			{
+				"name": "is_equipped",
+				"type": "bit"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "user_inventory"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

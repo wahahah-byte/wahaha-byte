@@ -1,0 +1,27 @@
+{
+	"name": "StreaksCSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Blob To CSV",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "CSV"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "streaks.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

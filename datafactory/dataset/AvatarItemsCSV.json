@@ -1,0 +1,64 @@
+{
+	"name": "AvatarItemsCSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Blob To CSV",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "CSV"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "avatar_items.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "item_id",
+				"type": "String"
+			},
+			{
+				"name": "name",
+				"type": "String"
+			},
+			{
+				"name": "category",
+				"type": "String"
+			},
+			{
+				"name": "slot",
+				"type": "String"
+			},
+			{
+				"name": "rarity",
+				"type": "String"
+			},
+			{
+				"name": "cost",
+				"type": "String"
+			},
+			{
+				"name": "description",
+				"type": "String"
+			},
+			{
+				"name": "preview_asset_url",
+				"type": "String"
+			},
+			{
+				"name": "is_available",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
