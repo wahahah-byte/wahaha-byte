@@ -1,5 +1,5 @@
 {
-	"name": "TasksTbl",
+	"name": "MinigamesTbl",
 	"properties": {
 		"linkedServiceName": {
 			"referenceName": "OutputSQL",
@@ -12,17 +12,12 @@
 		"type": "AzureSqlTable",
 		"schema": [
 			{
-				"name": "task_id",
+				"name": "game_id",
 				"type": "int",
 				"precision": 10
 			},
 			{
-				"name": "user_id",
-				"type": "int",
-				"precision": 10
-			},
-			{
-				"name": "title",
+				"name": "name",
 				"type": "varchar"
 			},
 			{
@@ -30,46 +25,32 @@
 				"type": "varchar"
 			},
 			{
-				"name": "category",
-				"type": "varchar"
-			},
-			{
-				"name": "priority",
-				"type": "varchar"
-			},
-			{
-				"name": "status",
-				"type": "varchar"
-			},
-			{
-				"name": "point_value",
+				"name": "max_points_reward",
 				"type": "int",
 				"precision": 10
 			},
 			{
-				"name": "due_date",
-				"type": "date"
+				"name": "unlock_level",
+				"type": "int",
+				"precision": 10
 			},
 			{
-				"name": "created_at",
-				"type": "date"
+				"name": "type",
+				"type": "varchar"
 			},
 			{
-				"name": "completed_at",
-				"type": "date"
+				"name": "duration_seconds",
+				"type": "int",
+				"precision": 10
 			},
 			{
-				"name": "is_recurring",
-				"type": "bit"
-			},
-			{
-				"name": "recurrence_rule",
+				"name": "difficulty",
 				"type": "varchar"
 			}
 		],
 		"typeProperties": {
 			"schema": "dbo",
-			"table": "tasks"
+			"table": "minigames"
 		}
 	},
 	"type": "Microsoft.DataFactory/factories/datasets"

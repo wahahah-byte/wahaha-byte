@@ -1,5 +1,5 @@
 {
-	"name": "TasksTbl",
+	"name": "AvatarItemsTbl",
 	"properties": {
 		"linkedServiceName": {
 			"referenceName": "OutputSQL",
@@ -12,21 +12,12 @@
 		"type": "AzureSqlTable",
 		"schema": [
 			{
-				"name": "task_id",
+				"name": "item_id",
 				"type": "int",
 				"precision": 10
 			},
 			{
-				"name": "user_id",
-				"type": "int",
-				"precision": 10
-			},
-			{
-				"name": "title",
-				"type": "varchar"
-			},
-			{
-				"name": "description",
+				"name": "name",
 				"type": "varchar"
 			},
 			{
@@ -34,42 +25,34 @@
 				"type": "varchar"
 			},
 			{
-				"name": "priority",
+				"name": "slot",
 				"type": "varchar"
 			},
 			{
-				"name": "status",
+				"name": "rarity",
 				"type": "varchar"
 			},
 			{
-				"name": "point_value",
+				"name": "cost",
 				"type": "int",
 				"precision": 10
 			},
 			{
-				"name": "due_date",
-				"type": "date"
-			},
-			{
-				"name": "created_at",
-				"type": "date"
-			},
-			{
-				"name": "completed_at",
-				"type": "date"
-			},
-			{
-				"name": "is_recurring",
-				"type": "bit"
-			},
-			{
-				"name": "recurrence_rule",
+				"name": "description",
 				"type": "varchar"
+			},
+			{
+				"name": "preview_asset_url",
+				"type": "varchar"
+			},
+			{
+				"name": "is_available",
+				"type": "bit"
 			}
 		],
 		"typeProperties": {
 			"schema": "dbo",
-			"table": "tasks"
+			"table": "avatar_items"
 		}
 	},
 	"type": "Microsoft.DataFactory/factories/datasets"

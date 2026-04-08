@@ -1,0 +1,60 @@
+{
+	"name": "Minigame_SessionsCSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Blob To CSV",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "CSV"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "minigame_sessions.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "session_id",
+				"type": "String"
+			},
+			{
+				"name": "user_id",
+				"type": "String"
+			},
+			{
+				"name": "game_id",
+				"type": "String"
+			},
+			{
+				"name": "score",
+				"type": "String"
+			},
+			{
+				"name": "points_earned",
+				"type": "String"
+			},
+			{
+				"name": "played_at",
+				"type": "String"
+			},
+			{
+				"name": "duration_seconds",
+				"type": "String"
+			},
+			{
+				"name": "outcome",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
