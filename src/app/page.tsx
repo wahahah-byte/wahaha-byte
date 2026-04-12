@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
+import NewTaskModal from "@/components/NewTaskModal";
 
 const PRIORITY_DOT: Record<string, string> = {
   high:   "#ef4444",
@@ -19,34 +21,52 @@ const FILTERS = [
 
 export default function Home() {
   const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilterParams>({ pageSize: 50, pageNumber: 1 });
   const [activeFilter, setActiveFilter] = useState("all");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [showNewTask, setShowNewTask] = useState(false);
+  const [starting, setStarting] = useState<string | null>(null);
   const [completing, setCompleting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!localStorage.getItem("auth_token")) router.replace("/login");
-  }, [router]);
+    setIsMounted(true);
+    setIsAuthenticated(!!localStorage.getItem("auth_token"));
+  }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     async function fetchTasks() {
       setLoading(true);
       setError(null);
       const { data, error } = await tasksApi.getAll(filters);
       setLoading(false);
       if (error) { setError(error); return; }
-      setTasks(data.data);
+      setTasks(data!.data);
     }
     fetchTasks();
-  }, [filters]);
+  }, [filters, isAuthenticated]);
 
   function applyFilter(value: string) {
     setActiveFilter(value);
     setFilters((f) => ({ ...f, status: value === "all" ? undefined : value, pageNumber: 1 }));
+  }
+
+  async function handleStart(id: string) {
+    setStarting(id);
+    const { error } = await tasksApi.start(id);
+    setStarting(null);
+    if (error) { setError(error); return; }
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === id ? { ...t, status: "in_progress" } : t
+      )
+    );
   }
 
   async function handleComplete(id: string) {
@@ -69,7 +89,56 @@ export default function Home() {
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
   }
 
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#252525" }}>
+        <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4" style={{ background: "#252525" }}>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-widest uppercase text-white mb-2">
+            Wahaha Byte
+          </h1>
+          <p className="text-sm tracking-wide text-[#888]">
+            Track tasks, earn points, stay on streak.
+          </p>
+        </div>
+
+        <div
+          className="w-full max-w-sm flex flex-col gap-3 p-8 rounded"
+          style={{ background: "#1a1a1a", border: "1px solid #2a2a2a" }}
+        >
+          <Link
+            href="/login"
+            className="w-full py-2.5 text-sm font-semibold tracking-wider uppercase rounded text-center transition-colors"
+            style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
+          >
+            Sign In
+          </Link>
+
+          <Link
+            href="/register"
+            className="w-full py-2.5 text-sm font-medium tracking-wide text-center rounded transition-colors"
+            style={{ background: "transparent", color: "#aaa", border: "1px solid #333" }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#555")}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#333")}
+          >
+            Create an account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <>
     <div className="min-h-screen text-[#d0d0d0] flex flex-col" style={{ background: "#252525" }}>
       <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1">
 
@@ -79,7 +148,7 @@ export default function Home() {
             Tasks
           </h1>
           <button
-            onClick={() => router.push("/tasks/new")}
+            onClick={() => setShowNewTask(true)}
             className="text-xs tracking-widest uppercase px-4 py-2 font-semibold cursor-pointer transition-colors"
             style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
@@ -151,6 +220,8 @@ export default function Home() {
         {/* Rows */}
         <div className="flex flex-col gap-1">
           {!loading && tasks.map((task) => {
+            const isPending = task.status === "pending";
+            const isInProgress = task.status === "in_progress";
             const isCompleted = task.status === "completed";
             const isHovered = hoveredId === task.taskId;
             const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
@@ -162,7 +233,7 @@ export default function Home() {
                 onMouseLeave={() => setHoveredId(null)}
                 className="grid items-center px-4 transition-colors"
                 style={{
-                  gridTemplateColumns: "1fr auto auto auto",
+                  gridTemplateColumns: "1fr auto auto 120px",
                   background: isHovered ? "#1a3040" : "#1a1a1a",
                   borderLeft: isHovered ? "2px solid #5bb8e0" : "2px solid transparent",
                   opacity: isCompleted ? 0.45 : 1,
@@ -210,17 +281,29 @@ export default function Home() {
                 </div>
 
                 {/* Points + actions */}
-                <div className="w-20 flex items-center justify-end gap-2">
+                <div className="w-[120px] flex items-center justify-end gap-2">
                   {isHovered ? (
                     <>
-                      <button
-                        onClick={() => !isCompleted && handleComplete(task.taskId)}
-                        disabled={isCompleted || completing === task.taskId}
-                        className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                        style={{ color: "#5bb8e0", border: "1px solid #1e5068", background: "#0d1f28" }}
-                      >
-                        {completing === task.taskId ? "…" : isCompleted ? "Done" : "Complete"}
-                      </button>
+                      {isPending && (
+                        <button
+                          onClick={() => handleStart(task.taskId)}
+                          disabled={starting === task.taskId}
+                          className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
+                          style={{ color: "#5bb8e0", border: "1px solid #1e5068", background: "#0d1f28" }}
+                        >
+                          {starting === task.taskId ? "…" : "Start"}
+                        </button>
+                      )}
+                      {isInProgress && (
+                        <button
+                          onClick={() => handleComplete(task.taskId)}
+                          disabled={completing === task.taskId}
+                          className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
+                          style={{ color: "#5bb8e0", border: "1px solid #1e5068", background: "#0d1f28" }}
+                        >
+                          {completing === task.taskId ? "…" : "Complete"}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(task.taskId)}
                         disabled={deleting === task.taskId}
@@ -262,5 +345,16 @@ export default function Home() {
         )}
       </div>
     </div>
+
+    {showNewTask && (
+      <NewTaskModal
+        onClose={() => setShowNewTask(false)}
+        onCreated={(task) => {
+          setTasks((prev) => [task, ...prev]);
+          setShowNewTask(false);
+        }}
+      />
+    )}
+    </>
   );
 }

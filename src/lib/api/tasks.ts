@@ -85,6 +85,9 @@ export const tasksApi = {
   update: (id: string, dto: UpdateTaskRequest) =>
     authedPut<void>(`/api/tasks/${id}`, dto),
 
+  start: (id: string) =>
+    authedPatch<void>(`/api/tasks/${id}/start`),
+
   complete: (id: string) =>
     authedPatch<void>(`/api/tasks/${id}/complete`),
 
