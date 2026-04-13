@@ -92,7 +92,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
     >
       <div
         className="w-full max-w-md flex flex-col gap-5 p-6 rounded"
-        style={{ background: "#1a1a1a", border: "1px solid #2a2a2a" }}
+        style={{ background: "#3e3f42", border: "1px solid #2a2a2a" }}
         onClick={() => setShowCalendar(false)}
       >
         {/* Header */}
@@ -110,14 +110,14 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
         {/* Title */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Title</label>
+          <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Title</label>
           <input
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="What needs to be done?"
-            className="w-full px-3 py-2 text-sm bg-transparent outline-none placeholder-[#333]"
+            className="w-full px-3 py-2 text-sm bg-transparent outline-none placeholder-white/20"
             style={{ color: "#f0f0f0", border: "1px solid #2a2a2a" }}
             onFocus={(e) => (e.currentTarget.style.borderColor = "#1e5068")}
             onBlur={(e)  => (e.currentTarget.style.borderColor = "#2a2a2a")}
@@ -126,13 +126,13 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
         {/* Description */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Description</label>
+          <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional details..."
             rows={2}
-            className="w-full px-3 py-2 text-sm bg-transparent outline-none resize-none placeholder-[#333]"
+            className="w-full px-3 py-2 text-sm bg-transparent outline-none resize-none placeholder-white/20"
             style={{ color: "#f0f0f0", border: "1px solid #2a2a2a" }}
             onFocus={(e) => (e.currentTarget.style.borderColor = "#1e5068")}
             onBlur={(e)  => (e.currentTarget.style.borderColor = "#2a2a2a")}
@@ -141,7 +141,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
         {/* Priority — 3-button bar */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Priority</label>
+          <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Priority</label>
           <div className="flex gap-0" style={{ border: "1px solid #2a2a2a" }}>
             {PRIORITIES.map((p, i) => (
               <button
@@ -165,24 +165,24 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
         {/* Category + Points */}
         <div className="flex gap-3">
           <div className="flex flex-col gap-1.5 flex-1">
-            <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Category</label>
+            <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Category</label>
             <div className="relative">
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                style={{ background: "#111", color: "#f0f0f0", border: "1px solid #2a2a2a" }}
+                style={{ background: "#2a2b2e", color: "#f0f0f0", border: "1px solid #2a2a2a" }}
               >
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c} style={{ background: "#111" }}>{c}</option>
+                  <option key={c} value={c} style={{ background: "#2a2b2e" }}>{c}</option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#444" }}>▾</span>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>▾</span>
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5 w-24">
-            <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Points</label>
+            <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Points</label>
             <input
               type="number"
               min={0}
@@ -198,13 +198,13 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
         {/* Due Date + calendar popup */}
         <div className="flex flex-col gap-1.5 relative">
-          <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Due Date</label>
+          <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Due Date</label>
           <button
             onClick={(e) => { e.stopPropagation(); setShowCalendar((v) => !v); }}
             className="w-full px-3 py-2 text-sm text-left cursor-pointer transition-colors"
             style={{
               background:   "transparent",
-              color:        dueDate ? "#f0f0f0" : "#333",
+              color:        dueDate ? "#f0f0f0" : "#717171",
               border:       `1px solid ${showCalendar ? "#1e5068" : "#2a2a2a"}`,
             }}
           >
@@ -216,7 +216,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           {showCalendar && (
             <div
               className="absolute top-full mt-1 left-0 right-0 z-20 p-3"
-              style={{ background: "#111", border: "1px solid #2a2a2a" }}
+              style={{ background: "#2a2b2e", border: "1px solid #2a2a2a" }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Month navigation */}
@@ -224,7 +224,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 <button
                   onClick={prevMonth}
                   className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                  style={{ color: "#555" }}
+                  style={{ color: "rgba(255,255,255,0.55)" }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
                 >
@@ -236,7 +236,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 <button
                   onClick={nextMonth}
                   className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                  style={{ color: "#555" }}
+                  style={{ color: "rgba(255,255,255,0.55)" }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
                 >
@@ -247,7 +247,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
               {/* Day-of-week headers */}
               <div className="grid grid-cols-7 mb-1">
                 {DAYS.map((d) => (
-                  <span key={d} className="text-center text-[9px] tracking-wider uppercase py-0.5" style={{ color: "#444" }}>
+                  <span key={d} className="text-center text-[9px] tracking-wider uppercase py-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
                     {d}
                   </span>
                 ))}
@@ -296,7 +296,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 <button
                   onClick={() => { setDueDate(null); setShowCalendar(false); }}
                   className="mt-2 w-full text-[9px] tracking-widest uppercase transition-colors cursor-pointer py-1"
-                  style={{ color: "#444", borderTop: "1px solid #1a1a1a" }}
+                  style={{ color: "#444", borderTop: "1px solid #3e3f42" }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#888")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#444")}
                 >
@@ -310,12 +310,12 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
         {/* Recurring toggle */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Recurring</span>
+            <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Recurring</span>
             <button
               onClick={() => setIsRecurring((v) => !v)}
               className="relative w-10 h-[22px] cursor-pointer transition-colors flex-shrink-0"
               style={{
-                background:   isRecurring ? "#1a3a4a" : "#111",
+                background:   isRecurring ? "#1a3a4a" : "#888",
                 border:       `1px solid ${isRecurring ? "#1e5068" : "#2a2a2a"}`,
                 borderRadius: "999px",
               }}
@@ -333,19 +333,19 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
           {isRecurring && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] tracking-widest uppercase" style={{ color: "#555" }}>Recurrence Rule</label>
+              <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Recurrence Rule</label>
               <div className="relative">
                 <select
                   value={recurrenceRule}
                   onChange={(e) => setRecurrenceRule(e.target.value)}
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "#111", color: "#f0f0f0", border: "1px solid #2a2a2a" }}
+                  style={{ background: "#2a2b2e", color: "#f0f0f0", border: "1px solid #2a2a2a" }}
                 >
                   {RECURRENCE_RULES.map((r) => (
-                    <option key={r.value} value={r.value} style={{ background: "#111" }}>{r.label}</option>
+                    <option key={r.value} value={r.value} style={{ background: "#2a2b2e" }}>{r.label}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#444" }}>▾</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>▾</span>
               </div>
             </div>
           )}

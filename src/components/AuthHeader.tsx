@@ -21,7 +21,7 @@ export default function AuthHeader() {
       <button
         onClick={() => setMenuOpen((o) => !o)}
         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-        style={{ background: "#2a2a2a", border: "1px solid #3a3a3a", color: "#aaa" }}
+        style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
@@ -34,7 +34,7 @@ export default function AuthHeader() {
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
           <div
             className="absolute right-0 mt-1 z-20 py-1 min-w-[120px]"
-            style={{ background: "#1a1a1a", border: "1px solid #2a2a2a" }}
+            style={{ background: "#1e1f22", border: "1px solid #3e3f42" }}
           >
             <button
               onClick={() => {
@@ -44,7 +44,7 @@ export default function AuthHeader() {
               }}
               className="w-full text-left px-4 py-2 text-xs tracking-wider uppercase cursor-pointer transition-colors"
               style={{ color: "#aaa", background: "transparent" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#222"; e.currentTarget.style.color = "#ef4444"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#2e2f32"; e.currentTarget.style.color = "#ef4444"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#aaa"; }}
             >
               Sign Out
