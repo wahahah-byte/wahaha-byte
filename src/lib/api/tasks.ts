@@ -14,6 +14,7 @@ export interface TaskDto {
   completedAt: string | null;
   isRecurring: boolean;
   recurrenceRule: string | null;
+  pointsAwarded?: boolean;
 }
 
 export interface CreateTaskRequest {
