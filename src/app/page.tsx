@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
+import { usersApi } from "@/lib/api/users";
 import NewTaskModal from "@/components/NewTaskModal";
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -35,10 +36,20 @@ export default function Home() {
   const [pausing, setPausing] = useState<string | null>(null);
   const [undoing, setUndoing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [stagedTaskIds, setStagedTaskIds] = useState<string[]>([]);
+  const [submittedTaskIds, setSubmittedTaskIds] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dailySubmitted, setDailySubmitted] = useState(0);
 
   useEffect(() => {
     setIsMounted(true);
-    setIsAuthenticated(!!localStorage.getItem("auth_token"));
+    const hasToken = !!localStorage.getItem("auth_token");
+    setIsAuthenticated(hasToken);
+    if (hasToken) {
+      usersApi.getMe().then(({ data }) => {
+        if (data) setDailySubmitted(data.pointsSubmittedToday ?? 0);
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -50,6 +61,8 @@ export default function Home() {
       setLoading(false);
       if (error) { setError(error); return; }
       setTasks(data!.data);
+      const alreadySubmitted = new Set(data!.data.filter((t) => t.pointsAwarded).map((t) => t.taskId));
+      setSubmittedTaskIds(alreadySubmitted);
     }
     fetchTasks();
   }, [filters, isAuthenticated]);
@@ -71,10 +84,15 @@ export default function Home() {
   }
 
   async function handleComplete(id: string) {
+    const task = tasks.find((t) => t.taskId === id);
     setCompleting(id);
     const { error } = await tasksApi.complete(id);
     setCompleting(null);
     if (error) { setError(error); return; }
+    if (task?.pointValue) {
+      setStagedTaskIds((prev) => [...prev, id]);
+      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+    }
     setTasks((prev) =>
       activeFilter === "in_progress"
         ? prev.filter((t) => t.taskId !== id)
@@ -123,6 +141,12 @@ export default function Home() {
     });
     setUndoing(null);
     if (error) { setError(error); return; }
+    // un-stage if this task was staged
+    const wasStaged = stagedTaskIds.includes(task.taskId);
+    if (wasStaged) {
+      setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
+      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
+    }
     setTasks((prev) =>
       activeFilter === "completed"
         ? prev.filter((t) => t.taskId !== task.taskId)
@@ -136,6 +160,23 @@ export default function Home() {
     setDeleting(null);
     if (error) { setError(error); return; }
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
+    setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
+  }
+
+  async function handleSubmit() {
+    if (stagedTaskIds.length === 0) return;
+    const DAILY_CAP = 200;
+    const remaining = DAILY_CAP - dailySubmitted;
+    if (remaining <= 0) return;
+    setIsSubmitting(true);
+    const { data, error } = await usersApi.submitPoints(stagedTaskIds);
+    setIsSubmitting(false);
+    if (error) { setError(error); return; }
+    setSubmittedTaskIds((prev) => new Set([...prev, ...stagedTaskIds]));
+    setStagedTaskIds([]);
+    setDailySubmitted(data!.dailyTotal);
+    window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: data!.pointsAwarded } }));
+    window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: 0, reset: true } }));
   }
 
   if (!isMounted) {
@@ -213,7 +254,7 @@ export default function Home() {
             <button
               key={f.value}
               onClick={() => applyFilter(f.value)}
-              className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative"
+              className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5"
               style={{
                 color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)",
                 background: "transparent",
@@ -221,6 +262,9 @@ export default function Home() {
               }}
             >
               {f.label}
+              {f.value === "completed" && stagedTaskIds.length > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
+              )}
               {activeFilter === f.value && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-px"
@@ -265,6 +309,67 @@ export default function Home() {
             <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>No items</p>
           </div>
         )}
+
+        {/* Submission panel — Completed tab only, when staged tasks exist */}
+        {activeFilter === "completed" && stagedTaskIds.length > 0 && (() => {
+          const DAILY_CAP = 200;
+          const remaining = DAILY_CAP - dailySubmitted;
+          const stagedPts = tasks
+            .filter((t) => stagedTaskIds.includes(t.taskId))
+            .reduce((sum, t) => sum + t.pointValue, 0);
+          const willAward = Math.min(stagedPts, Math.max(0, remaining));
+          const capped = stagedPts > remaining;
+          const limitReached = remaining <= 0;
+          return (
+            <div
+              className="mb-3 px-4 py-3"
+              style={{
+                background: "#2a2b2f",
+                border: "1px solid rgba(245,158,11,0.3)",
+                borderLeft: "2px solid #f59e0b",
+              }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.2em", textTransform: "uppercase" }}>
+                    Pending Submission
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
+                      <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
+                    </svg>
+                    <span style={{ color: "#f59e0b", fontSize: "12px", fontWeight: 600 }}>
+                      {stagedTaskIds.length} task{stagedTaskIds.length !== 1 ? "s" : ""} · {stagedPts.toLocaleString()} pts staged
+                    </span>
+                  </div>
+                  {limitReached ? (
+                    <span style={{ color: "#ef4444", fontSize: "10px", letterSpacing: "0.05em" }}>
+                      Daily limit reached (200 pts/day)
+                    </span>
+                  ) : capped ? (
+                    <span style={{ color: "rgba(245,158,11,0.7)", fontSize: "10px", letterSpacing: "0.05em" }}>
+                      Capped — will award {willAward} of {stagedPts} pts ({remaining} remaining today)
+                    </span>
+                  ) : (
+                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "10px", letterSpacing: "0.05em" }}>
+                      {remaining} pts remaining today · will award {willAward} pts
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || limitReached}
+                  className="flex-shrink-0 text-[10px] tracking-widest uppercase px-3 py-2 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ color: "#f59e0b", border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.08)" }}
+                  onMouseEnter={(e) => { if (!isSubmitting && !limitReached) e.currentTarget.style.background = "rgba(245,158,11,0.18)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(245,158,11,0.08)"; }}
+                >
+                  {isSubmitting ? "Submitting…" : limitReached ? "Limit Reached" : `Submit ${willAward} pts ▶`}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Rows */}
         <div className="flex flex-col gap-1">
@@ -386,7 +491,7 @@ export default function Home() {
                           </button>
                         </>
                       )}
-                      {isCompleted && (
+                      {isCompleted && !submittedTaskIds.has(task.taskId) && !task.pointsAwarded && (
                         <button
                           onClick={() => handleUndo(task)}
                           disabled={undoing === task.taskId}
