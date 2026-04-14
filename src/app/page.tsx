@@ -264,14 +264,14 @@ export default function Home() {
           <div
             className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
             style={{
-              gridTemplateColumns: "1fr auto auto auto",
+              gridTemplateColumns: "1fr 80px 64px 80px",
               color: "rgba(255,255,255,0.55)",
             }}
           >
             <span>Name</span>
-            <span className="w-20 text-center">Category</span>
-            <span className="w-16 text-center">Due</span>
-            <span className="text-right">Points</span>
+            <span className="text-center">Category</span>
+            <span className="text-center">Due</span>
+            <span className="text-center">Points</span>
           </div>
 
           {/* Error */}
@@ -360,6 +360,12 @@ export default function Home() {
           <div className="flex flex-col gap-1">
             {!loading && (activeFilter === "pending"
               ? tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
+              : activeFilter === "completed"
+              ? [...tasks].sort((a, b) => {
+                  const aUndo = a.status === "completed" && a.submitted === false && !a.pointsAwarded && !submittedTaskIds.has(a.taskId);
+                  const bUndo = b.status === "completed" && b.submitted === false && !b.pointsAwarded && !submittedTaskIds.has(b.taskId);
+                  return (bUndo ? 1 : 0) - (aUndo ? 1 : 0);
+                })
               : tasks
             ).map((task) => {
               const isInProgress = task.status === "in_progress";
@@ -369,6 +375,7 @@ export default function Home() {
               const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
               const isAdvancing = advancing === task.taskId;
               const canUndo = isCompleted && task.submitted === false && !task.pointsAwarded && !submittedTaskIds.has(task.taskId);
+              const isSubmitted = isCompleted && (task.submitted === true || submittedTaskIds.has(task.taskId) || !!task.pointsAwarded);
 
               return (
                 <div
@@ -378,10 +385,12 @@ export default function Home() {
                   className="grid items-center px-4 transition-colors"
                   style={{
                     position: "relative",
-                    gridTemplateColumns: "1fr auto auto auto",
+                    gridTemplateColumns: "1fr 80px 64px 80px",
                     background: isHovered ? "#363840" : "#2a2b2f",
                     borderLeft: isInProgress
                       ? "2px solid #5bb8e0"
+                      : canUndo
+                      ? "2px solid rgba(245,158,11,0.7)"
                       : isHovered ? "2px solid rgba(91,184,224,0.4)" : "2px solid transparent",
                     opacity: isCompleted ? 0.55 : isGreyedOut ? 0.4 : 1,
                     height: "60px",
@@ -410,18 +419,27 @@ export default function Home() {
                           <span style={{ color: "#5bb8e0", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>Active</span>
                         </div>
                       )}
+                      {canUndo && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                            <path d="M7 1.5H4C2.3 1.5 1 2.8 1 4.5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.4" strokeLinecap="round" />
+                            <polyline points="3.5,4 1,1.5 3.5,0" stroke="#f59e0b" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                          </svg>
+                          <span style={{ color: "#f59e0b", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>Undo</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Category */}
-                  <div className="w-20 flex items-center justify-center">
+                  <div className="flex items-center justify-center">
                     <span className="text-[10px] tracking-wide uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>
                       {task.category || "—"}
                     </span>
                   </div>
 
                   {/* Due date */}
-                  <div className="w-16 flex items-center justify-center">
+                  <div className="flex items-center justify-center">
                     <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.6)" }}>
                       {task.dueDate
                         ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
@@ -429,14 +447,50 @@ export default function Home() {
                     </span>
                   </div>
 
-                  {/* Points */}
-                  <div className="flex items-center gap-1 pl-4">
-                    <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
-                      <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
-                    </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#5bb8e0" }}>
-                      {task.pointValue.toLocaleString()}
-                    </span>
+                  {/* Points / Filed indicator */}
+                  <div className="flex items-center justify-center gap-1">
+                    {isSubmitted ? (
+                      <div
+                        className="flex items-center gap-1 px-1.5 py-0.5"
+                        style={{
+                          border: "1px solid rgba(74,222,128,0.35)",
+                          borderRadius: "2px",
+                          background: "rgba(74,222,128,0.06)",
+                        }}
+                      >
+                        <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                          <polyline points="1.5,5 4,7.5 8.5,2" stroke="#4ade80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span style={{ color: "rgba(74,222,128,0.75)", fontSize: "8px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>
+                          Filed
+                        </span>
+                      </div>
+                    ) : canUndo ? (
+                      <div
+                        className="flex items-center gap-1 px-1.5 py-0.5"
+                        style={{
+                          border: "1px solid rgba(245,158,11,0.35)",
+                          borderRadius: "2px",
+                          background: "rgba(245,158,11,0.06)",
+                        }}
+                      >
+                        <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
+                          <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
+                        </svg>
+                        <span style={{ color: "rgba(245,158,11,0.9)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.03em" }}>
+                          {task.pointValue.toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                          <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
+                        </svg>
+                        <span className="text-xs font-semibold" style={{ color: "#5bb8e0" }}>
+                          {task.pointValue.toLocaleString()}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Vertical icon button stack — appears outside the right edge on hover */}

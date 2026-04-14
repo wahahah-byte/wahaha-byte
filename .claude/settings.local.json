@@ -6,7 +6,8 @@
       "Bash(npx tsc:*)",
       "Bash(echo \"exit: $?\")",
       "Bash(xargs grep:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(npm run:*)"
     ]
   }
 }
