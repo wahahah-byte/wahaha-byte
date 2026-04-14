@@ -4,7 +4,9 @@
       "Bash(grep -E \"\\\\.\\(json|env|config|ts\\)$\")",
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(npx tsc:*)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(xargs grep:*)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

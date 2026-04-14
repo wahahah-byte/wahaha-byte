@@ -15,6 +15,7 @@ export interface TaskDto {
   isRecurring: boolean;
   recurrenceRule: string | null;
   pointsAwarded?: boolean;
+  submitted: boolean;
 }
 
 export interface CreateTaskRequest {
@@ -41,6 +42,7 @@ export interface UpdateTaskRequest {
   completedAt?: string;
   isRecurring: boolean;
   recurrenceRule?: string;
+  submitted: boolean;
 }
 
 export interface TaskFilterParams {
@@ -50,6 +52,7 @@ export interface TaskFilterParams {
   priority?: string;
   category?: string;
   isRecurring?: boolean;
+  submitted?: boolean;
 }
 
 export interface PagedResult<T> {

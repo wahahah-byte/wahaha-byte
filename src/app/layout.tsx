@@ -46,7 +46,7 @@ export default function RootLayout({
               </span>
             </div>
             <span style={{ color: "rgba(255,255,255,0.18)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-              Wahaha Byte — Task Management
+              Wahaha Byte
             </span>
           </div>
 

@@ -150,7 +150,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
                 style={{
                   background:  priority === p.value ? `${p.color}20` : "transparent",
-                  color:       priority === p.value ? p.color : "#444",
+                  color:       priority === p.value ? p.color : "#717171",
                   borderRight: i < PRIORITIES.length - 1 ? "1px solid #2a2a2a" : "none",
                   fontWeight:  priority === p.value ? 600 : 400,
                   borderBottom: priority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
@@ -359,7 +359,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           <button
             onClick={onClose}
             className="flex-1 py-2 text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
-            style={{ color: "#555", border: "1px solid #2a2a2a", background: "transparent" }}
+            style={{ color: "#717171", border: "1px solid #2a2a2a", background: "transparent" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#999")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
           >
