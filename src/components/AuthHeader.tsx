@@ -9,6 +9,7 @@ export default function AuthHeader() {
   const [hasToken, setHasToken] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [stagedPoints, setStagedPoints] = useState(0);
   const pathname = usePathname();
 
@@ -21,12 +22,16 @@ export default function AuthHeader() {
     if (!hasToken) return;
 
     usersApi.getMe().then(({ data }) => {
-      if (data) setBalance(data.currentBalance);
+      if (data) {
+        setBalance(data.currentBalance);
+        setUsername(data.username);
+      }
     });
 
-    function onPointsAwarded(e: Event) {
-      const delta = (e as CustomEvent<{ delta: number }>).detail.delta;
-      setBalance((b) => (b ?? 0) + delta);
+    function onPointsAwarded() {
+      usersApi.getMe().then(({ data }) => {
+        if (data) setBalance(data.currentBalance);
+      });
     }
     function onStagedUpdated(e: Event) {
       const { delta, reset } = (e as CustomEvent<{ delta: number; reset?: boolean }>).detail;
@@ -46,6 +51,13 @@ export default function AuthHeader() {
 
   return (
     <div className="flex items-center gap-3">
+      {/* Username */}
+      {username && (
+        <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+          {username}
+        </span>
+      )}
+
       {/* Staged (unsubmitted) points */}
       {stagedPoints > 0 && (
         <div className="flex items-center gap-1.5">

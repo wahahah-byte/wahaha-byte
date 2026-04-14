@@ -8,16 +8,16 @@ import { usersApi } from "@/lib/api/users";
 import NewTaskModal from "@/components/NewTaskModal";
 
 const PRIORITY_DOT: Record<string, string> = {
-  high:   "#ef4444",
+  high: "#ef4444",
   medium: "#f59e0b",
-  low:    "#22c55e",
+  low: "#22c55e",
 };
 
 const FILTERS = [
-  { label: "All",         value: "all" },
-  { label: "Pending",     value: "pending" },
+  { label: "All", value: "all" },
+  { label: "Pending", value: "pending" },
   { label: "In Progress", value: "in_progress" },
-  { label: "Completed",   value: "completed" },
+  { label: "Completed", value: "completed" },
 ];
 
 export default function Home() {
@@ -31,10 +31,8 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
-  const [starting, setStarting] = useState<string | null>(null);
-  const [completing, setCompleting] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState<string | null>(null);
   const [pausing, setPausing] = useState<string | null>(null);
-  const [undoing, setUndoing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [stagedTaskIds, setStagedTaskIds] = useState<string[]>([]);
   const [submittedTaskIds, setSubmittedTaskIds] = useState<Set<string>>(new Set());
@@ -69,51 +67,68 @@ export default function Home() {
 
   function applyFilter(value: string) {
     setActiveFilter(value);
-    // "pending" tab fetches all statuses so in-progress tasks can appear alongside pending ones
     setFilters((f) => ({ ...f, status: value === "all" || value === "pending" ? undefined : value, pageNumber: 1 }));
   }
 
-  async function handleStart(id: string) {
-    setStarting(id);
-    const { error } = await tasksApi.start(id);
-    setStarting(null);
-    if (error) { setError(error); return; }
-    setTasks((prev) =>
-      prev.map((t) => t.taskId === id ? { ...t, status: "in_progress" } : t)
-    );
-  }
+  async function handleAdvance(task: TaskDto) {
+    if (advancing === task.taskId) return;
+    const canUndo = task.status === "completed" && !submittedTaskIds.has(task.taskId) && !task.pointsAwarded;
+    setAdvancing(task.taskId);
 
-  async function handleComplete(id: string) {
-    const task = tasks.find((t) => t.taskId === id);
-    setCompleting(id);
-    const { error } = await tasksApi.complete(id);
-    setCompleting(null);
-    if (error) { setError(error); return; }
-    if (task?.pointValue) {
-      setStagedTaskIds((prev) => [...prev, id]);
-      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+    if (task.status === "pending") {
+      const { error } = await tasksApi.start(task.taskId);
+      setAdvancing(null);
+      if (error) { setError(error); return; }
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress" } : t));
+
+    } else if (task.status === "in_progress") {
+      const { error } = await tasksApi.complete(task.taskId);
+      setAdvancing(null);
+      if (error) { setError(error); return; }
+      if (task.pointValue) {
+        setStagedTaskIds((prev) => [...prev, task.taskId]);
+        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+      }
+      setTasks((prev) =>
+        activeFilter === "in_progress"
+          ? prev.filter((t) => t.taskId !== task.taskId)
+          : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "completed", completedAt: new Date().toISOString() } : t)
+      );
+
+    } else if (canUndo) {
+      const { error } = await tasksApi.update(task.taskId, {
+        taskId: task.taskId, title: task.title,
+        description: task.description ?? undefined, category: task.category,
+        priority: task.priority, status: "in_progress", pointValue: task.pointValue,
+        dueDate: task.dueDate ?? undefined, completedAt: undefined,
+        isRecurring: task.isRecurring, recurrenceRule: task.recurrenceRule ?? undefined,
+        submitted: task.submitted,
+      });
+      setAdvancing(null);
+      if (error) { setError(error); return; }
+      if (stagedTaskIds.includes(task.taskId)) {
+        setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
+        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
+      }
+      setTasks((prev) =>
+        activeFilter === "all"
+          ? prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t)
+          : prev.filter((t) => t.taskId !== task.taskId)
+      );
+    } else {
+      setAdvancing(null);
     }
-    setTasks((prev) =>
-      activeFilter === "in_progress"
-        ? prev.filter((t) => t.taskId !== id)
-        : prev.map((t) => t.taskId === id ? { ...t, status: "completed", completedAt: new Date().toISOString() } : t)
-    );
   }
 
   async function handlePause(task: TaskDto) {
     setPausing(task.taskId);
     const { error } = await tasksApi.update(task.taskId, {
-      taskId:         task.taskId,
-      title:          task.title,
-      description:    task.description ?? undefined,
-      category:       task.category,
-      priority:       task.priority,
-      status:         "pending",
-      pointValue:     task.pointValue,
-      dueDate:        task.dueDate ?? undefined,
-      completedAt:    undefined,
-      isRecurring:    task.isRecurring,
-      recurrenceRule: task.recurrenceRule ?? undefined,
+      taskId: task.taskId, title: task.title,
+      description: task.description ?? undefined, category: task.category,
+      priority: task.priority, status: "pending", pointValue: task.pointValue,
+      dueDate: task.dueDate ?? undefined, completedAt: undefined,
+      isRecurring: task.isRecurring, recurrenceRule: task.recurrenceRule ?? undefined,
+      submitted: task.submitted,
     });
     setPausing(null);
     if (error) { setError(error); return; }
@@ -121,36 +136,6 @@ export default function Home() {
       activeFilter === "in_progress"
         ? prev.filter((t) => t.taskId !== task.taskId)
         : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t)
-    );
-  }
-
-  async function handleUndo(task: TaskDto) {
-    setUndoing(task.taskId);
-    const { error } = await tasksApi.update(task.taskId, {
-      taskId:         task.taskId,
-      title:          task.title,
-      description:    task.description ?? undefined,
-      category:       task.category,
-      priority:       task.priority,
-      status:         "in_progress",
-      pointValue:     task.pointValue,
-      dueDate:        task.dueDate ?? undefined,
-      completedAt:    undefined,
-      isRecurring:    task.isRecurring,
-      recurrenceRule: task.recurrenceRule ?? undefined,
-    });
-    setUndoing(null);
-    if (error) { setError(error); return; }
-    // un-stage if this task was staged
-    const wasStaged = stagedTaskIds.includes(task.taskId);
-    if (wasStaged) {
-      setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
-      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
-    }
-    setTasks((prev) =>
-      activeFilter === "completed"
-        ? prev.filter((t) => t.taskId !== task.taskId)
-        : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t)
     );
   }
 
@@ -175,13 +160,13 @@ export default function Home() {
     setSubmittedTaskIds((prev) => new Set([...prev, ...stagedTaskIds]));
     setStagedTaskIds([]);
     setDailySubmitted(data!.dailyTotal);
-    window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: data!.pointsAwarded } }));
+    window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: data!.pointsAwarded ?? 0, newBalance: data!.newBalance } }));
     window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: 0, reset: true } }));
   }
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#7b7c81" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#1e1f22" }}>
         <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
       </div>
     );
@@ -189,7 +174,7 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4" style={{ background: "#7b7c81" }}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4" style={{ background: "#1e1f22" }}>
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-widest uppercase text-white mb-2">
             Wahaha Byte
@@ -229,329 +214,358 @@ export default function Home() {
 
   return (
     <>
-    <div className="min-h-screen text-white flex flex-col bg-scanlines" style={{ background: "#7b7c81" }}>
-      <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1">
+      <div className="min-h-screen text-white flex flex-col bg-scanlines" style={{ background: "#1e1f22" }}>
+        <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-xl font-bold tracking-widest uppercase text-white">
-            Tasks
-          </h1>
-          <button
-            onClick={() => setShowNewTask(true)}
-            className="text-xs tracking-widest uppercase px-4 py-2 font-semibold cursor-pointer transition-colors"
-            style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
-          >
-            + New
-          </button>
-        </div>
-
-        {/* Filter tabs */}
-        <div className="flex mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
-          {FILTERS.map((f) => (
+          {/* Header */}
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-xl font-bold tracking-widest uppercase text-white">
+              Tasks
+            </h1>
             <button
-              key={f.value}
-              onClick={() => applyFilter(f.value)}
-              className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5"
-              style={{
-                color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)",
-                background: "transparent",
-                border: "none",
-              }}
+              onClick={() => setShowNewTask(true)}
+              className="text-xs tracking-widest uppercase px-4 py-2 font-semibold cursor-pointer transition-colors"
+              style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
             >
-              {f.label}
-              {f.value === "completed" && stagedTaskIds.length > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
-              )}
-              {activeFilter === f.value && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-px"
-                  style={{ background: "#5bb8e0" }}
-                />
-              )}
+              + New
             </button>
-          ))}
-        </div>
-
-        {/* Column headers */}
-        <div
-          className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
-          style={{
-            gridTemplateColumns: "1fr auto auto auto",
-            color: "rgba(255,255,255,0.55)",
-          }}
-        >
-          <span>Name</span>
-          <span className="w-20 text-center">Category</span>
-          <span className="w-16 text-center">Due</span>
-          <span className="w-[150px] text-right">Points</span>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="px-4 py-3 mb-2 text-xs text-red-400" style={{ background: "#1e1e1e" }}>
-            {error}
           </div>
-        )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
-          </div>
-        )}
-
-        {/* Empty */}
-        {!loading && tasks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-2">
-            <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>No items</p>
-          </div>
-        )}
-
-        {/* Submission panel — Completed tab only, when staged tasks exist */}
-        {activeFilter === "completed" && stagedTaskIds.length > 0 && (() => {
-          const DAILY_CAP = 200;
-          const remaining = DAILY_CAP - dailySubmitted;
-          const stagedPts = tasks
-            .filter((t) => stagedTaskIds.includes(t.taskId))
-            .reduce((sum, t) => sum + t.pointValue, 0);
-          const willAward = Math.min(stagedPts, Math.max(0, remaining));
-          const capped = stagedPts > remaining;
-          const limitReached = remaining <= 0;
-          return (
-            <div
-              className="mb-3 px-4 py-3"
-              style={{
-                background: "#2a2b2f",
-                border: "1px solid rgba(245,158,11,0.3)",
-                borderLeft: "2px solid #f59e0b",
-              }}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.2em", textTransform: "uppercase" }}>
-                    Pending Submission
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
-                      <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
-                    </svg>
-                    <span style={{ color: "#f59e0b", fontSize: "12px", fontWeight: 600 }}>
-                      {stagedTaskIds.length} task{stagedTaskIds.length !== 1 ? "s" : ""} · {stagedPts.toLocaleString()} pts staged
-                    </span>
-                  </div>
-                  {limitReached ? (
-                    <span style={{ color: "#ef4444", fontSize: "10px", letterSpacing: "0.05em" }}>
-                      Daily limit reached (200 pts/day)
-                    </span>
-                  ) : capped ? (
-                    <span style={{ color: "rgba(245,158,11,0.7)", fontSize: "10px", letterSpacing: "0.05em" }}>
-                      Capped — will award {willAward} of {stagedPts} pts ({remaining} remaining today)
-                    </span>
-                  ) : (
-                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "10px", letterSpacing: "0.05em" }}>
-                      {remaining} pts remaining today · will award {willAward} pts
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || limitReached}
-                  className="flex-shrink-0 text-[10px] tracking-widest uppercase px-3 py-2 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  style={{ color: "#f59e0b", border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.08)" }}
-                  onMouseEnter={(e) => { if (!isSubmitting && !limitReached) e.currentTarget.style.background = "rgba(245,158,11,0.18)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(245,158,11,0.08)"; }}
-                >
-                  {isSubmitting ? "Submitting…" : limitReached ? "Limit Reached" : `Submit ${willAward} pts ▶`}
-                </button>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Rows */}
-        <div className="flex flex-col gap-1">
-          {!loading && (activeFilter === "pending"
-            ? tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
-            : tasks
-          ).map((task) => {
-            const isPending = task.status === "pending";
-            const isInProgress = task.status === "in_progress";
-            const isCompleted = task.status === "completed";
-            const isGreyedOut = isInProgress && activeFilter === "pending";
-            const isHovered = hoveredId === task.taskId;
-            const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
-
-            return (
-              <div
-                key={task.taskId}
-                onMouseEnter={() => { if (!isGreyedOut) setHoveredId(task.taskId); }}
-                onMouseLeave={() => { if (!isGreyedOut) setHoveredId(null); }}
-                className="grid items-center px-4 transition-colors"
+          {/* Filter tabs */}
+          <div className="flex mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => applyFilter(f.value)}
+                className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5"
                 style={{
-                  gridTemplateColumns: "1fr auto auto 150px",
-                  background: isHovered ? "#d4d5d8" : "#3e3f42",
-                  borderLeft: isHovered ? "2px solid #9a9b9e" : "2px solid transparent",
-                  opacity: isCompleted ? 0.5 : isGreyedOut ? 0.6 : 1,
-                  minHeight: "48px",
-                  cursor: isGreyedOut ? "default" : "auto",
+                  color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)",
+                  background: "transparent",
+                  border: "none",
                 }}
               >
-                {/* Name + priority dot */}
-                <div className="flex items-center gap-3 py-3 min-w-0">
+                {f.label}
+                {f.value === "completed" && stagedTaskIds.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
+                )}
+                {activeFilter === f.value && (
                   <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: dot }}
+                    className="absolute bottom-0 left-0 right-0 h-px"
+                    style={{ background: "#5bb8e0" }}
                   />
-                  <div className="min-w-0">
-                    <p
-                      className="text-sm truncate"
-                      style={{
-                        color: isCompleted ? "#888" : (isHovered && !isGreyedOut) ? "#1e1f22" : "#ffffff",
-                        textDecoration: isCompleted ? "line-through" : "none",
-                      }}
-                    >
-                      {task.title}
-                    </p>
-                    {task.description && (
-                      <p className="text-[11px] truncate mt-0.5" style={{ color: (isHovered && !isGreyedOut) ? "#555" : "rgba(255,255,255,0.5)" }}>
-                        {task.description}
-                      </p>
-                    )}
-                    {isInProgress && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span style={{ color: (isHovered && !isGreyedOut) ? "#1a6080" : "#5bb8e0", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>
-                          Active
-                        </span>
-                        <span className="blink-cursor" style={{ color: (isHovered && !isGreyedOut) ? "#1a6080" : "#5bb8e0", fontSize: "8px", lineHeight: 1 }}>█</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
+              </button>
+            ))}
+          </div>
 
-                {/* Category */}
-                <div className="w-20 text-center">
-                  <span className="text-[10px] tracking-wide uppercase" style={{ color: (isHovered && !isGreyedOut) ? "#555" : "rgba(255,255,255,0.5)" }}>
-                    {task.category || "—"}
-                  </span>
-                </div>
+          {/* Column headers */}
+          <div
+            className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
+            style={{
+              gridTemplateColumns: "1fr auto auto auto",
+              color: "rgba(255,255,255,0.55)",
+            }}
+          >
+            <span>Name</span>
+            <span className="w-20 text-center">Category</span>
+            <span className="w-16 text-center">Due</span>
+            <span className="text-right">Points</span>
+          </div>
 
-                {/* Due date */}
-                <div className="w-16 text-center">
-                  <span className="text-[10px]" style={{ color: (isHovered && !isGreyedOut) ? "#555" : "rgba(255,255,255,0.5)" }}>
-                    {task.dueDate
-                      ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                      : "—"}
-                  </span>
-                </div>
+          {/* Error */}
+          {error && (
+            <div className="px-4 py-3 mb-2 text-xs text-red-400" style={{ background: "#1e1e1e" }}>
+              {error}
+            </div>
+          )}
 
-                {/* Points + actions */}
-                <div className="w-[150px] flex items-center justify-end gap-2">
-                  {isGreyedOut ? (
-                    // In-progress tasks shown in Pending tab: only Pause, always visible
-                    <button
-                      onClick={() => handlePause(task)}
-                      disabled={pausing === task.taskId}
-                      className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                      style={{ color: "#f59e0b", border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.08)" }}
-                    >
-                      {pausing === task.taskId ? "…" : "Pause"}
-                    </button>
-                  ) : isHovered ? (
-                    <>
-                      {isPending && (
-                        <button
-                          onClick={() => handleStart(task.taskId)}
-                          disabled={starting === task.taskId}
-                          className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                          style={{ color: "#1a6080", border: "1px solid #5bb8e0", background: "rgba(91,184,224,0.12)" }}
-                        >
-                          {starting === task.taskId ? "…" : "Start"}
-                        </button>
-                      )}
-                      {isInProgress && (
-                        <>
-                          <button
-                            onClick={() => handlePause(task)}
-                            disabled={pausing === task.taskId}
-                            className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                            style={{ color: "#7a5a00", border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.1)" }}
-                          >
-                            {pausing === task.taskId ? "…" : "Pause"}
-                          </button>
-                          <button
-                            onClick={() => handleComplete(task.taskId)}
-                            disabled={completing === task.taskId}
-                            className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                            style={{ color: "#1a6080", border: "1px solid #5bb8e0", background: "rgba(91,184,224,0.12)" }}
-                          >
-                            {completing === task.taskId ? "…" : "Complete"}
-                          </button>
-                        </>
-                      )}
-                      {isCompleted && !submittedTaskIds.has(task.taskId) && !task.pointsAwarded && (
-                        <button
-                          onClick={() => handleUndo(task)}
-                          disabled={undoing === task.taskId}
-                          className="text-[10px] tracking-wider uppercase px-2 py-1 cursor-pointer transition-colors disabled:opacity-30"
-                          style={{ color: "#7a5a00", border: "1px solid #f59e0b", background: "rgba(245,158,11,0.12)" }}
-                        >
-                          {undoing === task.taskId ? "…" : "Undo"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(task.taskId)}
-                        disabled={deleting === task.taskId}
-                        className="text-[11px] px-2 py-1 cursor-pointer transition-colors"
-                        style={{ color: "#993333", border: "1px solid #cc4444", background: "transparent" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "#993333")}
-                      >
-                        ✕
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      {/* Blue gem icon */}
-                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
-                        <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
+          {/* Loading */}
+          {loading && (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loading && tasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-2">
+              <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>No items</p>
+            </div>
+          )}
+
+          {/* Submission panel — Completed tab only, when staged tasks exist */}
+          {activeFilter === "completed" && stagedTaskIds.length > 0 && (() => {
+            const DAILY_CAP = 200;
+            const remaining = DAILY_CAP - dailySubmitted;
+            const stagedPts = tasks
+              .filter((t) => stagedTaskIds.includes(t.taskId))
+              .reduce((sum, t) => sum + t.pointValue, 0);
+            const willAward = Math.min(stagedPts, Math.max(0, remaining));
+            const capped = stagedPts > remaining;
+            const limitReached = remaining <= 0;
+            return (
+              <div
+                className="mb-3 px-4 py-3"
+                style={{
+                  background: "#2a2b2f",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderLeft: "2px solid #f59e0b",
+                }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.2em", textTransform: "uppercase" }}>
+                      Pending Submission
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
+                        <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
                       </svg>
-                      <span className="text-xs font-semibold" style={{ color: "#5bb8e0" }}>
-                        {task.pointValue.toLocaleString()}
+                      <span style={{ color: "#f59e0b", fontSize: "12px", fontWeight: 600 }}>
+                        {stagedTaskIds.length} task{stagedTaskIds.length !== 1 ? "s" : ""} · {stagedPts.toLocaleString()} pts staged
                       </span>
                     </div>
-                  )}
+                    {limitReached ? (
+                      <span style={{ color: "#ef4444", fontSize: "10px", letterSpacing: "0.05em" }}>
+                        Daily limit reached (200 pts/day)
+                      </span>
+                    ) : capped ? (
+                      <span style={{ color: "rgba(245,158,11,0.7)", fontSize: "10px", letterSpacing: "0.05em" }}>
+                        Capped — will award {willAward} of {stagedPts} pts ({remaining} remaining today)
+                      </span>
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "10px", letterSpacing: "0.05em" }}>
+                        {remaining} pts remaining today · will award {willAward} pts
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || limitReached}
+                    className="flex-shrink-0 text-[10px] tracking-widest uppercase px-3 py-2 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{ color: "#f59e0b", border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.08)" }}
+                    onMouseEnter={(e) => { if (!isSubmitting && !limitReached) e.currentTarget.style.background = "rgba(245,158,11,0.18)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(245,158,11,0.08)"; }}
+                  >
+                    {isSubmitting ? "Submitting…" : limitReached ? "Limit Reached" : `Submit ${willAward} pts ▶`}
+                  </button>
                 </div>
               </div>
             );
-          })}
-        </div>{/* end rows */}
+          })()}
 
-        {/* Footer count */}
-        {!loading && tasks.length > 0 && (
-          <div className="flex justify-between items-center mt-2 px-1">
-            <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
-              {tasks.filter((t) => t.status !== "completed").length} remaining
-            </span>
-            <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
-              {tasks.length} total
-            </span>
-          </div>
-        )}
+          {/* Rows */}
+          <div className="flex flex-col gap-1">
+            {!loading && (activeFilter === "pending"
+              ? tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
+              : tasks
+            ).map((task) => {
+              const isInProgress = task.status === "in_progress";
+              const isCompleted = task.status === "completed";
+              const isGreyedOut = isInProgress && activeFilter === "pending";
+              const isHovered = hoveredId === task.taskId;
+              const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
+              const isAdvancing = advancing === task.taskId;
+              const canUndo = isCompleted && task.submitted === false && !task.pointsAwarded && !submittedTaskIds.has(task.taskId);
+
+              return (
+                <div
+                  key={task.taskId}
+                  onMouseEnter={() => setHoveredId(task.taskId)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  className="grid items-center px-4 transition-colors"
+                  style={{
+                    position: "relative",
+                    gridTemplateColumns: "1fr auto auto auto",
+                    background: isHovered ? "#363840" : "#2a2b2f",
+                    borderLeft: isInProgress
+                      ? "2px solid #5bb8e0"
+                      : isHovered ? "2px solid rgba(91,184,224,0.4)" : "2px solid transparent",
+                    opacity: isCompleted ? 0.55 : isGreyedOut ? 0.4 : 1,
+                    height: "60px",
+                    cursor: isGreyedOut ? "default" : "auto",
+                  }}
+                >
+                  {/* Name + priority dot */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: dot }}
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className="text-sm truncate"
+                        style={{
+                          color: isCompleted ? "rgba(255,255,255,0.45)" : "#ffffff",
+                          textDecoration: isCompleted ? "line-through" : "none",
+                        }}
+                      >
+                        {task.title}
+                      </p>
+                      {isInProgress && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span style={{ color: "#5bb8e0", fontSize: "8px", lineHeight: 1 }}>█</span>
+                          <span style={{ color: "#5bb8e0", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>Active</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div className="w-20 flex items-center justify-center">
+                    <span className="text-[10px] tracking-wide uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>
+                      {task.category || "—"}
+                    </span>
+                  </div>
+
+                  {/* Due date */}
+                  <div className="w-16 flex items-center justify-center">
+                    <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                      {task.dueDate
+                        ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : "—"}
+                    </span>
+                  </div>
+
+                  {/* Points */}
+                  <div className="flex items-center gap-1 pl-4">
+                    <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                      <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
+                    </svg>
+                    <span className="text-xs font-semibold" style={{ color: "#5bb8e0" }}>
+                      {task.pointValue.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Vertical icon button stack — appears outside the right edge on hover */}
+                  {isHovered && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        bottom: 0,
+                        right: 0,
+                        transform: "translateX(100%)",
+                        display: "flex",
+                        flexDirection: "column",
+                        width: "28px",
+                        background: "#1e1f22",
+                        border: "1px solid #3a3b3f",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Start (pending) */}
+                      {task.status === "pending" && !isGreyedOut && (
+                        <button
+                          onClick={() => handleAdvance(task)}
+                          disabled={isAdvancing}
+                          title="Start"
+                          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <polygon points="2,1 9,5 2,9" fill="#5bb8e0" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Pause (in_progress) */}
+                      {isInProgress && (
+                        <button
+                          onClick={() => handlePause(task)}
+                          disabled={pausing === task.taskId}
+                          title="Pause"
+                          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
+                            <rect x="5.5" y="1" width="3" height="8" fill="#f59e0b" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Complete (in_progress) */}
+                      {isInProgress && !isGreyedOut && (
+                        <button
+                          onClick={() => handleAdvance(task)}
+                          disabled={isAdvancing}
+                          title="Complete"
+                          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <polyline points="1,5 4,8 9,2" stroke="#5bb8e0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Undo (completed, not yet awarded) */}
+                      {canUndo && !isGreyedOut && (
+                        <button
+                          onClick={() => handleAdvance(task)}
+                          disabled={isAdvancing}
+                          title="Undo"
+                          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
+                            <polyline points="4,4.5 1.5,2 4,0" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Delete (non-greyed only) */}
+                      {!isGreyedOut && <button
+                        onClick={() => handleDelete(task.taskId)}
+                        disabled={deleting === task.taskId}
+                        title="Delete"
+                        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: deleting === task.taskId ? 0.4 : 1 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                      </button>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>{/* end rows */}
+
+          {/* Footer count */}
+          {!loading && tasks.length > 0 && (
+            <div className="flex justify-between items-center mt-2 px-1">
+              <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
+                {tasks.filter((t) => t.status !== "completed").length} remaining
+              </span>
+              <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
+                {tasks.length} total
+              </span>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
 
-    {showNewTask && (
-      <NewTaskModal
-        onClose={() => setShowNewTask(false)}
-        onCreated={(task) => {
-          setTasks((prev) => [task, ...prev]);
-          setShowNewTask(false);
-        }}
-      />
-    )}
+      {showNewTask && (
+        <NewTaskModal
+          onClose={() => setShowNewTask(false)}
+          onCreated={(task) => {
+            setTasks((prev) => [task, ...prev]);
+            setShowNewTask(false);
+          }}
+        />
+      )}
     </>
   );
 }
