@@ -41,6 +41,32 @@ body {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
+/* Task row hover — CSS-driven so it's instant (no React re-render) */
+.task-row-inner {
+  background: #2a2b2f;
+}
+.task-row-wrapper:hover .task-row-inner {
+  background: #363840;
+}
+.task-row-inner.default-border {
+  border-left: 2px solid transparent;
+}
+.task-row-wrapper:hover .task-row-inner.default-border {
+  border-left-color: rgba(91, 184, 224, 0.4);
+}
+.task-row-inner.greyed {
+  opacity: 0.4;
+}
+.task-row-wrapper:hover .task-row-inner.greyed {
+  opacity: 0.55;
+}
+.task-row-wrapper .task-actions {
+  display: none;
+}
+.task-row-wrapper:hover .task-actions {
+  display: flex;
+}
+
 .bg-scanlines {
   background-image:
     repeating-linear-gradient(

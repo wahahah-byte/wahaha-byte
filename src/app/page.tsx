@@ -29,7 +29,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilterParams>({ pageSize: 50, pageNumber: 1 });
   const [activeFilter, setActiveFilter] = useState("all");
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [pausing, setPausing] = useState<string | null>(null);
@@ -371,7 +370,6 @@ export default function Home() {
               const isInProgress = task.status === "in_progress";
               const isCompleted = task.status === "completed";
               const isGreyedOut = isInProgress && activeFilter === "pending";
-              const isHovered = hoveredId === task.taskId;
               const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
               const isAdvancing = advancing === task.taskId;
               const canUndo = isCompleted && task.submitted === false && !task.pointsAwarded && !submittedTaskIds.has(task.taskId);
@@ -380,20 +378,25 @@ export default function Home() {
               return (
                 <div
                   key={task.taskId}
-                  onMouseEnter={() => setHoveredId(task.taskId)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  className="grid items-center px-4 transition-colors"
+                  className="task-row-wrapper"
+                  style={{ position: "relative", height: "60px" }}
+                >
+                <div
+                  className={[
+                    "task-row-inner grid items-center px-4",
+                    isGreyedOut ? "greyed" : "",
+                    !isInProgress && !canUndo ? "default-border" : "",
+                  ].filter(Boolean).join(" ")}
                   style={{
-                    position: "relative",
+                    position: "absolute",
+                    inset: 0,
                     gridTemplateColumns: "1fr 80px 64px 80px",
-                    background: isHovered ? "#363840" : "#2a2b2f",
                     borderLeft: isInProgress
                       ? "2px solid #5bb8e0"
                       : canUndo
                       ? "2px solid rgba(245,158,11,0.7)"
-                      : isHovered ? "2px solid rgba(91,184,224,0.4)" : "2px solid transparent",
-                    opacity: isCompleted ? 0.55 : isGreyedOut ? 0.4 : 1,
-                    height: "60px",
+                      : undefined,
+                    opacity: isCompleted && !canUndo ? 0.55 : isGreyedOut ? undefined : 1,
                     cursor: isGreyedOut ? "default" : "auto",
                   }}
                 >
@@ -407,7 +410,7 @@ export default function Home() {
                       <p
                         className="text-sm truncate"
                         style={{
-                          color: isCompleted ? "rgba(255,255,255,0.45)" : "#ffffff",
+                          color: isCompleted && !canUndo ? "rgba(255,255,255,0.45)" : "#ffffff",
                           textDecoration: isCompleted ? "line-through" : "none",
                         }}
                       >
@@ -493,23 +496,24 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Vertical icon button stack — appears outside the right edge on hover */}
-                  {isHovered && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        bottom: 0,
-                        right: 0,
-                        transform: "translateX(100%)",
-                        display: "flex",
-                        flexDirection: "column",
-                        width: "28px",
-                        background: "#1e1f22",
-                        border: "1px solid #3a3b3f",
-                        overflow: "hidden",
-                      }}
-                    >
+                </div>
+
+                  {/* Vertical icon button stack — shown/hidden via CSS :hover on .task-row-wrapper */}
+                  <div
+                    className="task-actions"
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      right: 0,
+                      flexDirection: "column",
+                      width: "28px",
+                      background: "#1e1f22",
+                      border: "1px solid #3a3b3f",
+                      overflow: "hidden",
+                      zIndex: 10,
+                    }}
+                  >
                       {/* Start (pending) */}
                       {task.status === "pending" && !isGreyedOut && (
                         <button
@@ -591,7 +595,6 @@ export default function Home() {
                         </svg>
                       </button>}
                     </div>
-                  )}
                 </div>
               );
             })}
