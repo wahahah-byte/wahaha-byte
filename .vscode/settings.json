@@ -7,7 +7,8 @@
     {
         "command": [
             "workbench.action.terminal.killAll",
-            "workbench.action.terminal.new"
+            "workbench.action.terminal.new",
+            "workbench.action.terminal.split"
         ],
         "delay": 5000,
         "scope": "folderOpen"
