@@ -3,5 +3,14 @@
     "files.watcherExclude": {
         "**/build/**": true,
         "**/node_modules/**": true
+    },"auto-run-command.rules": [
+    {
+        "command": [
+            "workbench.action.terminal.killAll",
+            "workbench.action.terminal.new"
+        ],
+        "delay": 5000,
+        "scope": "folderOpen"
     }
+]
 }
