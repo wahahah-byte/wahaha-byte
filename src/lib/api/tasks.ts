@@ -73,6 +73,17 @@ function toQueryString(params: TaskFilterParams): string {
   return "?" + entries.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
 }
 
+export interface CheckInResponse {
+  pointsAwarded: number;
+  newBalance: number;
+  recurringDailyTotal: number;
+  streakCount: number;
+  longestCount: number;
+  bonusMultiplier: number;
+  streakReset: boolean;
+  nextDueDate: string;
+}
+
 export const tasksApi = {
   getAll: (filters: TaskFilterParams = {}) =>
     authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`),
@@ -97,4 +108,7 @@ export const tasksApi = {
 
   delete: (id: string) =>
     authedDelete<void>(`/api/tasks/${id}`),
+
+  checkIn: (id: string) =>
+    authedPost<CheckInResponse>(`/api/tasks/${id}/checkin`, {}),
 };

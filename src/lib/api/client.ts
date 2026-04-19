@@ -1,5 +1,3 @@
-// Use /backend in the browser so requests proxy through Next.js (no CORS).
-// On the server, call the API directly.
 const API_URL =
   typeof window !== "undefined" ? "/backend" : process.env.NEXT_PUBLIC_API_URL;
 
@@ -34,7 +32,6 @@ async function apiFetch<T>(
     let message: string;
     try {
       const json = JSON.parse(text);
-      // Identity errors come back as string[], plain errors as a string
       message = Array.isArray(json) ? json.join(" ") : String(json);
     } catch {
       message = text || res.statusText;
@@ -42,7 +39,6 @@ async function apiFetch<T>(
     return { data: null, error: message };
   }
 
-  // 204 No Content
   if (res.status === 204) return { data: null as T, error: null };
 
   const data: T = await res.json();

@@ -41,7 +41,6 @@ body {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-/* Task row hover — CSS-driven so it's instant (no React re-render) */
 .task-row-inner {
   background: #2a2b2f;
 }
@@ -65,6 +64,57 @@ body {
 }
 .task-row-wrapper:hover .task-actions {
   display: flex;
+}
+
+@keyframes filed-badge-in {
+  0%   { opacity: 0; transform: scale(0.55); }
+  55%  { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.filed-badge-enter {
+  opacity: 0;
+  animation: filed-badge-in 0.35s ease-out forwards;
+}
+
+@keyframes submit-btn-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.submit-btn:active {
+  animation: submit-btn-pulse 0.18s ease-out forwards;
+}
+
+@keyframes sword-slash {
+  0%   { stroke-dashoffset: 105; opacity: 1; }
+  55%  { stroke-dashoffset: 0;   opacity: 1; }
+  100% { stroke-dashoffset: 0;   opacity: 0; }
+}
+.slash-line {
+  stroke-dasharray: 105;
+  animation: sword-slash 0.26s cubic-bezier(0.15, 0, 0.4, 1) forwards;
+}
+
+@keyframes error-slide-up {
+  0%   { transform: translateY(0);    opacity: 1; }
+  78%  { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(-110%); opacity: 0; }
+}
+.error-banner-anim {
+  position: relative;
+  z-index: 1;
+  animation: error-slide-up 5s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+@keyframes recurring-pts-popup {
+  0%   { opacity: 0;   transform: translateY(0)    scale(0.8); }
+  15%  { opacity: 1;   transform: translateY(-4px)  scale(1.1); }
+  60%  { opacity: 1;   transform: translateY(-14px) scale(1); }
+  100% { opacity: 0;   transform: translateY(-26px) scale(0.9); }
+}
+.recurring-pts-popup {
+  animation: recurring-pts-popup 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
 }
 
 .bg-scanlines {

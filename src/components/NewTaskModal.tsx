@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
 
 const CATEGORIES = ["Fitness", "Study", "Health", "Work", "Personal", "Habits", "Finance", "Other"];
@@ -44,6 +44,10 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
   const [submitting, setSubmitting]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isRecurring) setPointValue((v) => Math.min(v, 5));
+  }, [isRecurring]);
+
   function prevMonth() {
     if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
     else setCalMonth((m) => m - 1);
@@ -73,7 +77,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
     onCreated(data!);
   }
 
-  // Build calendar grid
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
   const firstDay    = new Date(calYear, calMonth, 1).getDay();
   const cells: (number | null)[] = [
@@ -95,7 +98,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
         style={{ background: "#3e3f42", border: "1px solid #2a2a2a" }}
         onClick={() => setShowCalendar(false)}
       >
-        {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold tracking-widest uppercase text-white">New Task</h2>
           <button
@@ -108,7 +110,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           </button>
         </div>
 
-        {/* Title */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Title</label>
           <input
@@ -124,7 +125,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           />
         </div>
 
-        {/* Description */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Description</label>
           <textarea
@@ -139,7 +139,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           />
         </div>
 
-        {/* Priority — 3-button bar */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Priority</label>
           <div className="flex gap-0" style={{ border: "1px solid #2a2a2a" }}>
@@ -162,7 +161,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           </div>
         </div>
 
-        {/* Category + Points */}
         <div className="flex gap-3">
           <div className="flex flex-col gap-1.5 flex-1">
             <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Category</label>
@@ -186,17 +184,20 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
             <input
               type="number"
               min={0}
+              max={isRecurring ? 5 : undefined}
               value={pointValue}
-              onChange={(e) => setPointValue(Math.max(0, Number(e.target.value)))}
+              onChange={(e) => setPointValue(Math.max(0, Math.min(isRecurring ? 5 : Infinity, Number(e.target.value))))}
               className="w-full px-3 py-2 text-sm bg-transparent outline-none"
               style={{ color: "#5bb8e0", border: "1px solid #2a2a2a" }}
               onFocus={(e) => (e.currentTarget.style.borderColor = "#1e5068")}
               onBlur={(e)  => (e.currentTarget.style.borderColor = "#2a2a2a")}
             />
+            {isRecurring && (
+              <span className="text-[9px] leading-tight" style={{ color: "rgba(167,139,250,0.65)" }}>Max 5 pts / occurrence</span>
+            )}
           </div>
         </div>
 
-        {/* Due Date + calendar popup */}
         <div className="flex flex-col gap-1.5 relative">
           <label className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Due Date</label>
           <button
@@ -219,7 +220,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
               style={{ background: "#2a2b2e", border: "1px solid #2a2a2a" }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Month navigation */}
               <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={prevMonth}
@@ -244,7 +244,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 </button>
               </div>
 
-              {/* Day-of-week headers */}
               <div className="grid grid-cols-7 mb-1">
                 {DAYS.map((d) => (
                   <span key={d} className="text-center text-[9px] tracking-wider uppercase py-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
@@ -253,7 +252,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
                 ))}
               </div>
 
-              {/* Day cells */}
               <div className="grid grid-cols-7 gap-y-0.5">
                 {cells.map((day, i) => {
                   const isSelected =
@@ -307,7 +305,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           )}
         </div>
 
-        {/* Recurring toggle */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>Recurring</span>
@@ -351,10 +348,8 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           )}
         </div>
 
-        {/* Error */}
         {error && <p className="text-xs" style={{ color: "#ef4444" }}>{error}</p>}
 
-        {/* Actions */}
         <div className="flex gap-2 pt-1">
           <button
             onClick={onClose}
