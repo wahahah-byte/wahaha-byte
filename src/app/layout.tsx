@@ -37,7 +37,6 @@ export default function RootLayout({
             boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
           }}
         >
-          {/* Left: MGSV-style HUD strip */}
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
@@ -50,7 +49,6 @@ export default function RootLayout({
             </span>
           </div>
 
-          {/* Right: avatar */}
           <AuthHeader />
         </header>
         {children}

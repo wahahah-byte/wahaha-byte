@@ -7,12 +7,14 @@ export interface UserProfile {
   totalPointsEarned: number;
   level: number;
   pointsSubmittedToday: number;
+  recurringPointsSubmittedToday: number;
 }
 
 export interface SubmitPointsResponse {
   pointsAwarded: number;
   newBalance: number;
   dailyTotal: number;
+  recurringDailyTotal: number;
 }
 
 export const usersApi = {
