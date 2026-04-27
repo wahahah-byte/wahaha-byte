@@ -5,15 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
-import { streaksApi, StreakDto } from "@/lib/api/streaks";
 import NewTaskModal from "@/components/NewTaskModal";
 import ShatterEffect from "@/components/ShatterEffect";
 import TaskDetailModal from "@/components/TaskDetailModal";
 
 const MOCK_TASKS: TaskDto[] = [
-  { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false },
-  { taskId: "d2", userId: "demo", title: "Read 30 minutes", description: null, category: "Learning", priority: "medium", status: "pending", pointValue: 10, dueDate: "2026-04-27", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekdays", submitted: false },
-  { taskId: "d3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 20, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false },
+  { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
+  { taskId: "d2", userId: "demo", title: "Read 30 minutes", description: null, category: "Learning", priority: "medium", status: "pending", pointValue: 10, dueDate: "2026-04-27", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekdays", submitted: false, currentStreakCount: 8, longestStreakCount: 21 },
+  { taskId: "d3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 20, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false, currentStreakCount: 5, longestStreakCount: 5 },
   { taskId: "d4", userId: "demo", title: "Monthly budget review", description: null, category: "Finance", priority: "high", status: "pending", pointValue: 25, dueDate: "2026-05-01", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "monthly", submitted: false },
   { taskId: "d5", userId: "demo", title: "Fix login page redirect bug", description: null, category: "Dev", priority: "high", status: "in_progress", pointValue: 30, dueDate: "2026-04-26", createdAt: "2026-04-20T00:00:00Z", completedAt: null, isRecurring: false, recurrenceRule: null, submitted: false },
   { taskId: "d6", userId: "demo", title: "Design new dashboard mockup", description: null, category: "Design", priority: "medium", status: "pending", pointValue: 20, dueDate: "2026-05-03", createdAt: "2026-04-22T00:00:00Z", completedAt: null, isRecurring: false, recurrenceRule: null, submitted: false },
@@ -22,11 +21,6 @@ const MOCK_TASKS: TaskDto[] = [
   { taskId: "d9", userId: "demo", title: "Update resume", description: null, category: "Career", priority: "low", status: "completed", pointValue: 10, dueDate: "2026-04-24", createdAt: "2026-04-18T00:00:00Z", completedAt: "2026-04-24T10:00:00Z", isRecurring: false, recurrenceRule: null, submitted: true, pointsAwarded: true },
 ];
 
-const MOCK_STREAKS = new Map<string, StreakDto>([
-  ["d1", { streakId: 1, userId: "demo", taskId: "d1", streakType: "daily_Fitness", currentCount: 12, longestCount: 15, bonusMultiplier: 1.2, lastActivityDate: "2026-04-25T00:00:00Z", isActive: true }],
-  ["d2", { streakId: 2, userId: "demo", taskId: "d2", streakType: "weekdays_Learning", currentCount: 8, longestCount: 21, bonusMultiplier: 1.1, lastActivityDate: "2026-04-25T00:00:00Z", isActive: true }],
-  ["d3", { streakId: 3, userId: "demo", taskId: "d3", streakType: "weekly_Productivity", currentCount: 5, longestCount: 5, bonusMultiplier: 1.05, lastActivityDate: "2026-04-19T00:00:00Z", isActive: true }],
-]);
 
 const PRIORITY_DOT: Record<string, string> = {
   high: "#ef4444",
@@ -48,14 +42,6 @@ function getPrevPeriodStart(due: Date, rule: string): Date {
   return prev;
 }
 
-function penalizeStreak(count: number): number {
-  if (count < 10) return 0;
-  if (count < 25) return Math.floor(count / 2);
-  if (count < 50) return Math.floor((count * 2) / 3);
-  if (count < 75) return Math.floor((count * 3) / 4);
-  if (count < 100) return Math.floor((count * 4) / 5);
-  return Math.floor((count * 9) / 10);
-}
 
 function canCheckInNow(dueDate: string | null, rule?: string | null): boolean {
   if (rule === "weekdays") {
@@ -138,7 +124,6 @@ function Home() {
   const [recurringSubmittedToday, setRecurringSubmittedToday] = useState(0);
   const [showCapWarning, setShowCapWarning] = useState(false);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
-  const [streaks, setStreaks] = useState<Map<string, StreakDto>>(new Map());
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
 
   useEffect(() => {
@@ -146,7 +131,7 @@ function Home() {
     const tab = searchParams.get("tab");
     if (tab && FILTERS.some((f) => f.value === tab)) {
       setActiveFilter(tab);
-      setFilters((f) => ({ ...f, status: tab === "all" || tab === "pending" ? undefined : tab, pageNumber: 1 }));
+      setFilters((f) => ({ ...f, status: tab === "all" || tab === "pending" || tab === "in_progress" ? undefined : tab, pageNumber: 1 }));
     }
     const hasToken = !!localStorage.getItem("auth_token");
     setIsAuthenticated(hasToken);
@@ -159,7 +144,6 @@ function Home() {
       });
     } else {
       setTasks(MOCK_TASKS);
-      setStreaks(new Map(MOCK_STREAKS));
       setLoading(false);
     }
   }, []);
@@ -175,57 +159,10 @@ function Home() {
     async function fetchTasks() {
       setLoading(true);
       setError(null);
-      const [streakResult, taskResult] = await Promise.all([
-        streaksApi.getActive(),
-        tasksApi.getAll(filters),
-      ]);
+      const taskResult = await tasksApi.getAll(filters);
       setLoading(false);
       if (taskResult.error) { setError(taskResult.error); return; }
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const freshStreakMap = new Map<string, StreakDto>(
-        (streakResult.data ?? []).map((s) => [s.taskId, s])
-      );
-      // Correct bad streakType values (backend writes taskId there; real value is rule + '_' + category)
-      for (const [taskId, streak] of freshStreakMap) {
-        if (streak.streakType.includes("_")) continue;
-        const task = taskResult.data!.data.find((t) => t.taskId === taskId);
-        if (!task) continue;
-        const correctType = (task.recurrenceRule ?? "category") + "_" + task.category;
-        streaksApi.update(streak.streakId, { ...streak, streakType: correctType });
-        freshStreakMap.set(taskId, { ...streak, streakType: correctType });
-      }
-      const processedTasks = taskResult.data!.data.map((task) => {
-        if (!task.isRecurring || !task.dueDate || !task.recurrenceRule || task.status !== "pending") return task;
-        let dueDate = task.dueDate;
-        let due = parseLocalDate(dueDate);
-        let missedCount = 0;
-        while (due < today) {
-          dueDate = getNextDueDate(dueDate, task.recurrenceRule);
-          due = parseLocalDate(dueDate);
-          missedCount++;
-        }
-        if (missedCount === 0) return task;
-        tasksApi.update(task.taskId, {
-          taskId: task.taskId, title: task.title,
-          description: task.description ?? undefined, category: task.category,
-          priority: task.priority, status: task.status, pointValue: task.pointValue,
-          dueDate, isRecurring: task.isRecurring, recurrenceRule: task.recurrenceRule ?? undefined,
-          submitted: task.submitted,
-        });
-        const streak = freshStreakMap.get(task.taskId);
-        if (streak && streak.currentCount > 0) {
-          const correctType = (task.recurrenceRule ?? "category") + "_" + task.category;
-          let penalized = streak.currentCount;
-          for (let i = 0; i < missedCount; i++) penalized = penalizeStreak(penalized);
-          if (penalized !== streak.currentCount || streak.streakType !== correctType) {
-            streaksApi.update(streak.streakId, { ...streak, streakType: correctType, currentCount: penalized });
-            freshStreakMap.set(task.taskId, { ...streak, streakType: correctType, currentCount: penalized });
-          }
-        }
-        return { ...task, dueDate };
-      });
-      setTasks(processedTasks);
-      setStreaks(new Map(freshStreakMap));
+      setTasks(taskResult.data!.data);
       const alreadySubmitted = new Set(taskResult.data!.data.filter((t) => t.pointsAwarded).map((t) => t.taskId));
       setSubmittedTaskIds(alreadySubmitted);
     }
@@ -242,7 +179,7 @@ function Home() {
 
   function applyFilter(value: string) {
     setActiveFilter(value);
-    setFilters((f) => ({ ...f, status: value === "all" || value === "pending" ? undefined : value, pageNumber: 1 }));
+    setFilters((f) => ({ ...f, status: value === "all" || value === "pending" || value === "in_progress" ? undefined : value, pageNumber: 1 }));
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all") params.delete("tab");
     else params.set("tab", value);
@@ -377,20 +314,13 @@ function Home() {
     setAdvancing(task.taskId);
     if (!isAuthenticated) {
       const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
-      const taskStreak = streaks.get(task.taskId);
-      const newCount = (taskStreak?.currentCount ?? 0) + 1;
-      const updatedStreak: StreakDto = {
-        streakId: taskStreak?.streakId ?? 0,
-        userId: "demo", taskId: task.taskId,
-        streakType: (task.recurrenceRule ?? "category") + "_" + task.category,
-        currentCount: newCount, longestCount: Math.max(newCount, taskStreak?.longestCount ?? 0),
-        bonusMultiplier: taskStreak?.bonusMultiplier ?? 1,
-        lastActivityDate: new Date().toISOString(), isActive: true,
-      };
-      setStreaks((prev) => { const n = new Map(prev); n.set(task.taskId, updatedStreak); return n; });
+      const newCount = (task.currentStreakCount ?? 0) + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
-      setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, dueDate: nextDue } : t));
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+        ? { ...t, dueDate: nextDue, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0) }
+        : t
+      ));
       setAdvancing(null);
       return;
     }
@@ -400,41 +330,6 @@ function Home() {
     setRecurringSubmittedToday(data!.recurringDailyTotal);
     setDailySubmitted((prev) => prev + awarded);
     window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: awarded, newBalance: data!.newBalance } }));
-
-    const existingStreak = streaks.get(task.taskId);
-    const correctStreakType = (task.recurrenceRule ?? "category") + "_" + task.category;
-    const updatedStreak: StreakDto = {
-      streakId: existingStreak?.streakId ?? 0,
-      userId: task.userId,
-      taskId: task.taskId,
-      streakType: correctStreakType,
-      currentCount: data!.streakCount,
-      longestCount: data!.longestCount,
-      bonusMultiplier: data!.bonusMultiplier,
-      lastActivityDate: new Date().toISOString(),
-      isActive: true,
-    };
-    setStreaks((prev) => { const next = new Map(prev); next.set(task.taskId, updatedStreak); return next; });
-    if (existingStreak?.streakId) {
-      streaksApi.update(existingStreak.streakId, updatedStreak);
-    } else {
-      streaksApi.getActive().then(({ data: fresh }) => {
-        const backendStreak = fresh?.find((s) => s.taskId === task.taskId);
-        if (backendStreak?.streakId) {
-          const merged = { ...updatedStreak, streakId: backendStreak.streakId };
-          streaksApi.update(backendStreak.streakId, merged);
-          setStreaks((prev) => {
-            const cur = prev.get(task.taskId);
-            if (!cur?.streakId) {
-              const next = new Map(prev);
-              next.set(task.taskId, merged);
-              return next;
-            }
-            return prev;
-          });
-        }
-      });
-    }
 
     if (awarded > 0) {
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
@@ -461,7 +356,8 @@ function Home() {
     }
     setAdvancing(null);
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-      ? { ...t, status: "pending", dueDate: nextDueDate, completedAt: null, submitted: false }
+      ? { ...t, status: "pending", dueDate: nextDueDate, completedAt: null, submitted: false,
+          currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount }
       : t
     ));
   }
@@ -725,15 +621,17 @@ function Home() {
               const listItems: (TaskDto | Sep)[] =
                 activeFilter === "pending"
                   ? tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
-                  : activeFilter === "completed"
-                    ? [...tasks].filter((t) => t.status === "completed").sort(completedSort)
-                    : (() => {
-                      const active = tasks.filter((t) => t.status !== "completed");
-                      const completed = [...tasks].filter((t) => t.status === "completed").sort(completedSort);
-                      return completed.length > 0
-                        ? [...active, { __sep: true as const }, ...completed]
-                        : active;
-                    })();
+                  : activeFilter === "in_progress"
+                    ? tasks.filter((t) => t.status === "in_progress" || (t.status === "pending" && t.isRecurring))
+                    : activeFilter === "completed"
+                      ? [...tasks].filter((t) => t.status === "completed").sort(completedSort)
+                      : (() => {
+                        const active = tasks.filter((t) => t.status !== "completed");
+                        const completed = [...tasks].filter((t) => t.status === "completed").sort(completedSort);
+                        return completed.length > 0
+                          ? [...active, { __sep: true as const }, ...completed]
+                          : active;
+                      })();
               return listItems.map((item, _idx) => {
                 if ("__sep" in item) {
                   return (
@@ -751,7 +649,7 @@ function Home() {
                 const task = item;
                 const isInProgress = task.status === "in_progress";
                 const isCompleted = task.status === "completed";
-                const isGreyedOut = isInProgress && activeFilter === "pending";
+                const isGreyedOut = activeFilter === "pending" && (isInProgress || task.isRecurring);
                 const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
                 const isAdvancing = advancing === task.taskId;
                 const isFiling = filingIds.has(task.taskId);
@@ -834,7 +732,6 @@ function Home() {
                           )}
                           {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
                             const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule);
-                            const taskStreak = streaks.get(task.taskId);
                             const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
                             const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
                               : task.recurrenceRule === "weekdays" ? "Weekdays"
@@ -860,9 +757,9 @@ function Home() {
                                     </span>
                                   </>
                                 )}
-                                {taskStreak && taskStreak.currentCount > 0 && (
+                                {task.currentStreakCount && task.currentStreakCount > 0 && (
                                   <span style={{ color, fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
-                                    · 🔥 {taskStreak.currentCount}
+                                    · 🔥 {task.currentStreakCount}
                                   </span>
                                 )}
                               </div>
@@ -1159,7 +1056,8 @@ function Home() {
         return (
           <TaskDetailModal
             task={dt}
-            streak={streaks.get(dt.taskId)}
+            currentStreakCount={dt.currentStreakCount}
+            longestStreakCount={dt.longestStreakCount}
             onClose={closeDetail}
             canUndo={dtCanUndo}
             isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}

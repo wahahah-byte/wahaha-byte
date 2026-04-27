@@ -16,6 +16,8 @@ export interface TaskDto {
   recurrenceRule: string | null;
   pointsAwarded?: boolean;
   submitted: boolean;
+  currentStreakCount?: number;
+  longestStreakCount?: number;
 }
 
 export interface CreateTaskRequest {
@@ -85,8 +87,10 @@ export interface CheckInResponse {
 }
 
 export const tasksApi = {
-  getAll: (filters: TaskFilterParams = {}) =>
-    authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`),
+  getAll: (filters: TaskFilterParams = {}) => {
+    console.log(authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`));
+    return authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`)
+  },
 
   getById: (id: string) =>
     authedGet<TaskDto>(`/api/tasks/${id}`),

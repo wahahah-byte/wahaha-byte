@@ -1,7 +1,6 @@
 "use client";
 
 import { TaskDto } from "@/lib/api/tasks";
-import { StreakDto } from "@/lib/api/streaks";
 
 const PRIORITY_DOT: Record<string, string> = {
   high: "#ef4444",
@@ -17,7 +16,8 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 interface Props {
   task: TaskDto;
-  streak?: StreakDto;
+  currentStreakCount?: number;
+  longestStreakCount?: number;
   onClose: () => void;
   onStart?: () => void;
   onCheckIn?: () => void;
@@ -69,7 +69,7 @@ function ActionBtn({
 }
 
 export default function TaskDetailModal({
-  task, streak, onClose,
+  task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
   isActing, canUndo,
 }: Props) {
@@ -178,14 +178,14 @@ export default function TaskDetailModal({
               </Row>
             )}
 
-            {streak && streak.currentCount > 0 && (
+            {currentStreakCount && currentStreakCount > 0 && (
               <Row label="Streak">
                 <div className="flex items-center gap-1.5">
                   <span style={{ fontSize: "12px" }}>🔥</span>
                   <span style={{ color: "#a78bfa", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-                    {streak.currentCount} &nbsp;
+                    {currentStreakCount} &nbsp;
                     <span style={{ color: "rgba(167,139,250,0.5)", fontWeight: 400 }}>
-                      / best {streak.longestCount}
+                      / best {longestStreakCount}
                     </span>
                   </span>
                 </div>
