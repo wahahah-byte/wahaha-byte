@@ -10,7 +10,9 @@
       "Bash(npm run:*)",
       "Bash(git config *)",
       "Bash(xargs cat *)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(Select-String \"error CS|Build succeeded|Error\\\\\\(s\\\\\\)\")"
     ]
   }
 }
