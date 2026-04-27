@@ -87,12 +87,24 @@ body {
 
 @keyframes sword-slash {
   0%   { stroke-dashoffset: 105; opacity: 1; }
-  55%  { stroke-dashoffset: 0;   opacity: 1; }
+  30%  { stroke-dashoffset: 0;   opacity: 1; }
+  65%  { stroke-dashoffset: 0;   opacity: 0.85; }
   100% { stroke-dashoffset: 0;   opacity: 0; }
 }
 .slash-line {
   stroke-dasharray: 105;
-  animation: sword-slash 0.26s cubic-bezier(0.15, 0, 0.4, 1) forwards;
+  animation: sword-slash 0.55s cubic-bezier(0.1, 0, 0.35, 1) forwards;
+}
+
+@keyframes row-delete {
+  0%   { opacity: 1;   max-height: 64px; }
+  25%  { opacity: 0.9; max-height: 64px; }
+  60%  { opacity: 0.2; max-height: 64px; }
+  100% { opacity: 0;   max-height: 0;    margin-bottom: 0; padding-bottom: 0; }
+}
+.task-row-deleting {
+  overflow: hidden;
+  animation: row-delete 0.55s ease-out forwards;
 }
 
 @keyframes error-slide-up {

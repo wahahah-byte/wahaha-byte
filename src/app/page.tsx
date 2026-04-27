@@ -1,19 +1,77 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { streaksApi, StreakDto } from "@/lib/api/streaks";
 import NewTaskModal from "@/components/NewTaskModal";
 import ShatterEffect from "@/components/ShatterEffect";
+import TaskDetailModal from "@/components/TaskDetailModal";
+
+const MOCK_TASKS: TaskDto[] = [
+  { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false },
+  { taskId: "d2", userId: "demo", title: "Read 30 minutes", description: null, category: "Learning", priority: "medium", status: "pending", pointValue: 10, dueDate: "2026-04-27", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekdays", submitted: false },
+  { taskId: "d3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 20, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false },
+  { taskId: "d4", userId: "demo", title: "Monthly budget review", description: null, category: "Finance", priority: "high", status: "pending", pointValue: 25, dueDate: "2026-05-01", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "monthly", submitted: false },
+  { taskId: "d5", userId: "demo", title: "Fix login page redirect bug", description: null, category: "Dev", priority: "high", status: "in_progress", pointValue: 30, dueDate: "2026-04-26", createdAt: "2026-04-20T00:00:00Z", completedAt: null, isRecurring: false, recurrenceRule: null, submitted: false },
+  { taskId: "d6", userId: "demo", title: "Design new dashboard mockup", description: null, category: "Design", priority: "medium", status: "pending", pointValue: 20, dueDate: "2026-05-03", createdAt: "2026-04-22T00:00:00Z", completedAt: null, isRecurring: false, recurrenceRule: null, submitted: false },
+  { taskId: "d7", userId: "demo", title: "Organize project notes", description: null, category: "Productivity", priority: "low", status: "pending", pointValue: 5, dueDate: null, createdAt: "2026-04-23T00:00:00Z", completedAt: null, isRecurring: false, recurrenceRule: null, submitted: false },
+  { taskId: "d8", userId: "demo", title: "Write project README", description: null, category: "Dev", priority: "medium", status: "completed", pointValue: 15, dueDate: "2026-04-25", createdAt: "2026-04-20T00:00:00Z", completedAt: "2026-04-25T14:00:00Z", isRecurring: false, recurrenceRule: null, submitted: false, pointsAwarded: false },
+  { taskId: "d9", userId: "demo", title: "Update resume", description: null, category: "Career", priority: "low", status: "completed", pointValue: 10, dueDate: "2026-04-24", createdAt: "2026-04-18T00:00:00Z", completedAt: "2026-04-24T10:00:00Z", isRecurring: false, recurrenceRule: null, submitted: true, pointsAwarded: true },
+];
+
+const MOCK_STREAKS = new Map<string, StreakDto>([
+  ["d1", { streakId: 1, userId: "demo", taskId: "d1", streakType: "daily_Fitness", currentCount: 12, longestCount: 15, bonusMultiplier: 1.2, lastActivityDate: "2026-04-25T00:00:00Z", isActive: true }],
+  ["d2", { streakId: 2, userId: "demo", taskId: "d2", streakType: "weekdays_Learning", currentCount: 8, longestCount: 21, bonusMultiplier: 1.1, lastActivityDate: "2026-04-25T00:00:00Z", isActive: true }],
+  ["d3", { streakId: 3, userId: "demo", taskId: "d3", streakType: "weekly_Productivity", currentCount: 5, longestCount: 5, bonusMultiplier: 1.05, lastActivityDate: "2026-04-19T00:00:00Z", isActive: true }],
+]);
 
 const PRIORITY_DOT: Record<string, string> = {
   high: "#ef4444",
   medium: "#f59e0b",
   low: "#22c55e",
 };
+
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function getPrevPeriodStart(due: Date, rule: string): Date {
+  const prev = new Date(due);
+  if (rule === "daily" || rule === "weekdays") prev.setDate(prev.getDate() - 1);
+  else if (rule === "weekly") prev.setDate(prev.getDate() - 7);
+  else if (rule === "biweekly") prev.setDate(prev.getDate() - 14);
+  else if (rule === "monthly") prev.setMonth(prev.getMonth() - 1);
+  return prev;
+}
+
+function penalizeStreak(count: number): number {
+  if (count < 10) return 0;
+  if (count < 25) return Math.floor(count / 2);
+  if (count < 50) return Math.floor((count * 2) / 3);
+  if (count < 75) return Math.floor((count * 3) / 4);
+  if (count < 100) return Math.floor((count * 4) / 5);
+  return Math.floor((count * 9) / 10);
+}
+
+function canCheckInNow(dueDate: string | null, rule?: string | null): boolean {
+  if (rule === "weekdays") {
+    const day = new Date().getDay();
+    if (day === 0 || day === 6) return false;
+  }
+  if (!dueDate) return true;
+  const due = parseLocalDate(dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (rule === "daily" || rule === "weekdays") {
+    return due <= today;
+  }
+  if (today > due) return false;
+  return today > getPrevPeriodStart(due, rule ?? "");
+}
 
 function getNextDueDate(dueDate: string | null, rule: string): string {
   const base = dueDate ? new Date(dueDate) : new Date();
@@ -37,6 +95,18 @@ function getNextOccurrenceLabel(dueDate: string | null, rule: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function getUnlockInfo(dueDate: string | null): { date: string; relative: string; days: number } | null {
+  if (!dueDate) return null;
+  const due = parseLocalDate(dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return null;
+  const dateStr = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const relative = diffDays === 1 ? "tomorrow" : `in ${diffDays}d`;
+  return { date: dateStr, relative, days: diffDays };
+}
+
 const FILTERS = [
   { label: "All", value: "all" },
   { label: "Pending", value: "pending" },
@@ -44,8 +114,9 @@ const FILTERS = [
   { label: "Completed", value: "completed" },
 ];
 
-export default function Home() {
+function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isMounted, setIsMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tasks, setTasks] = useState<TaskDto[]>([]);
@@ -68,9 +139,15 @@ export default function Home() {
   const [showCapWarning, setShowCapWarning] = useState(false);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
   const [streaks, setStreaks] = useState<Map<string, StreakDto>>(new Map());
+  const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
+    const tab = searchParams.get("tab");
+    if (tab && FILTERS.some((f) => f.value === tab)) {
+      setActiveFilter(tab);
+      setFilters((f) => ({ ...f, status: tab === "all" || tab === "pending" ? undefined : tab, pageNumber: 1 }));
+    }
     const hasToken = !!localStorage.getItem("auth_token");
     setIsAuthenticated(hasToken);
     if (hasToken) {
@@ -80,11 +157,10 @@ export default function Home() {
           setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
         }
       });
-      streaksApi.getActive().then(({ data }) => {
-        if (data) {
-          setStreaks(new Map(data.map((s) => [s.streakType, s])));
-        }
-      });
+    } else {
+      setTasks(MOCK_TASKS);
+      setStreaks(new Map(MOCK_STREAKS));
+      setLoading(false);
     }
   }, []);
 
@@ -99,11 +175,58 @@ export default function Home() {
     async function fetchTasks() {
       setLoading(true);
       setError(null);
-      const { data, error } = await tasksApi.getAll(filters);
+      const [streakResult, taskResult] = await Promise.all([
+        streaksApi.getActive(),
+        tasksApi.getAll(filters),
+      ]);
       setLoading(false);
-      if (error) { setError(error); return; }
-      setTasks(data!.data);
-      const alreadySubmitted = new Set(data!.data.filter((t) => t.pointsAwarded).map((t) => t.taskId));
+      if (taskResult.error) { setError(taskResult.error); return; }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const freshStreakMap = new Map<string, StreakDto>(
+        (streakResult.data ?? []).map((s) => [s.taskId, s])
+      );
+      // Correct bad streakType values (backend writes taskId there; real value is rule + '_' + category)
+      for (const [taskId, streak] of freshStreakMap) {
+        if (streak.streakType.includes("_")) continue;
+        const task = taskResult.data!.data.find((t) => t.taskId === taskId);
+        if (!task) continue;
+        const correctType = (task.recurrenceRule ?? "category") + "_" + task.category;
+        streaksApi.update(streak.streakId, { ...streak, streakType: correctType });
+        freshStreakMap.set(taskId, { ...streak, streakType: correctType });
+      }
+      const processedTasks = taskResult.data!.data.map((task) => {
+        if (!task.isRecurring || !task.dueDate || !task.recurrenceRule || task.status !== "pending") return task;
+        let dueDate = task.dueDate;
+        let due = parseLocalDate(dueDate);
+        let missedCount = 0;
+        while (due < today) {
+          dueDate = getNextDueDate(dueDate, task.recurrenceRule);
+          due = parseLocalDate(dueDate);
+          missedCount++;
+        }
+        if (missedCount === 0) return task;
+        tasksApi.update(task.taskId, {
+          taskId: task.taskId, title: task.title,
+          description: task.description ?? undefined, category: task.category,
+          priority: task.priority, status: task.status, pointValue: task.pointValue,
+          dueDate, isRecurring: task.isRecurring, recurrenceRule: task.recurrenceRule ?? undefined,
+          submitted: task.submitted,
+        });
+        const streak = freshStreakMap.get(task.taskId);
+        if (streak && streak.currentCount > 0) {
+          const correctType = (task.recurrenceRule ?? "category") + "_" + task.category;
+          let penalized = streak.currentCount;
+          for (let i = 0; i < missedCount; i++) penalized = penalizeStreak(penalized);
+          if (penalized !== streak.currentCount || streak.streakType !== correctType) {
+            streaksApi.update(streak.streakId, { ...streak, streakType: correctType, currentCount: penalized });
+            freshStreakMap.set(task.taskId, { ...streak, streakType: correctType, currentCount: penalized });
+          }
+        }
+        return { ...task, dueDate };
+      });
+      setTasks(processedTasks);
+      setStreaks(new Map(freshStreakMap));
+      const alreadySubmitted = new Set(taskResult.data!.data.filter((t) => t.pointsAwarded).map((t) => t.taskId));
       setSubmittedTaskIds(alreadySubmitted);
     }
     fetchTasks();
@@ -120,12 +243,43 @@ export default function Home() {
   function applyFilter(value: string) {
     setActiveFilter(value);
     setFilters((f) => ({ ...f, status: value === "all" || value === "pending" ? undefined : value, pageNumber: 1 }));
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "all") params.delete("tab");
+    else params.set("tab", value);
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }
 
   async function handleAdvance(task: TaskDto) {
     if (advancing === task.taskId) return;
     const canUndo = task.status === "completed" && !submittedTaskIds.has(task.taskId) && !task.pointsAwarded;
     setAdvancing(task.taskId);
+
+    if (!isAuthenticated) {
+      if (task.status === "pending" && !task.isRecurring) {
+        setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress" } : t));
+      } else if (task.status === "in_progress") {
+        if (task.pointValue) {
+          setStagedTaskIds((prev) => [...prev, task.taskId]);
+          setSelectedIds((prev) => new Set([...prev, task.taskId]));
+          window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+        }
+        setTasks((prev) =>
+          activeFilter === "in_progress"
+            ? prev.filter((t) => t.taskId !== task.taskId)
+            : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "completed", completedAt: new Date().toISOString() } : t)
+        );
+      } else if (canUndo) {
+        if (stagedTaskIds.includes(task.taskId)) {
+          setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
+          window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
+        }
+        setSelectedIds((prev) => { const n = new Set(prev); n.delete(task.taskId); return n; });
+        setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t));
+      }
+      setAdvancing(null);
+      return;
+    }
 
     if (task.status === "pending") {
       const { error } = await tasksApi.start(task.taskId);
@@ -221,6 +375,25 @@ export default function Home() {
 
   async function handleCheckIn(task: TaskDto) {
     setAdvancing(task.taskId);
+    if (!isAuthenticated) {
+      const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
+      const taskStreak = streaks.get(task.taskId);
+      const newCount = (taskStreak?.currentCount ?? 0) + 1;
+      const updatedStreak: StreakDto = {
+        streakId: taskStreak?.streakId ?? 0,
+        userId: "demo", taskId: task.taskId,
+        streakType: (task.recurrenceRule ?? "category") + "_" + task.category,
+        currentCount: newCount, longestCount: Math.max(newCount, taskStreak?.longestCount ?? 0),
+        bonusMultiplier: taskStreak?.bonusMultiplier ?? 1,
+        lastActivityDate: new Date().toISOString(), isActive: true,
+      };
+      setStreaks((prev) => { const n = new Map(prev); n.set(task.taskId, updatedStreak); return n; });
+      setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
+      setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, dueDate: nextDue } : t));
+      setAdvancing(null);
+      return;
+    }
     const { data, error } = await tasksApi.checkIn(task.taskId);
     if (error) { setAdvancing(null); setError(error); return; }
     const awarded = data!.pointsAwarded;
@@ -228,35 +401,78 @@ export default function Home() {
     setDailySubmitted((prev) => prev + awarded);
     window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: awarded, newBalance: data!.newBalance } }));
 
-    setStreaks((prev) => {
-      const next = new Map(prev);
-      next.set(task.taskId, {
-        streakId: prev.get(task.taskId)?.streakId ?? 0,
-        userId: task.userId,
-        streakType: task.taskId,
-        currentCount: data!.streakCount,
-        longestCount: data!.longestCount,
-        bonusMultiplier: data!.bonusMultiplier,
-        lastActivityDate: new Date().toISOString(),
-        isActive: true,
+    const existingStreak = streaks.get(task.taskId);
+    const correctStreakType = (task.recurrenceRule ?? "category") + "_" + task.category;
+    const updatedStreak: StreakDto = {
+      streakId: existingStreak?.streakId ?? 0,
+      userId: task.userId,
+      taskId: task.taskId,
+      streakType: correctStreakType,
+      currentCount: data!.streakCount,
+      longestCount: data!.longestCount,
+      bonusMultiplier: data!.bonusMultiplier,
+      lastActivityDate: new Date().toISOString(),
+      isActive: true,
+    };
+    setStreaks((prev) => { const next = new Map(prev); next.set(task.taskId, updatedStreak); return next; });
+    if (existingStreak?.streakId) {
+      streaksApi.update(existingStreak.streakId, updatedStreak);
+    } else {
+      streaksApi.getActive().then(({ data: fresh }) => {
+        const backendStreak = fresh?.find((s) => s.taskId === task.taskId);
+        if (backendStreak?.streakId) {
+          const merged = { ...updatedStreak, streakId: backendStreak.streakId };
+          streaksApi.update(backendStreak.streakId, merged);
+          setStreaks((prev) => {
+            const cur = prev.get(task.taskId);
+            if (!cur?.streakId) {
+              const next = new Map(prev);
+              next.set(task.taskId, merged);
+              return next;
+            }
+            return prev;
+          });
+        }
       });
-      return next;
-    });
+    }
 
     if (awarded > 0) {
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
     }
 
+    let nextDueDate = data!.nextDueDate || task.dueDate;
+    if (nextDueDate && task.recurrenceRule) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (task.recurrenceRule === "daily") {
+        const nd = parseLocalDate(nextDueDate);
+        if (nd <= today) {
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          nextDueDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+        }
+      } else if (task.recurrenceRule !== "weekdays") {
+        const nd = parseLocalDate(nextDueDate);
+        if (today > getPrevPeriodStart(nd, task.recurrenceRule)) {
+          nextDueDate = getNextDueDate(nextDueDate, task.recurrenceRule);
+        }
+      }
+    }
     setAdvancing(null);
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-      ? { ...t, status: "pending", dueDate: data!.nextDueDate || t.dueDate, completedAt: null, submitted: false }
+      ? { ...t, status: "pending", dueDate: nextDueDate, completedAt: null, submitted: false }
       : t
     ));
   }
 
   async function handlePause(task: TaskDto) {
     setPausing(task.taskId);
+    if (!isAuthenticated) {
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t));
+      setPausing(null);
+      return;
+    }
     const { error } = await tasksApi.update(task.taskId, {
       taskId: task.taskId, title: task.title,
       description: task.description ?? undefined, category: task.category,
@@ -276,6 +492,18 @@ export default function Home() {
 
   async function handleDelete(id: string) {
     const snapshot = tasks.find((t) => t.taskId === id);
+    if (!isAuthenticated) {
+      if (stagedTaskIds.includes(id) && snapshot?.pointValue) {
+        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -snapshot.pointValue } }));
+      }
+      setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      setSlashingId(id);
+      await new Promise((r) => setTimeout(r, 550));
+      setSlashingId(null);
+      setTasks((prev) => prev.filter((t) => t.taskId !== id));
+      return;
+    }
     setSlashingId(id);
     const deletePromise = tasksApi.delete(id);
     if (stagedTaskIds.includes(id) && snapshot?.pointValue) {
@@ -283,7 +511,7 @@ export default function Home() {
     }
     setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    await new Promise((r) => setTimeout(r, 280));
+    await new Promise((r) => setTimeout(r, 550));
     setSlashingId(null);
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
     const { error } = await deletePromise;
@@ -295,6 +523,23 @@ export default function Home() {
 
   async function doSubmit() {
     if (selectedIds.size === 0) return;
+    if (!isAuthenticated) {
+      const ids = [...selectedIds];
+      setIsSubmitting(true);
+      setFilingIds(new Set(ids));
+      const delay = Math.max(520, (ids.length - 1) * 35 + 520);
+      setTimeout(() => {
+        setSubmittedTaskIds((prev) => new Set([...prev, ...ids]));
+        setRecentlyFiledIds(new Set(ids));
+        setSelectedIds(new Set());
+        setStagedTaskIds([]);
+        setFilingIds(new Set());
+        setIsSubmitting(false);
+        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: 0, reset: true } }));
+        setTimeout(() => setRecentlyFiledIds(new Set()), 600);
+      }, delay);
+      return;
+    }
     const REGULAR_CAP = 150;
     const regularSubmitted = dailySubmitted - recurringSubmittedToday;
     const remaining = REGULAR_CAP - regularSubmitted;
@@ -333,45 +578,12 @@ export default function Home() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4" style={{ background: "#1e1f22" }}>
-        <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-widest uppercase text-white mb-2">
-            Wahaha Byte
-          </h1>
-          <p className="text-sm tracking-wide text-white/70">
-            Track tasks, earn points, stay on streak.
-          </p>
-        </div>
-
-        <div
-          className="w-full max-w-sm flex flex-col gap-3 p-8 rounded"
-          style={{ background: "#3e3f42", border: "1px solid #2a2a2a" }}
-        >
-          <Link
-            href="/login"
-            className="w-full py-2.5 text-sm font-semibold tracking-wider uppercase rounded text-center transition-colors"
-            style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
-          >
-            Sign In
-          </Link>
-
-          <Link
-            href="/register"
-            className="w-full py-2.5 text-sm font-medium tracking-wide text-center rounded transition-colors"
-            style={{ background: "transparent", color: "#aaa", border: "1px solid #333" }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#555")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#333")}
-          >
-            Create an account
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const demoBanner = !isAuthenticated ? (
+    <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
+      <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
+      <Link href="/login" style={{ color: "#5bb8e0", letterSpacing: "0.18em" }}>Sign in →</Link>
+    </div>
+  ) : null;
 
   const REGULAR_CAP = 150;
   const RECURRING_CAP = 50;
@@ -392,15 +604,18 @@ export default function Home() {
           style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
         >
 
+          {demoBanner}
+
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-xl font-bold tracking-widest uppercase text-white">
               Tasks
             </h1>
             <button
-              onClick={() => setShowNewTask(true)}
-              className="text-xs tracking-widest uppercase px-4 py-2 font-semibold cursor-pointer transition-colors"
-              style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#1e4d63")}
+              onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
+              title={!isAuthenticated ? "Sign in to create tasks" : undefined}
+              className="text-xs tracking-widest uppercase px-4 py-2 font-semibold transition-colors"
+              style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068", cursor: !isAuthenticated ? "default" : "pointer", opacity: !isAuthenticated ? 0.4 : 1 }}
+              onMouseEnter={(e) => { if (!isAuthenticated) return; e.currentTarget.style.background = "#1e4d63"; }}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
             >
               + New
@@ -468,7 +683,7 @@ export default function Home() {
           )}
 
 
-          {activeFilter === "completed" && (() => {
+          {activeFilter === "completed" && !loading && (() => {
             const unsubmitted = tasks.filter((t) =>
               t.status === "completed" && !submittedTaskIds.has(t.taskId) && !t.pointsAwarded && t.submitted === false
             );
@@ -548,7 +763,7 @@ export default function Home() {
                 return (
                   <div
                     key={task.taskId}
-                    className="task-row-wrapper"
+                    className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
                     style={{ position: "relative", height: "60px" }}
                   >
                     <div
@@ -557,6 +772,7 @@ export default function Home() {
                         isGreyedOut ? "greyed" : "",
                         !isInProgress && !canUndo ? "default-border" : "",
                       ].filter(Boolean).join(" ")}
+                      onClick={() => setDetailTask(task)}
                       style={{
                         position: "absolute",
                         inset: 0,
@@ -568,7 +784,7 @@ export default function Home() {
                             : undefined,
                         opacity: isCompleted && !canUndo ? 0.55 : isGreyedOut ? undefined : 1,
                         transition: "opacity 0.15s ease-out",
-                        cursor: isGreyedOut ? "default" : "auto",
+                        cursor: "pointer",
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -616,27 +832,42 @@ export default function Home() {
                               <span style={{ color: "#f59e0b", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>Undo</span>
                             </div>
                           )}
-                          {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span style={{ color: "#a78bfa", fontSize: "9px", lineHeight: 1 }}>↻</span>
-                              <span style={{ color: "#a78bfa", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase" }}>
-                                {task.recurrenceRule === "daily"
-                                  ? "Daily"
-                                  : task.recurrenceRule === "weekdays"
-                                    ? "Weekdays"
-                                    : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule)}
-                              </span>
-                              {(() => {
-                                const streak = streaks.get(task.taskId);
-                                if (!streak || streak.currentCount === 0) return null;
-                                return (
-                                  <span style={{ color: "#a78bfa", fontSize: "8px", letterSpacing: "0.1em", opacity: 0.85 }}>
-                                    · 🔥 {streak.currentCount}
+                          {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
+                            const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule);
+                            const taskStreak = streaks.get(task.taskId);
+                            const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
+                            const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
+                              : task.recurrenceRule === "weekdays" ? "Weekdays"
+                              : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
+                            const color = isLocked ? "rgba(245,158,11,0.65)" : "#a78bfa";
+                            return (
+                              <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
+                                <span style={{ color, fontSize: "9px", lineHeight: 1, flexShrink: 0 }}>↻</span>
+                                <span style={{ color, fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>
+                                  {ruleLabel}
+                                </span>
+                                {isLocked && unlockInfo && (
+                                  <>
+                                    <span style={{ color: "rgba(245,158,11,0.35)", fontSize: "8px", flexShrink: 0 }}>·</span>
+                                    <svg width="7" height="8" viewBox="0 0 10 12" fill="none" style={{ flexShrink: 0 }}>
+                                      <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" fill="none"/>
+                                      <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+                                    </svg>
+                                    <span style={{ color: "rgba(245,158,11,0.6)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}>
+                                      {(task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
+                                        ? unlockInfo.date
+                                        : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`}
+                                    </span>
+                                  </>
+                                )}
+                                {taskStreak && taskStreak.currentCount > 0 && (
+                                  <span style={{ color, fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
+                                    · 🔥 {taskStreak.currentCount}
                                   </span>
-                                );
-                              })()}
-                            </div>
-                          )}
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -703,6 +934,7 @@ export default function Home() {
 
                     <div
                       className="task-actions"
+                      onClick={(e) => e.stopPropagation()}
                       style={{
                         position: "absolute",
                         top: 0,
@@ -716,20 +948,30 @@ export default function Home() {
                         zIndex: 10,
                       }}
                     >
-                      {task.status === "pending" && task.isRecurring && !isGreyedOut && (
-                        <button
-                          onClick={() => handleCheckIn(task)}
-                          disabled={isAdvancing}
-                          title="Check In"
-                          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(167,139,250,0.15)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </button>
-                      )}
+                      {task.status === "pending" && task.isRecurring && !isGreyedOut && (() => {
+                        const eligible = canCheckInNow(task.dueDate, task.recurrenceRule);
+                        return (
+                          <button
+                            onClick={eligible ? () => handleCheckIn(task) : undefined}
+                            disabled={isAdvancing || !eligible}
+                            title={eligible ? "Check In" : "Already checked in"}
+                            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
+                            onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          >
+                            {eligible ? (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="#a78bfa" strokeWidth="1.2" fill="none" />
+                                <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })()}
 
                       {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
                         <button
@@ -809,8 +1051,9 @@ export default function Home() {
                     </div>
                     {slashingId === task.taskId && (
                       <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
-                        <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 4px rgba(239,68,68,0.9))" }}>
-                          <line x1="1" y1="30" x2="99" y2="30" stroke="#ef4444" strokeWidth="0.8" strokeLinecap="round" className="slash-line" />
+                        <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 6px rgba(239,68,68,1)) drop-shadow(0 0 14px rgba(239,68,68,0.6))" }}>
+                          <line x1="1" y1="30" x2="99" y2="30" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" className="slash-line" />
+                          <line x1="1" y1="30" x2="99" y2="30" stroke="rgba(255,180,180,0.45)" strokeWidth="5" strokeLinecap="round" className="slash-line" />
                         </svg>
                       </div>
                     )}
@@ -909,6 +1152,28 @@ export default function Home() {
         </div>
       </div>
 
+      {detailTask && (() => {
+        const dt = detailTask;
+        const dtCanUndo = dt.status === "completed" && dt.submitted === false && !dt.pointsAwarded && !submittedTaskIds.has(dt.taskId);
+        const closeDetail = () => setDetailTask(null);
+        return (
+          <TaskDetailModal
+            task={dt}
+            streak={streaks.get(dt.taskId)}
+            onClose={closeDetail}
+            canUndo={dtCanUndo}
+            isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
+            onStart={dt.status === "pending" && !dt.isRecurring ? () => { closeDetail(); handleAdvance(dt); } : undefined}
+            onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
+            checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule)}
+            onPause={dt.status === "in_progress" ? () => { closeDetail(); handlePause(dt); } : undefined}
+            onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
+            onUndo={dtCanUndo ? () => { closeDetail(); handleAdvance(dt); } : undefined}
+            onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
+          />
+        );
+      })()}
+
       {showNewTask && (
         <NewTaskModal
           onClose={() => setShowNewTask(false)}
@@ -972,5 +1237,13 @@ export default function Home() {
         </div>
       )}
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <Home />
+    </Suspense>
   );
 }
