@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
+import { PointsProvider } from "@/context/PointsContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <PointsProvider>
         <header
           className="flex items-center justify-between px-6 py-3"
           style={{
@@ -37,14 +39,9 @@ export default function RootLayout({
             boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
           }}
         >
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
-              <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                System Active
-              </span>
-            </div>
-            <span style={{ color: "rgba(255,255,255,0.18)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
+            <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
               Wahaha Byte
             </span>
           </div>
@@ -52,6 +49,7 @@ export default function RootLayout({
           <AuthHeader />
         </header>
         {children}
+        </PointsProvider>
       </body>
     </html>
   );

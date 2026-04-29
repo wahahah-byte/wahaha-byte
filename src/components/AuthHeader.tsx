@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
+import { usePoints } from "@/context/PointsContext";
 
 export default function AuthHeader() {
   const [isMounted, setIsMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
-  const [stagedPoints, setStagedPoints] = useState(0);
-  const [pointsSubmittedToday, setPointsSubmittedToday] = useState(0);
-  const [recurringSubmittedToday, setRecurringSubmittedToday] = useState(0);
   const pathname = usePathname();
+
+  const {
+    balance, username, stagedPoints, recurringSubmittedToday, dailySubmitted,
+    setBalance, setUsername, setRecurringSubmittedToday, setDailySubmitted,
+  } = usePoints();
 
   useEffect(() => {
     setIsMounted(true);
@@ -24,37 +25,11 @@ export default function AuthHeader() {
       if (data) {
         setBalance(data.currentBalance);
         setUsername(data.username);
-        setPointsSubmittedToday(data.pointsSubmittedToday ?? 0);
+        setDailySubmitted(data.pointsSubmittedToday ?? 0);
         setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
       }
     });
   }, [pathname]);
-
-  useEffect(() => {
-    if (!hasToken) return;
-
-    function onPointsAwarded() {
-      usersApi.getMe().then(({ data }) => {
-        if (data) {
-          setBalance(data.currentBalance);
-          setPointsSubmittedToday(data.pointsSubmittedToday ?? 0);
-          setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
-        }
-      });
-    }
-    function onStagedUpdated(e: Event) {
-      const { delta, reset } = (e as CustomEvent<{ delta: number; reset?: boolean }>).detail;
-      if (reset) setStagedPoints(0);
-      else setStagedPoints((p) => p + delta);
-    }
-
-    window.addEventListener("points-awarded", onPointsAwarded);
-    window.addEventListener("staged-points-updated", onStagedUpdated);
-    return () => {
-      window.removeEventListener("points-awarded", onPointsAwarded);
-      window.removeEventListener("staged-points-updated", onStagedUpdated);
-    };
-  }, [hasToken]);
 
   if (!isMounted || !hasToken) return null;
 
@@ -131,7 +106,7 @@ export default function AuthHeader() {
               {(() => {
                 const REG_CAP = 150;
                 const REC_CAP = 50;
-                const regSubmitted = Math.min(pointsSubmittedToday - recurringSubmittedToday, REG_CAP);
+                const regSubmitted = Math.min(dailySubmitted - recurringSubmittedToday, REG_CAP);
                 const recSubmitted = Math.min(recurringSubmittedToday, REC_CAP);
                 const regPct = Math.round((regSubmitted / REG_CAP) * 100);
                 const recPct = Math.round((recSubmitted / REC_CAP) * 100);
