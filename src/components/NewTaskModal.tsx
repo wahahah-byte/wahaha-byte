@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
-
-const CATEGORIES = ["Fitness", "Study", "Health", "Work", "Personal", "Habits", "Finance", "Other"];
+import DatePicker from "@/components/DatePicker";
+import { CATEGORIES } from "@/lib/constants";
 
 const RECURRENCE_RULES = [
   { label: "Daily", value: "daily" },
@@ -18,9 +18,6 @@ const PRIORITIES = [
   { label: "Medium", value: "medium", color: "#f59e0b" },
   { label: "High", value: "high", color: "#ef4444" },
 ];
-
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 interface Props {
   onClose: () => void;
@@ -38,13 +35,8 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showYearSelect, setShowYearSelect] = useState(false);
-  const [calMonth, setCalMonth] = useState(today.getMonth());
-  const [year, setCalYear] = useState(today.getFullYear());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currYear, setCurrYear] = useState(today.getFullYear());
 
   useEffect(() => {
     if (isRecurring) {
@@ -52,20 +44,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
       if (!dueDate) setDueDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
     }
   }, [isRecurring]);
-  function nextYear() {
-    setCurrYear((y) => y + 6);
-  }
-  function prevYear() {
-    setCurrYear((y) => y - 6);
-  }
-  function prevMonth() {
-    if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
-    else setCalMonth((m) => m - 1);
-  }
-  function nextMonth() {
-    if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); }
-    else setCalMonth((m) => m + 1);
-  }
 
   async function handleSubmit() {
     if (!title.trim()) { setError("Title is required."); return; }
@@ -81,7 +59,9 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
       category,
       priority,
       pointValue,
-      dueDate: dueDate ? `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}-${String(dueDate.getDate()).padStart(2, "0")}` : undefined,
+      dueDate: dueDate
+        ? `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}-${String(dueDate.getDate()).padStart(2, "0")}`
+        : undefined,
       isRecurring,
       recurrenceRule: isRecurring ? recurrenceRule : undefined,
     };
@@ -90,18 +70,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
     if (apiError) { setError(apiError); return; }
     onCreated(data!);
   }
-  let currYear1 = currYear;
-  const years: (number | null)[] = [
-    ...Array.from({ length: 3 }, (_) => currYear1 += 1),
-    ...Array.from({ length: 3 }, (_) => currYear1 += 1),
-  ];
-  const daysInMonth = new Date(year, calMonth + 1, 0).getDate();
-  const firstDay = new Date(year, calMonth, 1).getDay();
-  const cells: (number | null)[] = [
-    ...Array<null>(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
 
   return (
     <div
@@ -112,7 +80,6 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
       <div
         className="w-full max-w-md flex flex-col"
         style={{ background: "#2a2b2f", border: "1px solid #3a3b3f", borderRadius: "4px", boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}
-        onClick={() => { setShowCalendar(false); setShowYearSelect(false); }}
       >
         <div
           className="flex items-center justify-between px-5 py-3"
@@ -216,198 +183,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
           </div>
 
           <Field label={isRecurring ? "First Due" : "Due Date"}>
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowCalendar((v) => !v); setShowYearSelect(false); }}
-                className="w-full px-3 py-2 text-sm text-left cursor-pointer transition-colors"
-                style={{
-                  background: "#1e1f22",
-                  color: dueDate ? "#f0f0f0" : "rgba(255,255,255,0.2)",
-                  border: `1px solid ${showCalendar ? "#5bb8e0" : "#3a3b3f"}`,
-                  borderRadius: "3px",
-                }}
-              >
-                {dueDate
-                  ? dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : "Select a date"}
-              </button>
-              {showYearSelect && (
-                <div className="flex items-center justify-between mb-3">
-
-                  <div className="absolute mt-1 left-50 right-0 top-10 z-40 p-3">
-
-                    <div
-                      className="flex p-3 items-center justify-between mb-3"
-                      style={{ background: "#1e1f22", border: "1px solid #3a3b3f", borderRadius: "3px", boxShadow: "0 8px 24px rgba(0,0,0,0.55)" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={prevYear}
-                        disabled={currYear === today.getFullYear() - 6}
-                        className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                        style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "none" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-                      >
-                        ‹
-                      </button>
-                      <div className="grid grid-cols-3 grid-rows-2 gap-y-0.5">
-                        {years.map((year, i) => {
-                          console.log(year);
-                          const isSelected =
-                            year !== null &&
-                            dueDate !== null &&
-                            dueDate.getFullYear() === year;
-                          const isToday =
-                            year !== null &&
-                            today.getFullYear() === year;
-
-                          return (
-                            <button
-                              key={i}
-                              disabled={year === null}
-                              onClick={() => {
-                                if (!year) return;
-                                setCalYear(year);
-                                setShowYearSelect(false);
-                              }}
-                              className="text-center py-2 px-2 text-[11px] transition-colors cursor-pointer disabled:pointer-events-none"
-                              style={{
-                                color: year === null ? "transparent" : isSelected ? "#0d1f28" : isToday ? "#5bb8e0" : "rgba(255,255,255,0.55)",
-                                background: isSelected ? "#5bb8e0" : "transparent",
-                                fontWeight: isSelected || isToday ? 600 : 400,
-                                borderRadius: "2px",
-                                border: "none",
-                              }}
-                              onMouseEnter={(e) => { if (year && !isSelected) e.currentTarget.style.color = "#fff"; }}
-                              onMouseLeave={(e) => { if (year && !isSelected) e.currentTarget.style.color = isToday ? "#5bb8e0" : "rgba(255,255,255,0.55)"; }}
-                            >
-                              {year ?? ""}
-                            </button>
-                          );
-                        })}
-
-                      </div>
-                      <button
-                        onClick={nextYear}
-                        className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                        style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "none" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-                      >
-                        ›
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-
-              )}
-              {showCalendar && (
-                <div
-                  className="absolute top-full mt-1 left-0 right-0 z-20 p-3"
-                  style={{ background: "#1e1f22", border: "1px solid #3a3b3f", borderRadius: "3px", boxShadow: "0 8px 24px rgba(0,0,0,0.55)" }}
-                  onClick={(e) => { e.stopPropagation(); setShowYearSelect(false); }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <button
-                      onClick={prevMonth}
-                      className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                      style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "none" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-                    >
-                      ‹
-                    </button>
-                    <div className="flex space-x-2">
-                      <span className="text-[11px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>
-                        {MONTHS[calMonth]}
-                      </span>
-                      <span className="text-[11px] tracking-widest uppercase cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); setShowYearSelect((v) => !v); }}
-                        style={{ color: "rgba(255,255,255,0.6)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "#5bb8e0"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; }}
-                      >
-                        {year}
-                      </span>
-                    </div>
-                    <button
-                      onClick={nextMonth}
-                      className="w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-sm"
-                      style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "none" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "#aaa")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-                    >
-                      ›
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-7 mb-1">
-                    {DAYS.map((d) => (
-                      <span key={d} className="text-center text-[9px] tracking-wider uppercase py-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-y-0.5">
-                    {cells.map((day, i) => {
-                      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                      const isPast = day !== null && new Date(year, calMonth, day) < todayMidnight;
-                      const isSelected =
-                        day !== null &&
-                        dueDate !== null &&
-                        dueDate.getDate() === day &&
-                        dueDate.getMonth() === calMonth &&
-                        dueDate.getFullYear() === year;
-                      const isToday =
-                        day !== null &&
-                        today.getDate() === day &&
-                        today.getMonth() === calMonth &&
-                        today.getFullYear() === year;
-
-                      return (
-                        <button
-                          key={i}
-                          disabled={day === null || isPast}
-                          onClick={() => {
-                            if (!day) return;
-                            setDueDate(new Date(year, calMonth, day));
-                            setShowCalendar(false);
-                            setShowYearSelect(false);
-                          }}
-                          className="text-center py-1 text-[11px] transition-colors cursor-pointer disabled:pointer-events-none"
-                          style={{
-                            color: day === null ? "transparent" : isPast ? "rgba(255,255,255,0.18)" : isSelected ? "#0d1f28" : isToday ? "#5bb8e0" : "rgba(255,255,255,0.55)",
-                            background: isSelected ? "#5bb8e0" : "transparent",
-                            fontWeight: isSelected || isToday ? 600 : 400,
-                            borderRadius: "2px",
-                            border: "none",
-                          }}
-                          onMouseEnter={(e) => { if (day && !isSelected && !isPast) e.currentTarget.style.color = "#fff"; }}
-                          onMouseLeave={(e) => { if (day && !isSelected && !isPast) e.currentTarget.style.color = isToday ? "#5bb8e0" : "rgba(255,255,255,0.55)"; }}
-                        >
-                          {day ?? ""}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {dueDate && (
-                    <button
-                      onClick={() => { setDueDate(null); setShowCalendar(false); setShowYearSelect(false); }}
-                      className="mt-2 w-full text-[9px] tracking-widest uppercase transition-colors cursor-pointer py-1"
-                      style={{ color: "rgba(255,255,255,0.25)", borderTop: "1px solid #3a3b3f", background: "transparent", border: "none" } as React.CSSProperties}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.25)")}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </Field>
 
           <div className="flex items-center justify-between">
@@ -479,8 +255,8 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
             {submitting ? "Creating…" : "Create Task"}
           </button>
         </div>
-      </div >
-    </div >
+      </div>
+    </div>
   );
 }
 
