@@ -8,6 +8,7 @@ import { usersApi } from "@/lib/api/users";
 import NewTaskModal from "@/components/NewTaskModal";
 import ShatterEffect from "@/components/ShatterEffect";
 import TaskDetailModal from "@/components/TaskDetailModal";
+import { usePoints } from "@/context/PointsContext";
 
 const MOCK_TASKS: TaskDto[] = [
   { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -74,7 +75,7 @@ function getNextDueDate(dueDate: string | null, rule: string): string {
 
 function getNextOccurrenceLabel(dueDate: string | null, rule: string): string {
   if (!dueDate) return rule.charAt(0).toUpperCase() + rule.slice(1);
-  const d = new Date(dueDate);
+  const d = parseLocalDate(dueDate);
   if (rule === "weekly") d.setDate(d.getDate() + 7);
   if (rule === "biweekly") d.setDate(d.getDate() + 14);
   if (rule === "monthly") d.setMonth(d.getMonth() + 1);
@@ -120,9 +121,8 @@ function Home() {
   const [filingIds, setFilingIds] = useState<Set<string>>(new Set());
   const [recentlyFiledIds, setRecentlyFiledIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dailySubmitted, setDailySubmitted] = useState(0);
-  const [recurringSubmittedToday, setRecurringSubmittedToday] = useState(0);
   const [showCapWarning, setShowCapWarning] = useState(false);
+  const { dailySubmitted, recurringSubmittedToday, setDailySubmitted, setRecurringSubmittedToday, updateStaged, setBalance } = usePoints();
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
 
@@ -135,14 +135,7 @@ function Home() {
     }
     const hasToken = !!localStorage.getItem("auth_token");
     setIsAuthenticated(hasToken);
-    if (hasToken) {
-      usersApi.getMe().then(({ data }) => {
-        if (data) {
-          setDailySubmitted(data.pointsSubmittedToday ?? 0);
-          setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
-        }
-      });
-    } else {
+    if (!hasToken) {
       setTasks(MOCK_TASKS);
       setLoading(false);
     }
@@ -199,7 +192,7 @@ function Home() {
         if (task.pointValue) {
           setStagedTaskIds((prev) => [...prev, task.taskId]);
           setSelectedIds((prev) => new Set([...prev, task.taskId]));
-          window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+          updateStaged(task.pointValue);
         }
         setTasks((prev) =>
           activeFilter === "in_progress"
@@ -209,7 +202,7 @@ function Home() {
       } else if (canUndo) {
         if (stagedTaskIds.includes(task.taskId)) {
           setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
-          window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
+          updateStaged(-(task.pointValue ?? 0));
         }
         setSelectedIds((prev) => { const n = new Set(prev); n.delete(task.taskId); return n; });
         setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t));
@@ -244,7 +237,7 @@ function Home() {
           const awarded = submitData!.pointsAwarded ?? 0;
           setRecurringSubmittedToday(submitData!.recurringDailyTotal);
           setDailySubmitted(submitData!.dailyTotal);
-          window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: awarded, newBalance: submitData!.newBalance } }));
+          setBalance(submitData!.newBalance);
 
           if (awarded > 0) {
             setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
@@ -275,7 +268,7 @@ function Home() {
         if (task.pointValue) {
           setStagedTaskIds((prev) => [...prev, task.taskId]);
           setSelectedIds((prev) => new Set([...prev, task.taskId]));
-          window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: task.pointValue } }));
+          updateStaged(task.pointValue);
         }
         setTasks((prev) =>
           activeFilter === "in_progress"
@@ -297,7 +290,7 @@ function Home() {
       if (error) { setError(error); return; }
       if (stagedTaskIds.includes(task.taskId)) {
         setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
-        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -(task.pointValue ?? 0) } }));
+        updateStaged(-(task.pointValue ?? 0));
       }
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(task.taskId); return n; });
       setTasks((prev) =>
@@ -329,7 +322,7 @@ function Home() {
     const awarded = data!.pointsAwarded;
     setRecurringSubmittedToday(data!.recurringDailyTotal);
     setDailySubmitted((prev) => prev + awarded);
-    window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: awarded, newBalance: data!.newBalance } }));
+    setBalance(data!.newBalance);
 
     if (awarded > 0) {
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
@@ -390,7 +383,7 @@ function Home() {
     const snapshot = tasks.find((t) => t.taskId === id);
     if (!isAuthenticated) {
       if (stagedTaskIds.includes(id) && snapshot?.pointValue) {
-        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -snapshot.pointValue } }));
+        updateStaged(-snapshot.pointValue);
       }
       setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
@@ -403,7 +396,7 @@ function Home() {
     setSlashingId(id);
     const deletePromise = tasksApi.delete(id);
     if (stagedTaskIds.includes(id) && snapshot?.pointValue) {
-      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: -snapshot.pointValue } }));
+      updateStaged(-snapshot.pointValue);
     }
     setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
@@ -431,7 +424,7 @@ function Home() {
         setStagedTaskIds([]);
         setFilingIds(new Set());
         setIsSubmitting(false);
-        window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: 0, reset: true } }));
+        updateStaged(0, true);
         setTimeout(() => setRecentlyFiledIds(new Set()), 600);
       }, delay);
       return;
@@ -455,8 +448,8 @@ function Home() {
       setStagedTaskIds([]);
       setFilingIds(new Set());
       setDailySubmitted(data!.dailyTotal);
-      window.dispatchEvent(new CustomEvent("points-awarded", { detail: { delta: data!.pointsAwarded ?? 0, newBalance: data!.newBalance } }));
-      window.dispatchEvent(new CustomEvent("staged-points-updated", { detail: { delta: 0, reset: true } }));
+      setBalance(data!.newBalance);
+      updateStaged(0, true);
       setTimeout(() => setRecentlyFiledIds(new Set()), 600);
     }, delay);
   }
@@ -757,7 +750,7 @@ function Home() {
                                     </span>
                                   </>
                                 )}
-                                {task.currentStreakCount && task.currentStreakCount > 0 && (
+                                {(task.currentStreakCount ?? 0) >= 3 && (
                                   <span style={{ color, fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
                                     · 🔥 {task.currentStreakCount}
                                   </span>
@@ -777,7 +770,7 @@ function Home() {
                       <div className="flex items-center justify-center">
                         <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.6)" }}>
                           {task.dueDate
-                            ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                             : "—"}
                         </span>
                       </div>
@@ -845,7 +838,7 @@ function Home() {
                         zIndex: 10,
                       }}
                     >
-                      {task.status === "pending" && task.isRecurring && !isGreyedOut && (() => {
+                      {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
                         const eligible = canCheckInNow(task.dueDate, task.recurrenceRule);
                         return (
                           <button
@@ -932,7 +925,7 @@ function Home() {
                         </button>
                       )}
 
-                      {!isGreyedOut && <button
+                      {!isInProgress && <button
                         onClick={() => handleDelete(task.taskId)}
                         disabled={slashingId === task.taskId}
                         title="Delete"

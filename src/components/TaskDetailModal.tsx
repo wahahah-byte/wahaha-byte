@@ -30,9 +30,19 @@ interface Props {
   canUndo?: boolean;
 }
 
+function parseDateOnly(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function fmt(dateStr: string | null) {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return parseDateOnly(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtShort(dateStr: string | null) {
+  if (!dateStr) return "—";
+  return parseDateOnly(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function fmtFull(dateStr: string | null) {
@@ -178,7 +188,7 @@ export default function TaskDetailModal({
               </Row>
             )}
 
-            {currentStreakCount && currentStreakCount > 0 && (
+            {(currentStreakCount ?? 0) >= 3 && (
               <Row label="Streak">
                 <div className="flex items-center gap-1.5">
                   <span style={{ fontSize: "12px" }}>🔥</span>
@@ -236,9 +246,7 @@ export default function TaskDetailModal({
                 <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.6)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
               </svg>
               <span style={{ color: "rgba(245,158,11,0.65)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                {task.dueDate
-                  ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                  : "—"}
+                {fmtShort(task.dueDate)}
               </span>
             </div>
           )}
