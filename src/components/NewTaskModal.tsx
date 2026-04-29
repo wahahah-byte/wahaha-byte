@@ -47,7 +47,10 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
   const [currYear, setCurrYear] = useState(today.getFullYear());
 
   useEffect(() => {
-    if (isRecurring) setPointValue(1);
+    if (isRecurring) {
+      setPointValue(1);
+      if (!dueDate) setDueDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+    }
   }, [isRecurring]);
   function nextYear() {
     setCurrYear((y) => y + 6);
@@ -66,6 +69,10 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
 
   async function handleSubmit() {
     if (!title.trim()) { setError("Title is required."); return; }
+    if (dueDate) {
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (dueDate < todayMidnight) { setError("Due date cannot be in the past."); return; }
+    }
     setSubmitting(true);
     setError(null);
     const dto: CreateTaskRequest = {
@@ -208,7 +215,7 @@ export default function NewTaskModal({ onClose, onCreated }: Props) {
             </Field>
           </div>
 
-          <Field label="Due Date">
+          <Field label={isRecurring ? "First Due" : "Due Date"}>
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowCalendar((v) => !v); setShowYearSelect(false); }}

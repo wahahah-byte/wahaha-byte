@@ -17,6 +17,9 @@ async function apiFetch<T>(
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...(typeof window !== "undefined"
+      ? { "X-Timezone-Offset": String(new Date().getTimezoneOffset()) }
+      : {}),
     ...(options?.headers as Record<string, string>),
   };
 

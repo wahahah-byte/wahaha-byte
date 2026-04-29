@@ -86,6 +86,12 @@ export interface CheckInResponse {
   nextDueDate: string;
 }
 
+export interface SkipCycleResponse {
+  nextDueDate: string;
+  streakReset: boolean;
+  streakCount: number;
+}
+
 export const tasksApi = {
   getAll: (filters: TaskFilterParams = {}) => {
     console.log(authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`));
@@ -115,4 +121,7 @@ export const tasksApi = {
 
   checkIn: (id: string) =>
     authedPost<CheckInResponse>(`/api/tasks/${id}/checkin`, {}),
+
+  skipCycle: (id: string) =>
+    authedPost<SkipCycleResponse>(`/api/tasks/${id}/skip-cycle`, {}),
 };

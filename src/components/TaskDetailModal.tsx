@@ -1,12 +1,7 @@
 "use client";
 
 import { TaskDto } from "@/lib/api/tasks";
-
-const PRIORITY_DOT: Record<string, string> = {
-  high: "#ef4444",
-  medium: "#f59e0b",
-  low: "#22c55e",
-};
+import { PRIORITY_DOT } from "@/lib/constants";
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "rgba(255,255,255,0.45)" },
@@ -45,9 +40,20 @@ function fmtShort(dateStr: string | null) {
   return parseDateOnly(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function fmtLocalDate(dateStr: string | null) {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function fmtFull(dateStr: string | null) {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleString("en-US", {
+  // 1. Truncate .NET's 7-digit sub-ms precision to 3 digits (JS limit)
+  let s = dateStr.replace(/(\.\d{3})\d+/, "$1");
+  // 2. Append Z if no timezone designator — EF Core omits it for Kind=Unspecified
+  if (!/Z|[+-]\d{2}:?\d{2}$/.test(s)) s += "Z";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
@@ -163,12 +169,12 @@ export default function TaskDetailModal({
               </div>
             </Row>
 
-            <Row label="Due Date">
+            <Row label={task.isRecurring ? "Cycle Due" : "Due Date"}>
               <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px" }}>{fmt(task.dueDate)}</span>
             </Row>
 
             <Row label="Created">
-              <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px" }}>{fmt(task.createdAt)}</span>
+              <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px" }}>{fmtLocalDate(task.createdAt)}</span>
             </Row>
 
             {task.completedAt && (
