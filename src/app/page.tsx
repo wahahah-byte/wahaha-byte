@@ -11,7 +11,7 @@ import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
-import { canCheckInNow, parseLocalDate, isOverdue } from "@/lib/dateUtils";
+import { canCheckInNow, parseLocalDate, getCyclesOverdue } from "@/lib/dateUtils";
 import { FILTERS } from "@/lib/constants";
 
 const MOCK_TASKS: TaskDto[] = [
@@ -38,7 +38,8 @@ function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
-  type GroupMode = "none" | "type" | "due";
+  const [penalizedTaskIds, setPenalizedTaskIds] = useState<Set<string>>(new Set());
+  type GroupMode = "none" | "type" | "due" | "category";
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   type SortMode = "due" | "priority" | "title" | "points";
@@ -74,7 +75,16 @@ function Home() {
     const hasToken = !!localStorage.getItem("auth_token");
     setIsAuthenticated(hasToken);
     if (!hasToken) {
-      setTasks(MOCK_TASKS);
+      const penalizedIds = new Set<string>();
+      const processed = MOCK_TASKS.map((t) => {
+        if (t.status === "in_progress" && !t.isRecurring && t.dueDate && getCyclesOverdue(t.dueDate, null) >= 3) {
+          penalizedIds.add(t.taskId);
+          return { ...t, status: "pending" as const };
+        }
+        return t;
+      });
+      if (penalizedIds.size > 0) setPenalizedTaskIds(penalizedIds);
+      setTasks(processed);
       setLoading(false);
     }
   }, []);
@@ -93,8 +103,30 @@ function Home() {
       const taskResult = await tasksApi.getAll(filters);
       setLoading(false);
       if (taskResult.error) { setError(taskResult.error); return; }
-      setTasks(taskResult.data!.data);
-      const alreadySubmitted = new Set(taskResult.data!.data.filter((t) => t.pointsAwarded).map((t) => t.taskId));
+      const raw = taskResult.data!.data;
+      const penalizedIds = new Set<string>();
+      const processed = raw.map((t) => {
+        if (t.status === "in_progress" && !t.isRecurring && t.dueDate && getCyclesOverdue(t.dueDate, null) >= 3) {
+          penalizedIds.add(t.taskId);
+          return { ...t, status: "pending" as const };
+        }
+        return t;
+      });
+      if (penalizedIds.size > 0) {
+        setPenalizedTaskIds(penalizedIds);
+        for (const t of raw.filter((t) => penalizedIds.has(t.taskId))) {
+          tasksApi.update(t.taskId, {
+            taskId: t.taskId, title: t.title,
+            description: t.description ?? undefined, category: t.category,
+            priority: t.priority, status: "pending", pointValue: t.pointValue,
+            dueDate: t.dueDate ?? undefined, completedAt: undefined,
+            isRecurring: t.isRecurring, recurrenceRule: t.recurrenceRule ?? undefined,
+            submitted: t.submitted,
+          });
+        }
+      }
+      setTasks(processed);
+      const alreadySubmitted = new Set(raw.filter((t) => t.pointsAwarded).map((t) => t.taskId));
       setSubmittedTaskIds(alreadySubmitted);
     }
     fetchTasks();
@@ -198,6 +230,22 @@ function Home() {
           : parseLocalDate(key).toLocaleDateString("en-US", { month: "short", day: "numeric" });
         items.push(sep(label, `__sep-due-${key}`), ...buckets.get(key)!.sort(sortTasks));
       }
+    } else if (groupMode === "category") {
+      const buckets = new Map<string, TaskDto[]>();
+      for (const t of activeTasks) {
+        const key = t.category || "__none";
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key)!.push(t);
+      }
+      const keys = [...buckets.keys()].sort((a, b) => {
+        if (a === "__none") return 1;
+        if (b === "__none") return -1;
+        return a.localeCompare(b);
+      });
+      for (const key of keys) {
+        const label = key === "__none" ? "No Category" : key;
+        items.push(sep(label, `__sep-cat-${key}`), ...buckets.get(key)!.sort(sortTasks));
+      }
     } else {
       items.push(...[...activeTasks].sort(sortTasks));
     }
@@ -289,7 +337,7 @@ function Home() {
                 style={{ color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
               >
                 {f.label}
-                {f.value === "completed" && selectedIds.size > 0 && (
+                {f.value === "completed" && unsubmitted.length > 0 && (
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
                 )}
                 {activeFilter === f.value && (
@@ -385,7 +433,7 @@ function Home() {
                   <line x1="1" y1="5" x2="6" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <line x1="1" y1="8" x2="7.5" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
-                {groupMode === "type" ? "Type" : groupMode === "due" ? "Due Date" : "Group"}
+                {groupMode === "type" ? "Type" : groupMode === "due" ? "Due Date" : groupMode === "category" ? "Category" : "Group"}
                 <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style={{ opacity: 0.6 }}>
                   <polyline points="0.5,1 3.5,4 6.5,1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -405,7 +453,7 @@ function Home() {
                     overflow: "hidden",
                   }}
                 >
-                  {([ ["none", "None"], ["type", "Type"], ["due", "Due Date"] ] as [GroupMode, string][]).map(([value, label]) => (
+                  {([ ["none", "None"], ["type", "Type"], ["due", "Due Date"], ["category", "Category"] ] as [GroupMode, string][]).map(([value, label]) => (
                     <button
                       key={value}
                       onClick={() => { setGroupMode(value); setShowGroupMenu(false); }}
@@ -460,7 +508,18 @@ function Home() {
           )}
 
           {activeFilter === "completed" && !loading && (
-            <div className="flex justify-end px-1 mb-1" style={{ visibility: unsubmitted.length > 0 ? "visible" : "hidden" }}>
+            <div className="flex justify-between items-center px-1 mb-1" style={{ visibility: unsubmitted.length > 0 ? "visible" : "hidden" }}>
+              <div className="flex items-center gap-1.5" title={`${unsubmitted.length} task${unsubmitted.length === 1 ? "" : "s"} pending submission`}>
+                <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
+                  <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
+                </svg>
+                <span style={{ color: "rgba(245,158,11,0.9)", fontSize: "10px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                  {unsubmitted.reduce((s, t) => s + t.pointValue, 0).toLocaleString()}
+                </span>
+                <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                  Unsubmitted
+                </span>
+              </div>
               <button
                 onClick={() => {
                   if (allUnsubmittedSelected) {
@@ -503,6 +562,7 @@ function Home() {
                   selectedIds={selectedIds}
                   submittedTaskIds={submittedTaskIds}
                   recurringPopup={recurringPopups.get(item.taskId)}
+                  penalizedTaskIds={penalizedTaskIds}
                   onAdvance={handleAdvance}
                   onCheckIn={handleCheckIn}
                   onPause={handlePause}

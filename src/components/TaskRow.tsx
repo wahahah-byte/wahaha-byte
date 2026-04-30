@@ -1,8 +1,8 @@
 "use client";
 
 import { TaskDto } from "@/lib/api/tasks";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue } from "@/lib/dateUtils";
-import { PRIORITY_DOT } from "@/lib/constants";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
+import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import ShatterEffect from "@/components/ShatterEffect";
 
 interface TaskRowProps {
@@ -16,6 +16,7 @@ interface TaskRowProps {
   selectedIds: Set<string>;
   submittedTaskIds: Set<string>;
   recurringPopup: number | undefined;
+  penalizedTaskIds?: Set<string>;
   onAdvance: (task: TaskDto) => void;
   onCheckIn: (task: TaskDto) => void;
   onPause: (task: TaskDto) => void;
@@ -28,7 +29,7 @@ interface TaskRowProps {
 export default function TaskRow({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, selectedIds, submittedTaskIds,
-  recurringPopup, onAdvance, onCheckIn, onPause, onDelete,
+  recurringPopup, penalizedTaskIds, onAdvance, onCheckIn, onPause, onDelete,
   onSkip, onToggleSelect, onOpenDetail,
 }: TaskRowProps) {
   const isInProgress = task.status === "in_progress";
@@ -120,6 +121,12 @@ export default function TaskRow({
                   <span style={{ color: "#5bb8e0", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Active</span>
                 </>
               )}
+              {task.status === "pending" && !task.isRecurring && penalizedTaskIds?.has(task.taskId) && (
+                <>
+                  <span style={{ color: "rgba(239,68,68,0.35)", fontSize: "8px", flexShrink: 0 }}>·</span>
+                  <span style={{ color: "rgba(239,68,68,0.65)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}>↩ overdue reset</span>
+                </>
+              )}
               {canUndo && (
                 <>
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
@@ -132,6 +139,8 @@ export default function TaskRow({
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
                 const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule);
                 const overdue = isLocked && isOverdue(task.dueDate);
+                const cyclesOverdue = overdue ? getCyclesOverdue(task.dueDate, task.recurrenceRule) : 0;
+                const isPenalized = cyclesOverdue >= 3;
                 const unlockInfo = isLocked && !overdue ? getUnlockInfo(task.dueDate) : null;
                 const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
@@ -150,6 +159,19 @@ export default function TaskRow({
                         <span style={{ color: "rgba(239,68,68,0.85)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>
                           ⚠ OVERDUE
                         </span>
+                        {isPenalized && (
+                          <>
+                            <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
+                            <span style={{
+                              color: "rgba(239,68,68,0.9)", fontSize: "7px", letterSpacing: "0.15em",
+                              textTransform: "uppercase", fontWeight: 700, flexShrink: 0,
+                              background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)",
+                              borderRadius: "2px", padding: "1px 4px",
+                            }}>
+                              PENALIZED ×{cyclesOverdue}
+                            </span>
+                          </>
+                        )}
                         {streakCount >= 3 && (
                           <>
                             <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
@@ -247,9 +269,10 @@ export default function TaskRow({
             return (
               <button
                 onClick={() => onSkip(task)}
+                disabled={isAdvancing}
                 title="Skip missed cycle"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.12)")}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
+                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">

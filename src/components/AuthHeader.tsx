@@ -52,22 +52,6 @@ export default function AuthHeader() {
         </div>
       )}
 
-      {(() => {
-        const REC_CAP = 50;
-        const rec = Math.min(recurringSubmittedToday, REC_CAP);
-        const capped = rec >= REC_CAP;
-        return (
-          <div className="flex items-center gap-1" title={`Recurring: ${rec} / ${REC_CAP} pts today`}>
-            <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
-              <polygon points="5,0 10,4 5,12 0,4" fill={capped ? "#4ade80" : "#a78bfa"} opacity="0.85" />
-            </svg>
-            <span style={{ color: capped ? "#4ade80" : "#a78bfa", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-              {rec}/{REC_CAP}
-            </span>
-          </div>
-        );
-      })()}
-
       {balance !== null && (
         <div className="flex items-center gap-1.5">
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { tasksApi, TaskDto } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
-import { getNextDueDate, parseLocalDate, getPrevPeriodStart } from "@/lib/dateUtils";
+import { getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
 
 interface UseTaskActionsOptions {
@@ -47,11 +47,10 @@ export function useTaskActions({
           setSelectedIds((prev) => new Set([...prev, task.taskId]));
           updateStaged(task.pointValue);
         }
-        setTasks((prev) =>
-          activeFilter === "in_progress"
-            ? prev.filter((t) => t.taskId !== task.taskId)
-            : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "completed", completedAt: new Date().toISOString() } : t)
-        );
+        setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+          ? { ...t, status: "completed", completedAt: new Date().toISOString(), submitted: false }
+          : t
+        ));
       } else if (canUndo) {
         if (stagedTaskIds.includes(task.taskId)) {
           setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
@@ -122,11 +121,10 @@ export function useTaskActions({
           setSelectedIds((prev) => new Set([...prev, task.taskId]));
           updateStaged(task.pointValue);
         }
-        setTasks((prev) =>
-          activeFilter === "in_progress"
-            ? prev.filter((t) => t.taskId !== task.taskId)
-            : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "completed", completedAt: new Date().toISOString() } : t)
-        );
+        setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+          ? { ...t, status: "completed", completedAt: new Date().toISOString(), submitted: false }
+          : t
+        ));
       }
 
     } else if (canUndo) {
@@ -260,17 +258,31 @@ export function useTaskActions({
 
   async function handleSkip(task: TaskDto) {
     if (!isAuthenticated) {
-      const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
+      let nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
+      while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
         ? { ...t, dueDate: nextDue, currentStreakCount: 0 }
         : t
       ));
       return;
     }
+    setAdvancing(task.taskId);
     const { data, error } = await tasksApi.skipCycle(task.taskId);
-    if (error) { setError(error); return; }
+    if (error) { setAdvancing(null); setError(error); return; }
+    let nextDue = data!.nextDueDate;
+    while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
+    if (nextDue !== data!.nextDueDate) {
+      await tasksApi.update(task.taskId, {
+        taskId: task.taskId, title: task.title,
+        description: task.description ?? undefined, category: task.category,
+        priority: task.priority, status: task.status, pointValue: task.pointValue,
+        dueDate: nextDue, isRecurring: task.isRecurring,
+        recurrenceRule: task.recurrenceRule ?? undefined, submitted: task.submitted,
+      });
+    }
+    setAdvancing(null);
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-      ? { ...t, dueDate: data!.nextDueDate, currentStreakCount: 0 }
+      ? { ...t, dueDate: nextDue, currentStreakCount: data!.streakCount }
       : t
     ));
   }

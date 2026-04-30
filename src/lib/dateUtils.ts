@@ -26,7 +26,7 @@ export function canCheckInNow(dueDate: string | null, rule?: string | null): boo
 }
 
 export function getNextDueDate(dueDate: string | null, rule: string): string {
-  const base = dueDate ? new Date(dueDate) : new Date();
+  const base = dueDate ? parseLocalDate(dueDate) : new Date();
   base.setHours(12, 0, 0, 0);
   if (rule === "daily") base.setDate(base.getDate() + 1);
   else if (rule === "weekdays") {
@@ -65,4 +65,30 @@ export function isOverdue(dueDate: string | null): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today > due;
+}
+
+export function getCyclesOverdue(dueDate: string | null, rule: string | null): number {
+  if (!dueDate) return 0;
+  const due = parseLocalDate(dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (today <= due) return 0;
+  const daysDiff = Math.floor((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+  if (!rule || rule === "daily") return daysDiff;
+  if (rule === "weekly") return Math.floor(daysDiff / 7);
+  if (rule === "biweekly") return Math.floor(daysDiff / 14);
+  if (rule === "monthly") {
+    return (today.getFullYear() - due.getFullYear()) * 12 + (today.getMonth() - due.getMonth());
+  }
+  if (rule === "weekdays") {
+    let count = 0;
+    const d = new Date(due);
+    while (d < today) {
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  return daysDiff;
 }
