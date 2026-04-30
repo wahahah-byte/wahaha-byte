@@ -154,6 +154,7 @@ export function useTaskActions({
   }
 
   async function handleCheckIn(task: TaskDto) {
+    if (advancing === task.taskId) return;
     setAdvancing(task.taskId);
     if (!isAuthenticated) {
       const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
