@@ -3,9 +3,9 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
+import { tasksApi, TaskDto, TaskFilterParams, UpdateTaskRequest } from "@/lib/api/tasks";
 import NewTaskModal from "@/components/NewTaskModal";
-import TaskDetailModal from "@/components/TaskDetailModal";
+import TaskDetailModal, { EditableTaskFields } from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
 import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
@@ -142,6 +142,36 @@ function Home() {
     router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }
 
+  async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
+    if (!detailTask) return null;
+    if (!isAuthenticated) {
+      const updated = { ...detailTask, ...fields };
+      setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
+      setDetailTask(updated);
+      return null;
+    }
+    const req: UpdateTaskRequest = {
+      taskId: detailTask.taskId,
+      title: fields.title,
+      description: fields.description ?? undefined,
+      category: fields.category,
+      priority: fields.priority,
+      status: detailTask.status,
+      pointValue: detailTask.pointValue,
+      dueDate: fields.dueDate ?? undefined,
+      completedAt: detailTask.completedAt ?? undefined,
+      isRecurring: detailTask.isRecurring,
+      recurrenceRule: detailTask.recurrenceRule ?? undefined,
+      submitted: detailTask.submitted,
+    };
+    const { error } = await tasksApi.update(detailTask.taskId, req);
+    if (error) return error;
+    const updated = { ...detailTask, ...fields };
+    setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
+    setDetailTask(updated);
+    return null;
+  }
+
   if (!isMounted) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#1e1f22" }}>
@@ -187,21 +217,11 @@ function Home() {
     if (activeFilter === "completed") {
       return [...tasks].filter((t) => t.status === "completed").sort(completedSort);
     }
-    const hasCheckedIn = (t: TaskDto) =>
-      (t.currentStreakCount ?? 0) > 0 || (t.longestStreakCount ?? 0) > 0;
     const activeTasks =
       activeFilter === "pending"
-        ? tasks.filter((t) =>
-            t.isRecurring
-              ? t.status === "pending" && !hasCheckedIn(t)
-              : t.status === "pending" || t.status === "in_progress"
-          )
+        ? tasks.filter((t) => t.status === "pending")
         : activeFilter === "in_progress"
-          ? tasks.filter((t) =>
-              t.isRecurring
-                ? t.status === "pending" && hasCheckedIn(t)
-                : t.status === "in_progress"
-            )
+          ? tasks.filter((t) => t.status === "in_progress")
           : tasks.filter((t) => t.status !== "completed");
     const completedTasks = activeFilter === "all"
       ? [...tasks].filter((t) => t.status === "completed").sort(completedSort)
@@ -507,6 +527,12 @@ function Home() {
             </div>
           )}
 
+          {!loading && activeFilter === "in_progress" && listItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-2">
+              <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>No tasks in progress</p>
+            </div>
+          )}
+
           {activeFilter === "completed" && !loading && (
             <div className="flex justify-between items-center px-1 mb-1" style={{ visibility: unsubmitted.length > 0 ? "visible" : "hidden" }}>
               <div className="flex items-center gap-1.5" title={`${unsubmitted.length} task${unsubmitted.length === 1 ? "" : "s"} pending submission`}>
@@ -620,6 +646,7 @@ function Home() {
             onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
             onUndo={dtCanUndo ? () => { closeDetail(); handleAdvance(dt); } : undefined}
             onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
+            onSave={handleSaveTask}
           />
         );
       })()}

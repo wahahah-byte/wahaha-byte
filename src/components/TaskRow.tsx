@@ -1,7 +1,7 @@
 "use client";
 
 import { TaskDto } from "@/lib/api/tasks";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import ShatterEffect from "@/components/ShatterEffect";
 
@@ -34,10 +34,8 @@ export default function TaskRow({
 }: TaskRowProps) {
   const isInProgress = task.status === "in_progress";
   const isCompleted = task.status === "completed";
-  const isGreyedOut = activeFilter === "pending" && (
-    isInProgress ||
-    (task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule))
-  );
+  const isGreyedOut = activeFilter === "pending" &&
+    task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule);
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
   const isAdvancing = advancing === task.taskId;
   const isFiling = filingIds.has(task.taskId);
@@ -105,16 +103,21 @@ export default function TaskRow({
               {task.title}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
-              {task.category && (
-                <span style={{
-                  fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase",
-                  color: "rgba(255,255,255,0.45)", background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.11)", borderRadius: "2px",
-                  padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0,
-                }}>
-                  {task.category}
-                </span>
-              )}
+              {task.category && (() => {
+                const cc = CATEGORY_COLOR[task.category] ?? "rgba(255,255,255,0.45)";
+                return (
+                  <span style={{
+                    fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase",
+                    color: cc,
+                    background: `${cc}18`,
+                    border: `1px solid ${cc}40`,
+                    borderRadius: "2px",
+                    padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                    {task.category}
+                  </span>
+                );
+              })()}
               {isInProgress && (
                 <>
                   <span style={{ color: "#5bb8e0", fontSize: "8px", lineHeight: 1, flexShrink: 0 }}>█</span>
