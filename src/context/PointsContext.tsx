@@ -7,10 +7,12 @@ interface PointsContextValue {
   balance: number | null;
   username: string | null;
   stagedPoints: number;
+  unsubmittedPoints: number;
   dailySubmitted: number;
   recurringSubmittedToday: number;
   setBalance: (n: number) => void;
   setUsername: (s: string) => void;
+  setUnsubmittedPoints: (n: number) => void;
   setDailySubmitted: Dispatch<SetStateAction<number>>;
   setRecurringSubmittedToday: (n: number) => void;
   updateStaged: (delta: number, reset?: boolean) => void;
@@ -22,6 +24,7 @@ export function PointsProvider({ children }: { children: ReactNode }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [stagedPoints, setStagedPoints] = useState(0);
+  const [unsubmittedPoints, setUnsubmittedPoints] = useState(0);
   const [dailySubmitted, setDailySubmitted] = useState(0);
   const [recurringSubmittedToday, setRecurringSubmittedToday] = useState(0);
 
@@ -32,8 +35,8 @@ export function PointsProvider({ children }: { children: ReactNode }) {
 
   return (
     <PointsContext.Provider value={{
-      balance, username, stagedPoints, dailySubmitted, recurringSubmittedToday,
-      setBalance, setUsername, setDailySubmitted, setRecurringSubmittedToday, updateStaged,
+      balance, username, stagedPoints, unsubmittedPoints, dailySubmitted, recurringSubmittedToday,
+      setBalance, setUsername, setUnsubmittedPoints, setDailySubmitted, setRecurringSubmittedToday, updateStaged,
     }}>
       {children}
     </PointsContext.Provider>

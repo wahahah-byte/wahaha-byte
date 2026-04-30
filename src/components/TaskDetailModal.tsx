@@ -40,6 +40,8 @@ interface Props {
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   isActing?: boolean;
   canUndo?: boolean;
+  initialEditMode?: boolean;
+  mustReschedule?: boolean;
 }
 
 function parseDateOnly(dateStr: string): Date {
@@ -102,12 +104,12 @@ function ActionBtn({
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
-  onSave, isActing, canUndo,
+  onSave, isActing, canUndo, initialEditMode, mustReschedule,
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "#aaa" };
 
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialEditMode ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState(task.title);
@@ -130,6 +132,14 @@ export default function TaskDetailModal({
 
   async function handleSave() {
     if (!editTitle.trim()) { setEditError("Title is required."); return; }
+    if (mustReschedule) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!editDueDate || editDueDate <= today) {
+        setEditError("Due date must be after today.");
+        return;
+      }
+    }
     if (!onSave) return;
     setIsSaving(true);
     setEditError(null);
@@ -200,6 +210,17 @@ export default function TaskDetailModal({
         {/* Body */}
         {isEditing ? (
           <div className="flex flex-col gap-3 px-5 py-4">
+            {mustReschedule && (
+              <div
+                className="px-3 py-2 text-xs leading-relaxed flex items-start gap-2"
+                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "3px", color: "rgba(239,68,68,0.9)" }}
+              >
+                <span style={{ fontSize: "11px", lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
+                <span style={{ fontSize: "11px", lineHeight: 1.4 }}>
+                  This task is overdue. Pick a new due date after today to start it, or delete the task.
+                </span>
+              </div>
+            )}
             <EditField label="Title">
               <input
                 autoFocus
@@ -375,7 +396,7 @@ export default function TaskDetailModal({
           {isEditing ? (
             <>
               <button
-                onClick={() => setIsEditing(false)}
+                onClick={() => mustReschedule ? onClose() : setIsEditing(false)}
                 disabled={isSaving}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
                 style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "3px" }}
@@ -392,8 +413,24 @@ export default function TaskDetailModal({
                 onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(91,184,224,0.15)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(91,184,224,0.08)"; }}
               >
-                {isSaving ? "Saving…" : "Save"}
+                {isSaving ? "Saving…" : mustReschedule ? "Save & Start" : "Save"}
               </button>
+              {mustReschedule && onDelete && (
+                <button
+                  onClick={onDelete}
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
+                  style={{ color: "#ef4444", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "3px" }}
+                  onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                    <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                    <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                  Delete
+                </button>
+              )}
             </>
           ) : (
             <>

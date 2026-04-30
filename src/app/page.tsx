@@ -13,6 +13,7 @@ import { useTaskActions } from "@/hooks/useTaskActions";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { canCheckInNow, parseLocalDate, getCyclesOverdue } from "@/lib/dateUtils";
 import { FILTERS } from "@/lib/constants";
+import { usePoints } from "@/context/PointsContext";
 
 const MOCK_TASKS: TaskDto[] = [
   { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-04-26", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -38,6 +39,7 @@ function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
+  const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
   const [penalizedTaskIds, setPenalizedTaskIds] = useState<Set<string>>(new Set());
   type GroupMode = "none" | "type" | "due" | "category";
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
@@ -46,6 +48,7 @@ function Home() {
   const [sortMode, setSortMode] = useState<SortMode>("due");
   const [showSortMenu, setShowSortMenu] = useState(false);
 
+  const { setUnsubmittedPoints } = usePoints();
   const submission = useTaskSubmission({ tasks, isAuthenticated, setError: (msg) => setError(msg) });
 
   const {
@@ -132,6 +135,15 @@ function Home() {
     fetchTasks();
   }, [filters, isAuthenticated]);
 
+  useEffect(() => {
+    const total = tasks.reduce((s, t) =>
+      t.status === "completed" && !submittedTaskIds.has(t.taskId) && !t.pointsAwarded && t.submitted === false
+        ? s + t.pointValue : s,
+      0
+    );
+    setUnsubmittedPoints(total);
+  }, [tasks, submittedTaskIds, setUnsubmittedPoints]);
+
   function applyFilter(value: string) {
     setActiveFilter(value);
     setFilters((f) => ({ ...f, status: value === "all" || value === "pending" || value === "in_progress" ? undefined : value, pageNumber: 1 }));
@@ -144,10 +156,16 @@ function Home() {
 
   async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
     if (!detailTask) return null;
+    const isRestart = overdueRestartTaskId === detailTask.taskId;
     if (!isAuthenticated) {
       const updated = { ...detailTask, ...fields };
       setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
       setDetailTask(updated);
+      if (isRestart) {
+        setOverdueRestartTaskId(null);
+        setDetailTask(null);
+        handleAdvance(updated);
+      }
       return null;
     }
     const req: UpdateTaskRequest = {
@@ -169,6 +187,11 @@ function Home() {
     const updated = { ...detailTask, ...fields };
     setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
     setDetailTask(updated);
+    if (isRestart) {
+      setOverdueRestartTaskId(null);
+      setDetailTask(null);
+      handleAdvance(updated);
+    }
     return null;
   }
 
@@ -596,6 +619,7 @@ function Home() {
                   onSkip={handleSkip}
                   onToggleSelect={toggleSelect}
                   onOpenDetail={setDetailTask}
+                  onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
                 />
               );
             })}
@@ -630,7 +654,8 @@ function Home() {
       {detailTask && (() => {
         const dt = detailTask;
         const dtCanUndo = dt.status === "completed" && dt.submitted === false && !dt.pointsAwarded && !submittedTaskIds.has(dt.taskId);
-        const closeDetail = () => setDetailTask(null);
+        const isRestart = overdueRestartTaskId === dt.taskId;
+        const closeDetail = () => { setOverdueRestartTaskId(null); setDetailTask(null); };
         return (
           <TaskDetailModal
             task={dt}
@@ -647,6 +672,8 @@ function Home() {
             onUndo={dtCanUndo ? () => { closeDetail(); handleAdvance(dt); } : undefined}
             onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
             onSave={handleSaveTask}
+            initialEditMode={isRestart}
+            mustReschedule={isRestart}
           />
         );
       })()}

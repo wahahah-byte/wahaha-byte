@@ -12,7 +12,7 @@ export default function AuthHeader() {
   const pathname = usePathname();
 
   const {
-    balance, username, stagedPoints, recurringSubmittedToday, dailySubmitted,
+    balance, username, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
     setBalance, setUsername, setRecurringSubmittedToday, setDailySubmitted,
   } = usePoints();
 
@@ -41,13 +41,13 @@ export default function AuthHeader() {
         </span>
       )}
 
-      {stagedPoints > 0 && (
-        <div className="flex items-center gap-1.5">
+      {unsubmittedPoints > 0 && (
+        <div className="flex items-center gap-1.5" title={`${unsubmittedPoints} unsubmitted pts`}>
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
             <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
           </svg>
           <span style={{ color: "#f59e0b", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-            +{stagedPoints.toLocaleString()}
+            +{unsubmittedPoints.toLocaleString()}
           </span>
         </div>
       )}

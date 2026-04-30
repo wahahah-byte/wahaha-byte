@@ -1,7 +1,7 @@
 "use client";
 
 import { TaskDto } from "@/lib/api/tasks";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import ShatterEffect from "@/components/ShatterEffect";
 
@@ -17,6 +17,7 @@ interface TaskRowProps {
   submittedTaskIds: Set<string>;
   recurringPopup: number | undefined;
   penalizedTaskIds?: Set<string>;
+  onRestartOverdue?: (task: TaskDto) => void;
   onAdvance: (task: TaskDto) => void;
   onCheckIn: (task: TaskDto) => void;
   onPause: (task: TaskDto) => void;
@@ -29,7 +30,7 @@ interface TaskRowProps {
 export default function TaskRow({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, selectedIds, submittedTaskIds,
-  recurringPopup, penalizedTaskIds, onAdvance, onCheckIn, onPause, onDelete,
+  recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
   onSkip, onToggleSelect, onOpenDetail,
 }: TaskRowProps) {
   const isInProgress = task.status === "in_progress";
@@ -309,20 +310,25 @@ export default function TaskRow({
           );
         })()}
 
-        {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
-          <button
-            onClick={() => onAdvance(task)}
-            disabled={isAdvancing}
-            title="Start"
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <polygon points="2,1 9,5 2,9" fill="#5bb8e0" />
-            </svg>
-          </button>
-        )}
+        {task.status === "pending" && !task.isRecurring && !isGreyedOut && (() => {
+          const overdueRegular = isOverdue(task.dueDate);
+          const startColor = overdueRegular ? "#ef4444" : "#5bb8e0";
+          const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "rgba(91,184,224,0.15)";
+          return (
+            <button
+              onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
+              disabled={isAdvancing}
+              title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <polygon points="2,1 9,5 2,9" fill={startColor} />
+              </svg>
+            </button>
+          );
+        })()}
 
         {isInProgress && (
           <button
