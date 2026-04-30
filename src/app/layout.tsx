@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
+import HeaderNav from "@/components/HeaderNav";
 import { PointsProvider } from "@/context/PointsContext";
 import "./globals.css";
 
@@ -39,11 +40,14 @@ export default function RootLayout({
             boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
           }}
         >
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
-            <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-              Wahaha Byte
-            </span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
+              <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                Wahaha Byte
+              </span>
+            </div>
+            <HeaderNav />
           </div>
 
           <AuthHeader />
