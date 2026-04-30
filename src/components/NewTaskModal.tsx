@@ -22,18 +22,21 @@ const PRIORITIES = [
 interface Props {
   onClose: () => void;
   onCreated: (task: TaskDto) => void;
+  initialRecurring?: boolean;
 }
 
-export default function NewTaskModal({ onClose, onCreated }: Props) {
+export default function NewTaskModal({ onClose, onCreated, initialRecurring = false }: Props) {
   const today = new Date();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [priority, setPriority] = useState("medium");
-  const [pointValue, setPointValue] = useState(25);
-  const [dueDate, setDueDate] = useState<Date | null>(null);
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [pointValue, setPointValue] = useState(initialRecurring ? 1 : 25);
+  const [dueDate, setDueDate] = useState<Date | null>(
+    initialRecurring ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null,
+  );
+  const [isRecurring, setIsRecurring] = useState(initialRecurring);
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
