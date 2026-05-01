@@ -35,13 +35,13 @@ function Home() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<TaskFilterParams>({ pageSize: 50, pageNumber: 1 });
+  const [filters, setFilters] = useState<TaskFilterParams>({ pageSize: 50, pageNumber: 1, isRecurring: false });
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
   const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
   const [penalizedTaskIds, setPenalizedTaskIds] = useState<Set<string>>(new Set());
-  type GroupMode = "none" | "type" | "due" | "category";
+  type GroupMode = "none" | "due" | "category";
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   type SortMode = "due" | "priority" | "title" | "points";
@@ -79,8 +79,8 @@ function Home() {
     setIsAuthenticated(hasToken);
     if (!hasToken) {
       const penalizedIds = new Set<string>();
-      const processed = MOCK_TASKS.map((t) => {
-        if (t.status === "in_progress" && !t.isRecurring && t.dueDate && getCyclesOverdue(t.dueDate, null) >= 3) {
+      const processed = MOCK_TASKS.filter((t) => !t.isRecurring).map((t) => {
+        if (t.status === "in_progress" && t.dueDate && getCyclesOverdue(t.dueDate, null) >= 3) {
           penalizedIds.add(t.taskId);
           return { ...t, status: "pending" as const };
         }
@@ -250,12 +250,7 @@ function Home() {
       ? [...tasks].filter((t) => t.status === "completed").sort(completedSort)
       : [];
     const items: (TaskDto | Sep)[] = [];
-    if (groupMode === "type") {
-      const recurring = activeTasks.filter((t) => t.isRecurring).sort(sortTasks);
-      const regular = activeTasks.filter((t) => !t.isRecurring).sort(sortTasks);
-      if (recurring.length > 0) items.push(sep("Recurring", "__sep-recurring"), ...recurring);
-      if (regular.length > 0) items.push(sep("Regular", "__sep-regular"), ...regular);
-    } else if (groupMode === "due") {
+    if (groupMode === "due") {
       const buckets = new Map<string, TaskDto[]>();
       for (const t of activeTasks) {
         const key = t.dueDate ?? "__none";
@@ -496,7 +491,7 @@ function Home() {
                     overflow: "hidden",
                   }}
                 >
-                  {([ ["none", "None"], ["type", "Type"], ["due", "Due Date"], ["category", "Category"] ] as [GroupMode, string][]).map(([value, label]) => (
+                  {([ ["none", "None"], ["due", "Due Date"], ["category", "Category"] ] as [GroupMode, string][]).map(([value, label]) => (
                     <button
                       key={value}
                       onClick={() => { setGroupMode(value); setShowGroupMenu(false); }}

@@ -29,5 +29,12 @@ export const FILTERS = [
   { label: "Completed", value: "completed" },
 ];
 
+export const RECURRING_FILTERS = [
+  { label: "All", value: "all" },
+  { label: "Today", value: "today" },
+  { label: "Upcoming", value: "upcoming" },
+  { label: "Missed", value: "missed" },
+];
+
 export const REGULAR_CAP = 150;
 export const RECURRING_CAP = 50;
