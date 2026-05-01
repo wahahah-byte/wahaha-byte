@@ -376,7 +376,7 @@ function Home() {
               <button
                 key={f.value}
                 onClick={() => applyFilter(f.value)}
-                className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5"
+                className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
                 style={{ color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
               >
                 {f.label}
@@ -410,7 +410,7 @@ function Home() {
                   <line x1="1" y1="5" x2="7" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <line x1="1" y1="8" x2="5" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
-                {sortMode === "due" ? "Sort" : sortMode === "priority" ? "Priority" : sortMode === "title" ? "Title" : "Points"}
+                <span className="hidden sm:inline">{sortMode === "due" ? "Sort" : sortMode === "priority" ? "Priority" : sortMode === "title" ? "Title" : "Points"}</span>
                 <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style={{ opacity: 0.6 }}>
                   <polyline points="0.5,1 3.5,4 6.5,1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -476,7 +476,7 @@ function Home() {
                   <line x1="1" y1="5" x2="6" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <line x1="1" y1="8" x2="7.5" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
-                {groupMode === "type" ? "Type" : groupMode === "due" ? "Due Date" : groupMode === "category" ? "Category" : "Group"}
+                <span className="hidden sm:inline">{groupMode === "due" ? "Due Date" : groupMode === "category" ? "Category" : "Group"}</span>
                 <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style={{ opacity: 0.6 }}>
                   <polyline points="0.5,1 3.5,4 6.5,1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -553,6 +553,12 @@ function Home() {
           {!loading && activeFilter === "in_progress" && listItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
               <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>No tasks in progress</p>
+            </div>
+          )}
+
+          {!loading && activeFilter === "pending" && listItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-2">
+              <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>No pending tasks</p>
             </div>
           )}
 
