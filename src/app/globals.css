@@ -66,8 +66,16 @@ body {
 .task-row-wrapper .task-actions {
   display: none;
 }
-.task-row-wrapper:hover .task-actions {
+@media (hover: hover) {
+  .task-row-wrapper:hover .task-actions {
+    display: flex;
+  }
+}
+.task-row-wrapper[data-revealed="true"] .task-actions {
   display: flex;
+}
+.task-row-wrapper[data-revealed="true"] .task-row-inner {
+  transform: translateX(calc(var(--actions-width, 28px) * -1));
 }
 
 @keyframes filed-badge-in {

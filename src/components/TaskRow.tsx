@@ -77,13 +77,33 @@ export default function TaskRow({
     const dx = t.clientX - touchRef.current.x;
     const dy = t.clientY - touchRef.current.y;
     if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 30) {
-      if (dx < 0 && !revealed) setRevealed(true);
-      else if (dx > 0 && revealed) setRevealed(false);
+      if (dx < 0 && !revealed) {
+        setRevealed(true);
+        window.dispatchEvent(new CustomEvent("task-row-reveal", { detail: { id: task.taskId } }));
+      } else if (dx > 0 && revealed) {
+        setRevealed(false);
+      }
     }
   }
   function handleTouchEnd() {
     touchRef.current = null;
   }
+
+  useEffect(() => {
+    function onOtherReveal(e: Event) {
+      const detail = (e as CustomEvent<{ id: string }>).detail;
+      if (detail && detail.id !== task.taskId) setRevealed(false);
+    }
+    function onScroll() {
+      setRevealed(false);
+    }
+    window.addEventListener("task-row-reveal", onOtherReveal);
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("task-row-reveal", onOtherReveal);
+      window.removeEventListener("scroll", onScroll, { capture: true } as EventListenerOptions);
+    };
+  }, [task.taskId]);
 
   function handleRowClick() {
     if (revealed) {
@@ -97,7 +117,7 @@ export default function TaskRow({
     <div
       ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
-      style={{ position: "relative", height: "60px" }}
+      style={{ position: "relative", height: "60px", touchAction: "pan-y" }}
       data-revealed={revealed ? "true" : undefined}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -123,7 +143,7 @@ export default function TaskRow({
                 ? "2px solid rgba(239,68,68,0.55)"
                 : undefined,
           opacity: isCompleted && !canUndo ? 0.55 : isGreyedOut ? undefined : 1,
-          transition: "opacity 0.15s ease-out",
+          transition: "transform 0.2s ease-out, opacity 0.15s ease-out",
           cursor: "pointer",
         }}
       >
