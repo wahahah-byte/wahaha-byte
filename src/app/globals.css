@@ -62,8 +62,36 @@ body {
 .task-row-wrapper .task-actions {
   display: none;
 }
-.task-row-wrapper:hover .task-actions {
-  display: flex;
+@media (hover: hover) {
+  .task-row-wrapper:hover .task-actions {
+    display: flex;
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  /* Panel is rendered (so it can transition) but pushed off-screen until swiped */
+  .task-row-wrapper .task-actions {
+    display: flex;
+    flex-direction: row !important;
+    width: auto !important;
+    transform: translateX(100%);
+    transition: transform 220ms ease-out;
+  }
+  .task-row-wrapper[data-revealed="true"] .task-actions {
+    transform: translateX(0);
+  }
+  /* Each action becomes a square tap target across the row's full height */
+  .task-row-wrapper .task-actions > button {
+    flex: none !important;
+    width: 56px !important;
+    height: 100% !important;
+  }
+  /* Row content slides left by the panel's measured width to expose it cleanly */
+  .task-row-inner {
+    transition: transform 220ms ease-out;
+  }
+  .task-row-wrapper[data-revealed="true"] .task-row-inner {
+    transform: translateX(calc(-1 * var(--actions-width, 168px)));
+  }
 }
 
 @keyframes filed-badge-in {
@@ -107,15 +135,25 @@ body {
   animation: row-delete 0.55s ease-out forwards;
 }
 
-@keyframes error-slide-up {
-  0%   { transform: translateY(0);    opacity: 1; }
-  78%  { transform: translateY(0);    opacity: 1; }
-  100% { transform: translateY(-110%); opacity: 0; }
+@keyframes toast-banner {
+  0%   { transform: translateY(-180%); opacity: 0; }
+  10%  { transform: translateY(0);     opacity: 1; }
+  86%  { transform: translateY(0);     opacity: 1; }
+  100% { transform: translateY(-180%); opacity: 0; }
 }
-.error-banner-anim {
-  position: relative;
-  z-index: 1;
-  animation: error-slide-up 5s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+.toast-banner-anim {
+  animation: toast-banner 5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes outline-draw {
+  0%   { stroke-dashoffset: 312; opacity: 1; }
+  35%  { stroke-dashoffset: 0;   opacity: 1; }
+  70%  { stroke-dashoffset: 0;   opacity: 0.85; }
+  100% { stroke-dashoffset: 0;   opacity: 0; }
+}
+.error-outline {
+  stroke-dasharray: 312;
+  animation: outline-draw 0.7s cubic-bezier(0.1, 0, 0.35, 1) forwards;
 }
 
 @keyframes recurring-pts-popup {

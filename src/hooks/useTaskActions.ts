@@ -156,13 +156,17 @@ export function useTaskActions({
   async function handleCheckIn(task: TaskDto) {
     if (advancing === task.taskId) return;
     setAdvancing(task.taskId);
+    const todayIso = (() => {
+      const t = new Date();
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    })();
     if (!isAuthenticated) {
       const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
       const newCount = (task.currentStreakCount ?? 0) + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-        ? { ...t, dueDate: nextDue, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0) }
+        ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0) }
         : t
       ));
       setAdvancing(null);
@@ -200,7 +204,7 @@ export function useTaskActions({
     }
     setAdvancing(null);
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-      ? { ...t, status: "pending", dueDate: nextDueDate, completedAt: null, submitted: false,
+      ? { ...t, status: "pending", dueDate: nextDueDate, lastCheckInDate: todayIso, completedAt: null, submitted: false,
           currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount }
       : t
     ));

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
+import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 
 export default function AuthHeader() {
   const [isMounted, setIsMounted] = useState(false);
@@ -88,14 +89,12 @@ export default function AuthHeader() {
               }}
             >
               {(() => {
-                const REG_CAP = 150;
-                const REC_CAP = 50;
-                const regSubmitted = Math.min(dailySubmitted - recurringSubmittedToday, REG_CAP);
-                const recSubmitted = Math.min(recurringSubmittedToday, REC_CAP);
-                const regPct = Math.round((regSubmitted / REG_CAP) * 100);
-                const recPct = Math.round((recSubmitted / REC_CAP) * 100);
-                const regCapped = regSubmitted >= REG_CAP;
-                const recCapped = recSubmitted >= REC_CAP;
+                const regSubmitted = Math.min(dailySubmitted - recurringSubmittedToday, REGULAR_CAP);
+                const recSubmitted = Math.min(recurringSubmittedToday, RECURRING_CAP);
+                const regPct = Math.round((regSubmitted / REGULAR_CAP) * 100);
+                const recPct = Math.round((recSubmitted / RECURRING_CAP) * 100);
+                const regCapped = regSubmitted >= REGULAR_CAP;
+                const recCapped = recSubmitted >= RECURRING_CAP;
                 return (
                   <div className="px-4 py-3 border-b flex flex-col gap-2.5" style={{ borderColor: "#2e2f34" }}>
                     <div>
@@ -104,7 +103,7 @@ export default function AuthHeader() {
                           Regular
                         </span>
                         <span style={{ color: regCapped ? "#4ade80" : "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
-                          {regSubmitted} / {REG_CAP}
+                          {regSubmitted} / {REGULAR_CAP}
                         </span>
                       </div>
                       <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "#2e2f34" }}>
@@ -125,7 +124,7 @@ export default function AuthHeader() {
                           Recurring
                         </span>
                         <span style={{ color: recCapped ? "#4ade80" : "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
-                          {recSubmitted} / {REC_CAP}
+                          {recSubmitted} / {RECURRING_CAP}
                         </span>
                       </div>
                       <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "#2e2f34" }}>

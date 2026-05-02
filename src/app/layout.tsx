@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
 import { PointsProvider } from "@/context/PointsContext";
+import { ToastProvider, ToastBanner } from "@/context/ToastContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <PointsProvider>
+        <ToastProvider>
         <header
           className="flex items-center justify-between px-6 py-3"
           style={{
@@ -38,6 +40,8 @@ export default function RootLayout({
             borderTop: "2px solid #5bb8e0",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
             boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
+            position: "relative",
+            zIndex: 10,
           }}
         >
           <div className="flex items-center gap-6">
@@ -52,7 +56,9 @@ export default function RootLayout({
 
           <AuthHeader />
         </header>
+        <ToastBanner />
         {children}
+        </ToastProvider>
         </PointsProvider>
       </body>
     </html>

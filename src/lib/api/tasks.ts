@@ -19,6 +19,7 @@ export interface TaskDto {
   wasPenalized?: boolean;
   currentStreakCount?: number;
   longestStreakCount?: number;
+  lastCheckInDate?: string | null;
 }
 
 export interface CreateTaskRequest {
