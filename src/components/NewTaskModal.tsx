@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
 import DatePicker from "@/components/DatePicker";
-import { CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, maxPointsFor } from "@/lib/constants";
 
 const RECURRENCE_RULES = [
   { label: "Daily", value: "daily" },
@@ -48,6 +48,12 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
     }
   }, [isRecurring]);
 
+  useEffect(() => {
+    if (isRecurring) return;
+    const cap = maxPointsFor(category);
+    if (pointValue > cap) setPointValue(cap);
+  }, [category, isRecurring]);
+
   async function handleSubmit() {
     if (!title.trim()) { setError("Title is required."); return; }
     if (dueDate) {
@@ -76,7 +82,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
       style={{ background: "rgba(0,0,0,0.72)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -91,7 +97,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           <h2 className="text-xs font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.75)" }}>New Task</h2>
           <button
             onClick={onClose}
-            className="text-[#555] transition-colors text-lg leading-none cursor-pointer"
+            className="text-[#555] transition-colors text-lg leading-none cursor-pointer flex items-center justify-center min-w-[32px] min-h-[32px]"
             onMouseEnter={(e) => (e.currentTarget.style.color = "#999")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
           >
@@ -112,6 +118,9 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
             />
+            <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Title and points cannot be edited 24 hours after creation.
+            </span>
           </Field>
 
           <Field label="Description">
@@ -173,14 +182,19 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
                   style={{ background: "#1e1f22", color: "#5bb8e0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
                 >
-                  {(isRecurring ? [1, 2, 3, 4, 5] : [5, 10, 15, 20, 25]).map((v) => (
+                  {(isRecurring
+                    ? [1, 2, 3, 4, 5]
+                    : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(category))
+                  ).map((v) => (
                     <option key={v} value={v} style={{ background: "#1e1f22" }}>{v}</option>
                   ))}
                 </select>
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(91,184,224,0.5)" }}>▾</span>
               </div>
-              {isRecurring && (
+              {isRecurring ? (
                 <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(167,139,250,0.55)" }}>Max 5 pts</span>
+              ) : (
+                <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(91,184,224,0.55)" }}>Max {maxPointsFor(category)} pts</span>
               )}
             </Field>
           </div>
@@ -240,7 +254,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
         >
           <button
             onClick={onClose}
-            className="flex-1 py-2 text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+            className="flex-1 py-2.5 text-xs tracking-widest uppercase cursor-pointer transition-colors"
             style={{ color: "rgba(255,255,255,0.35)", border: "1px solid #3a3b3f", background: "transparent", borderRadius: "3px" }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.6)"; e.currentTarget.style.borderColor = "#555"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.35)"; e.currentTarget.style.borderColor = "#3a3b3f"; }}
@@ -250,7 +264,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 py-2 text-[10px] tracking-widest uppercase font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 text-xs tracking-widest uppercase font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068", borderRadius: "3px" }}
             onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#1e4d63"; }}
             onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}

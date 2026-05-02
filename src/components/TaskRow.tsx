@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { TaskDto } from "@/lib/api/tasks";
 import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
@@ -13,6 +14,7 @@ interface TaskRowProps {
   slashingId: string | null;
   filingIds: Set<string>;
   recentlyFiledIds: Set<string>;
+  errorIds?: Set<string>;
   selectedIds: Set<string>;
   submittedTaskIds: Set<string>;
   recurringPopup: number | undefined;
@@ -29,14 +31,14 @@ interface TaskRowProps {
 
 export default function TaskRow({
   task, activeFilter, advancing, pausing, slashingId,
-  filingIds, recentlyFiledIds, selectedIds, submittedTaskIds,
+  filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
   onSkip, onToggleSelect, onOpenDetail,
 }: TaskRowProps) {
   const isInProgress = task.status === "in_progress";
   const isCompleted = task.status === "completed";
   const isGreyedOut = activeFilter === "pending" &&
-    task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule);
+    task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
   const isAdvancing = advancing === task.taskId;
   const isFiling = filingIds.has(task.taskId);
@@ -45,10 +47,62 @@ export default function TaskRow({
   const isSelectable = activeFilter === "completed" && isCompleted && !isSubmitted;
   const overdueRecurring = task.isRecurring && !isInProgress && !isCompleted && isOverdue(task.dueDate);
 
+  const hasError = errorIds?.has(task.taskId) ?? false;
+
+  const [revealed, setRevealed] = useState(false);
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const actions = actionsRef.current;
+    if (!wrapper || !actions) return;
+    const sync = () => {
+      wrapper.style.setProperty("--actions-width", `${actions.offsetWidth}px`);
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(actions);
+    return () => ro.disconnect();
+  }, []);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY };
+  }
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!touchRef.current) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.current.x;
+    const dy = t.clientY - touchRef.current.y;
+    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 30) {
+      if (dx < 0 && !revealed) setRevealed(true);
+      else if (dx > 0 && revealed) setRevealed(false);
+    }
+  }
+  function handleTouchEnd() {
+    touchRef.current = null;
+  }
+
+  function handleRowClick() {
+    if (revealed) {
+      setRevealed(false);
+      return;
+    }
+    onOpenDetail(task);
+  }
+
   return (
     <div
+      ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
       style={{ position: "relative", height: "60px" }}
+      data-revealed={revealed ? "true" : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <div
         className={[
@@ -56,7 +110,7 @@ export default function TaskRow({
           isGreyedOut ? "greyed" : "",
           !isInProgress && !canUndo ? "default-border" : "",
         ].filter(Boolean).join(" ")}
-        onClick={() => onOpenDetail(task)}
+        onClick={handleRowClick}
         style={{
           position: "absolute",
           inset: 0,
@@ -141,13 +195,14 @@ export default function TaskRow({
                 </>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule);
+                const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
                 const overdue = isLocked && isOverdue(task.dueDate);
                 const cyclesOverdue = overdue ? getCyclesOverdue(task.dueDate, task.recurrenceRule) : 0;
                 const isPenalized = cyclesOverdue >= 3;
                 const unlockInfo = isLocked && !overdue ? getUnlockInfo(task.dueDate) : null;
                 const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
+                  : task.recurrenceRule === "biweekly" ? "Biweekly"
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
                 const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "#a78bfa";
                 const streakCount = task.currentStreakCount ?? 0;
@@ -259,6 +314,7 @@ export default function TaskRow({
       </div>
 
       <div
+        ref={actionsRef}
         className="task-actions"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -272,21 +328,20 @@ export default function TaskRow({
           if (overdueRecurring) {
             return (
               <button
-                onClick={() => onSkip(task)}
+                onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
                 disabled={isAdvancing}
-                title="Skip missed cycle"
+                title="Resume — reschedule to today"
                 style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
-                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <line x1="1" y1="5" x2="8" y2="5" stroke="rgba(239,68,68,0.7)" strokeWidth="1.5" strokeLinecap="round" />
-                  <polyline points="5,2 8,5 5,8" stroke="rgba(239,68,68,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <polygon points="2,1 9,5 2,9" fill="#ef4444" />
                 </svg>
               </button>
             );
           }
-          const eligible = canCheckInNow(task.dueDate, task.recurrenceRule);
+          const eligible = canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
           return (
             <button
               onClick={eligible ? () => onCheckIn(task) : undefined}
@@ -397,6 +452,14 @@ export default function TaskRow({
           <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 6px rgba(239,68,68,1)) drop-shadow(0 0 14px rgba(239,68,68,0.6))" }}>
             <line x1="1" y1="30" x2="99" y2="30" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" className="slash-line" />
             <line x1="1" y1="30" x2="99" y2="30" stroke="rgba(255,180,180,0.45)" strokeWidth="5" strokeLinecap="round" className="slash-line" />
+          </svg>
+        </div>
+      )}
+
+      {hasError && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
+          <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 4px rgba(239,68,68,0.85)) drop-shadow(0 0 10px rgba(239,68,68,0.45))" }}>
+            <rect x="0.75" y="0.75" width="98.5" height="58.5" fill="none" stroke="#ef4444" strokeWidth="1.25" className="error-outline" />
           </svg>
         </div>
       )}

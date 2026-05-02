@@ -3,6 +3,7 @@ import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
 import { FILTERS } from "@/lib/constants";
 import { MOCK_TASKS } from "@/lib/mockTasks";
 import { processPenalties } from "@/lib/penalties";
+import { useToast } from "@/context/ToastContext";
 
 type UseTasksOptions = {
   initialFilterFromUrl: string | null;
@@ -30,7 +31,7 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError } = useToast();
   const [submittedSeed, setSubmittedSeed] = useState<Set<string> | null>(null);
 
   const penalizedTaskIds = useMemo(
@@ -82,12 +83,6 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     }
     fetchTasks();
   }, [filters, isAuthenticated]);
-
-  useEffect(() => {
-    if (!error) return;
-    const t = setTimeout(() => setError(null), 5100);
-    return () => clearTimeout(t);
-  }, [error]);
 
   return {
     tasks, setTasks, loading, error, setError,

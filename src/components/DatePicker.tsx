@@ -57,7 +57,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => { setShowCalendar((v) => !v); setShowYearSelect(false); }}
-        className="w-full px-3 py-2 text-sm text-left cursor-pointer transition-colors"
+        className="w-full px-3 py-2.5 sm:py-2 text-sm text-left cursor-pointer transition-colors"
         style={{
           background: "#1e1f22",
           color: value ? "#f0f0f0" : "rgba(255,255,255,0.2)",
@@ -167,7 +167,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
 
           <div className="grid grid-cols-7 mb-1">
             {DAYS.map((d) => (
-              <span key={d} className="text-center text-[9px] tracking-wider uppercase py-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>
+              <span key={d} className="text-center text-[9px] tracking-wider uppercase py-1.5 sm:py-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>
                 {d}
               </span>
             ))}
@@ -197,7 +197,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                     setShowCalendar(false);
                     setShowYearSelect(false);
                   }}
-                  className="text-center py-1 text-[11px] transition-colors cursor-pointer disabled:pointer-events-none"
+                  className="text-center py-2 sm:py-1 text-xs sm:text-[11px] transition-colors cursor-pointer disabled:pointer-events-none"
                   style={{
                     color: day === null ? "transparent" : isPast ? "rgba(255,255,255,0.18)" : isSelected ? "#0d1f28" : isToday ? "#5bb8e0" : "rgba(255,255,255,0.55)",
                     background: isSelected ? "#5bb8e0" : "transparent",

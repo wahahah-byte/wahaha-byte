@@ -1,5 +1,7 @@
 "use client";
 
+import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
+
 type Props = {
   isAuthenticated: boolean;
   onNewTask: () => void;
@@ -8,18 +10,25 @@ type Props = {
 export default function TasksHeader({ isAuthenticated, onNewTask }: Props) {
   return (
     <div style={{ display: "flex", alignItems: "stretch", background: "#1e2025", marginBottom: "6px", height: "38px" }}>
-      <div style={{
-        width: "38px", minWidth: "38px",
-        background: "#2a2d33",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
-      }}>
-        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-          fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
-          <path d="M9 16l2 2 4-4" />
-        </svg>
-      </div>
+      <CategoryCapsTooltip variant="regular">
+        <div
+          tabIndex={0}
+          aria-label="Show task point caps"
+          style={{
+            width: "38px", minWidth: "38px", height: "38px",
+            background: "#2a2d33",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            borderRight: "1px solid rgba(255,255,255,0.08)",
+            cursor: "help",
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+            fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+            <path d="M9 16l2 2 4-4" />
+          </svg>
+        </div>
+      </CategoryCapsTooltip>
 
       <div style={{ position: "relative", display: "flex", alignItems: "center", paddingLeft: "14px", overflow: "hidden" }}>
         <span style={{
