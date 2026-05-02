@@ -288,7 +288,7 @@ function Recurring() {
                 <button
                   key={f.value}
                   onClick={() => applyFilter(f.value)}
-                  className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5"
+                  className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
                   style={{ color: activeFilter === f.value ? "#a78bfa" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
                 >
                   {f.label}
@@ -323,7 +323,7 @@ function Recurring() {
                   <line x1="1" y1="5" x2="7" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <line x1="1" y1="8" x2="5" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
-                {sortMode === "due" ? "Sort" : sortMode === "streak" ? "Streak" : sortMode === "priority" ? "Priority" : sortMode === "title" ? "Title" : "Points"}
+                <span className="hidden sm:inline">{sortMode === "due" ? "Sort" : sortMode === "streak" ? "Streak" : sortMode === "priority" ? "Priority" : sortMode === "title" ? "Title" : "Points"}</span>
                 <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style={{ opacity: 0.6 }}>
                   <polyline points="0.5,1 3.5,4 6.5,1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -389,7 +389,7 @@ function Recurring() {
                   <line x1="1" y1="5" x2="6" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <line x1="1" y1="8" x2="7.5" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
-                {groupMode === "frequency" ? "Frequency" : groupMode === "category" ? "Category" : "Group"}
+                <span className="hidden sm:inline">{groupMode === "frequency" ? "Frequency" : groupMode === "category" ? "Category" : "Group"}</span>
                 <svg width="7" height="5" viewBox="0 0 7 5" fill="none" style={{ opacity: 0.6 }}>
                   <polyline points="0.5,1 3.5,4 6.5,1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
