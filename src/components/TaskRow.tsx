@@ -377,21 +377,19 @@ export default function TaskRow({
           </button>
         )}
 
-        {!isInProgress && (
-          <button
-            onClick={() => onDelete(task.taskId)}
-            disabled={slashingId === task.taskId}
-            title="Delete"
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-        )}
+        <button
+          onClick={() => onDelete(task.taskId)}
+          disabled={slashingId === task.taskId}
+          title="Delete"
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       {slashingId === task.taskId && (

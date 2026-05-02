@@ -16,6 +16,7 @@ export interface TaskDto {
   recurrenceRule: string | null;
   pointsAwarded?: boolean;
   submitted: boolean;
+  wasPenalized?: boolean;
   currentStreakCount?: number;
   longestStreakCount?: number;
 }
