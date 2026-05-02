@@ -10,6 +10,8 @@ import TaskRow from "@/components/TaskRow";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { canCheckInNow, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
+import { useToast } from "@/context/ToastContext";
+import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 
 const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 3, dueDate: "2026-04-29", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -20,10 +22,10 @@ const MOCK_RECURRING: TaskDto[] = [
 
 function tabMatches(task: TaskDto, tab: string): boolean {
   if (tab === "all") return true;
-  if (tab === "today") return canCheckInNow(task.dueDate, task.recurrenceRule);
+  if (tab === "today") return canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
   if (tab === "missed") return isOverdue(task.dueDate);
   if (tab === "upcoming")
-    return !canCheckInNow(task.dueDate, task.recurrenceRule) && !isOverdue(task.dueDate);
+    return !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate) && !isOverdue(task.dueDate);
   return true;
 }
 
@@ -34,10 +36,11 @@ function Recurring() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { setError } = useToast();
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
+  const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
   type GroupMode = "none" | "frequency" | "category";
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
@@ -72,12 +75,6 @@ function Recurring() {
   }, []);
 
   useEffect(() => {
-    if (!error) return;
-    const t = setTimeout(() => setError(null), 5100);
-    return () => clearTimeout(t);
-  }, [error]);
-
-  useEffect(() => {
     if (!isAuthenticated) return;
     async function fetchTasks() {
       setLoading(true);
@@ -102,10 +99,12 @@ function Recurring() {
 
   async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
     if (!detailTask) return null;
+    const isRestart = overdueRestartTaskId === detailTask.taskId;
     if (!isAuthenticated) {
       const updated = { ...detailTask, ...fields };
       setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
       setDetailTask(updated);
+      if (isRestart) { setOverdueRestartTaskId(null); setDetailTask(null); }
       return null;
     }
     const req: UpdateTaskRequest = {
@@ -127,6 +126,7 @@ function Recurring() {
     const updated = { ...detailTask, ...fields };
     setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
     setDetailTask(updated);
+    if (isRestart) { setOverdueRestartTaskId(null); setDetailTask(null); }
     return null;
   }
 
@@ -156,8 +156,8 @@ function Recurring() {
     return a.dueDate.localeCompare(b.dueDate);
   };
   const sortRecurring = (a: TaskDto, b: TaskDto): number => {
-    const aReady = canCheckInNow(a.dueDate, a.recurrenceRule) ? 0 : 1;
-    const bReady = canCheckInNow(b.dueDate, b.recurrenceRule) ? 0 : 1;
+    const aReady = canCheckInNow(a.dueDate, a.recurrenceRule, a.lastCheckInDate) ? 0 : 1;
+    const bReady = canCheckInNow(b.dueDate, b.recurrenceRule, b.lastCheckInDate) ? 0 : 1;
     if (aReady !== bReady) return aReady - bReady;
     switch (sortMode) {
       case "streak":   return (b.currentStreakCount ?? 0) - (a.currentStreakCount ?? 0);
@@ -213,7 +213,7 @@ function Recurring() {
     return [...filteredTasks].sort(sortRecurring);
   })();
 
-  const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule)).length;
+  const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate)).length;
   const missedCount = tasks.filter((t) => isOverdue(t.dueDate)).length;
 
   return (
@@ -228,18 +228,25 @@ function Recurring() {
           )}
 
           <div style={{ display: "flex", alignItems: "stretch", background: "#1e2025", marginBottom: "6px", height: "38px" }}>
-            <div style={{
-              width: "38px", minWidth: "38px",
-              background: "#2a2d33",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRight: "1px solid rgba(255,255,255,0.08)",
-            }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                fill="none" stroke="rgba(167,139,250,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12a9 9 0 1 1-3-6.7" />
-                <polyline points="21 4 21 10 15 10" />
-              </svg>
-            </div>
+            <CategoryCapsTooltip variant="recurring">
+              <div
+                tabIndex={0}
+                aria-label="Show recurring point caps"
+                style={{
+                  width: "38px", minWidth: "38px", height: "38px",
+                  background: "#2a2d33",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRight: "1px solid rgba(255,255,255,0.08)",
+                  cursor: "help",
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                  fill="none" stroke="rgba(167,139,250,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <polyline points="21 4 21 10 15 10" />
+                </svg>
+              </div>
+            </CategoryCapsTooltip>
 
             <div style={{ position: "relative", display: "flex", alignItems: "center", paddingLeft: "14px", overflow: "hidden" }}>
               <span style={{
@@ -445,12 +452,6 @@ function Recurring() {
             <span className="text-center">Points</span>
           </div>
 
-          {error && (
-            <div className="error-banner-anim px-4 py-3 mb-2 text-xs text-red-400" style={{ background: "#1e1e1e" }}>
-              {error}
-            </div>
-          )}
-
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 border-[#333] border-t-[#a78bfa] rounded-full animate-spin" />
@@ -514,6 +515,7 @@ function Recurring() {
                   onSkip={handleSkip}
                   onToggleSelect={() => {}}
                   onOpenDetail={setDetailTask}
+                  onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
                 />
               );
             })}
@@ -534,7 +536,8 @@ function Recurring() {
 
       {detailTask && (() => {
         const dt = detailTask;
-        const closeDetail = () => setDetailTask(null);
+        const isRestart = overdueRestartTaskId === dt.taskId;
+        const closeDetail = () => { setOverdueRestartTaskId(null); setDetailTask(null); };
         return (
           <TaskDetailModal
             task={dt}
@@ -543,10 +546,12 @@ function Recurring() {
             onClose={closeDetail}
             canUndo={false}
             isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
-            onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
-            checkInBlocked={!canCheckInNow(dt.dueDate, dt.recurrenceRule)}
+            onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
+            checkInBlocked={!canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
             onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
             onSave={handleSaveTask}
+            initialEditMode={isRestart}
+            mustReschedule={isRestart}
           />
         );
       })()}

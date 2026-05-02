@@ -36,5 +36,28 @@ export const RECURRING_FILTERS = [
   { label: "Missed", value: "missed" },
 ];
 
-export const REGULAR_CAP = 150;
-export const RECURRING_CAP = 50;
+export const REGULAR_CAP = 200;
+export const RECURRING_CAP = 200;
+
+export const PER_CATEGORY_REGULAR_DAILY_CAP = 50;
+export const PER_CATEGORY_RECURRING_DAILY_CAP = 50;
+
+export const PER_TASK_VALUE_CAP: Record<string, number> = {
+  Career:       25,
+  Dev:          25,
+  Design:       25,
+  Learning:     25,
+  Study:        25,
+  Work:         25,
+  Finance:      20,
+  Health:       20,
+  Productivity: 20,
+  Fitness:      15,
+  Personal:     15,
+  Other:        15,
+  Habits:       10,
+};
+
+export function maxPointsFor(category: string): number {
+  return PER_TASK_VALUE_CAP[category] ?? 25;
+}

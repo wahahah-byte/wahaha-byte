@@ -90,7 +90,7 @@ function ActionBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
       style={{ color, background: "transparent", border: `1px solid ${color}44`, borderRadius: "3px" }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = hoverBg; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -109,6 +109,22 @@ export default function TaskDetailModal({
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "#aaa" };
 
+  function todayMidnight() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function rescheduleDefault(): Date {
+    const d = todayMidnight();
+    if ((task.recurrenceRule ?? "").toLowerCase() === "weekdays") {
+      while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    }
+    return d;
+  }
+
+  const titleLocked = (Date.now() - new Date(task.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+
   const [isEditing, setIsEditing] = useState(initialEditMode ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -117,7 +133,9 @@ export default function TaskDetailModal({
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editCategory, setEditCategory] = useState(task.category);
   const [editDueDate, setEditDueDate] = useState<Date | null>(
-    task.dueDate ? parseDateOnly(task.dueDate) : null
+    mustReschedule
+      ? rescheduleDefault()
+      : task.dueDate ? parseDateOnly(task.dueDate) : null
   );
 
   function startEdit() {
@@ -125,7 +143,7 @@ export default function TaskDetailModal({
     setEditDescription(task.description ?? "");
     setEditPriority(task.priority);
     setEditCategory(task.category);
-    setEditDueDate(task.dueDate ? parseDateOnly(task.dueDate) : null);
+    setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
     setEditError(null);
     setIsEditing(true);
   }
@@ -133,11 +151,17 @@ export default function TaskDetailModal({
   async function handleSave() {
     if (!editTitle.trim()) { setEditError("Title is required."); return; }
     if (mustReschedule) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (!editDueDate || editDueDate <= today) {
-        setEditError("Due date must be after today.");
-        return;
+      const today = todayMidnight();
+      if (task.isRecurring) {
+        if (!editDueDate || editDueDate < today) {
+          setEditError("Due date cannot be in the past.");
+          return;
+        }
+      } else {
+        if (!editDueDate || editDueDate <= today) {
+          setEditError("Due date must be after today.");
+          return;
+        }
       }
     }
     if (!onSave) return;
@@ -163,7 +187,7 @@ export default function TaskDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
       style={{ background: "rgba(0,0,0,0.72)" }}
       onClick={isEditing ? undefined : onClose}
     >
@@ -217,19 +241,28 @@ export default function TaskDetailModal({
               >
                 <span style={{ fontSize: "11px", lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
                 <span style={{ fontSize: "11px", lineHeight: 1.4 }}>
-                  This task is overdue. Pick a new due date after today to start it, or delete the task.
+                  {task.isRecurring
+                    ? "This recurring task is overdue. Confirm the new due date or pick a different one to resume."
+                    : "This task is overdue. Pick a new due date after today to start it, or delete the task."}
                 </span>
               </div>
             )}
             <EditField label="Title">
               <input
-                autoFocus
+                autoFocus={!titleLocked}
                 value={editTitle}
+                disabled={titleLocked}
+                title={titleLocked ? "Title is locked 24 hours after creation." : undefined}
                 onChange={(e) => setEditTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                className="w-full px-3 py-2 text-sm outline-none"
-                style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
+                className="w-full px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
+                style={{
+                  background: titleLocked ? "#1a1b1e" : "#1e1f22",
+                  color: titleLocked ? "rgba(255,255,255,0.4)" : "#f0f0f0",
+                  border: "1px solid #3a3b3f",
+                  borderRadius: "3px",
+                }}
+                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "#5bb8e0"; }}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
               />
             </EditField>
@@ -290,7 +323,7 @@ export default function TaskDetailModal({
               </div>
             </EditField>
 
-            {!task.isRecurring && (
+            {(!task.isRecurring || mustReschedule) && (
               <EditField label="Due Date">
                 <DatePicker value={editDueDate} onChange={setEditDueDate} />
               </EditField>
@@ -310,7 +343,7 @@ export default function TaskDetailModal({
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
               <Row label="Status">
                 <span style={{ color: status.color, fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
                   {status.label}
@@ -398,7 +431,7 @@ export default function TaskDetailModal({
               <button
                 onClick={() => mustReschedule ? onClose() : setIsEditing(false)}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
                 style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "3px" }}
                 onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -408,18 +441,18 @@ export default function TaskDetailModal({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
                 style={{ color: "#5bb8e0", background: "rgba(91,184,224,0.08)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "3px" }}
                 onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(91,184,224,0.15)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(91,184,224,0.08)"; }}
               >
-                {isSaving ? "Saving…" : mustReschedule ? "Save & Start" : "Save"}
+                {isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
               </button>
               {mustReschedule && onDelete && (
                 <button
                   onClick={onDelete}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
+                  className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
                   style={{ color: "#ef4444", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "3px" }}
                   onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

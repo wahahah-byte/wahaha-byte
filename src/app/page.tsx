@@ -29,7 +29,7 @@ function Home() {
 
   const tasksHook = useTasks({ initialFilterFromUrl: initialTab });
   const {
-    tasks, setTasks, loading, error, setError,
+    tasks, setTasks, loading, setError,
     isMounted, isAuthenticated, penalizedTaskIds, submittedSeed,
   } = tasksHook;
 
@@ -45,7 +45,7 @@ function Home() {
 
   const {
     selectedIds, setSelectedIds, stagedTaskIds, setStagedTaskIds,
-    submittedTaskIds, setSubmittedTaskIds, filingIds, recentlyFiledIds,
+    submittedTaskIds, setSubmittedTaskIds, filingIds, recentlyFiledIds, errorIds,
     isSubmitting, showCapWarning, setShowCapWarning,
     toggleSelect, doSubmit, handleSubmit,
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
@@ -93,7 +93,7 @@ function Home() {
       if (isRestart) {
         setOverdueRestartTaskId(null);
         setDetailTask(null);
-        handleAdvance(updated);
+        if (!updated.isRecurring) handleAdvance(updated);
       }
       return null;
     }
@@ -119,7 +119,7 @@ function Home() {
     if (isRestart) {
       setOverdueRestartTaskId(null);
       setDetailTask(null);
-      handleAdvance(updated);
+      if (!updated.isRecurring) handleAdvance(updated);
     }
     return null;
   }
@@ -192,12 +192,6 @@ function Home() {
             <span className="text-center">Points</span>
           </div>
 
-          {error && (
-            <div className="error-banner-anim px-4 py-3 mb-2 text-xs text-red-400" style={{ background: "#1e1e1e" }}>
-              {error}
-            </div>
-          )}
-
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
@@ -257,6 +251,7 @@ function Home() {
                   slashingId={slashingId}
                   filingIds={filingIds}
                   recentlyFiledIds={recentlyFiledIds}
+                  errorIds={errorIds}
                   selectedIds={selectedIds}
                   submittedTaskIds={submittedTaskIds}
                   recurringPopup={recurringPopups.get(item.taskId)}
@@ -314,8 +309,8 @@ function Home() {
             canUndo={dtCanUndo}
             isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
             onStart={dt.status === "pending" && !dt.isRecurring ? () => { closeDetail(); handleAdvance(dt); } : undefined}
-            onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
-            checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule)}
+            onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
+            checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
             onPause={dt.status === "in_progress" ? () => { closeDetail(); handlePause(dt); } : undefined}
             onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
             onUndo={dtCanUndo ? () => { closeDetail(); handleAdvance(dt); } : undefined}

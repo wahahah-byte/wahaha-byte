@@ -25,7 +25,7 @@ const byDueDate = (a: TaskDto, b: TaskDto) => {
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 const getTaskTier = (t: TaskDto): 0 | 1 => {
-  if (t.isRecurring) return canCheckInNow(t.dueDate, t.recurrenceRule) ? 0 : 1;
+  if (t.isRecurring) return canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate) ? 0 : 1;
   return t.status === "in_progress" ? 1 : 0;
 };
 

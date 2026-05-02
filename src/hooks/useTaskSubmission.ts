@@ -20,6 +20,7 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
   const [submittedTaskIds, setSubmittedTaskIds] = useState<Set<string>>(new Set());
   const [filingIds, setFilingIds] = useState<Set<string>>(new Set());
   const [recentlyFiledIds, setRecentlyFiledIds] = useState<Set<string>>(new Set());
+  const [errorIds, setErrorIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCapWarning, setShowCapWarning] = useState(false);
 
@@ -65,13 +66,41 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
     setIsSubmitting(false);
     if (error) { setError(error); return; }
 
-    setFilingIds(new Set(ids));
-    const delay = Math.max(520, (ids.length - 1) * 35 + 520);
+    const results = data!.results ?? [];
+    const failedIds = new Set(results.filter((r) => r.error).map((r) => r.taskId));
+    const succeededIds = ids.filter((id) => !failedIds.has(id));
+
+    if (data!.errors && data!.errors.length > 0) {
+      const first = data!.errors[0];
+      const more = data!.errors.length - 1;
+      setError(more > 0 ? `${first} (+${more} more)` : first);
+    }
+
+    if (failedIds.size > 0) {
+      setErrorIds(failedIds);
+      setTimeout(() => setErrorIds(new Set()), 700);
+    }
+
+    if (succeededIds.length === 0) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) if (!failedIds.has(id)) next.delete(id);
+        return next;
+      });
+      return;
+    }
+
+    setFilingIds(new Set(succeededIds));
+    const delay = Math.max(520, (succeededIds.length - 1) * 35 + 520);
     setTimeout(() => {
-      setSubmittedTaskIds((prev) => new Set([...prev, ...ids]));
-      setRecentlyFiledIds(new Set(ids));
-      setSelectedIds(new Set());
-      setStagedTaskIds([]);
+      setSubmittedTaskIds((prev) => new Set([...prev, ...succeededIds]));
+      setRecentlyFiledIds(new Set(succeededIds));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of succeededIds) next.delete(id);
+        return next;
+      });
+      setStagedTaskIds((prev) => prev.filter((id) => !succeededIds.includes(id)));
       setFilingIds(new Set());
       setDailySubmitted(data!.dailyTotal);
       setBalance(data!.newBalance);
@@ -89,7 +118,7 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
     selectedIds, setSelectedIds,
     stagedTaskIds, setStagedTaskIds,
     submittedTaskIds, setSubmittedTaskIds,
-    filingIds, recentlyFiledIds,
+    filingIds, recentlyFiledIds, errorIds,
     isSubmitting, showCapWarning, setShowCapWarning,
     toggleSelect, doSubmit, handleSubmit,
     remaining: _remaining,

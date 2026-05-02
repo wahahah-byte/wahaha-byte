@@ -10,11 +10,19 @@ export interface UserProfile {
   recurringPointsSubmittedToday: number;
 }
 
+export interface TaskSubmissionResult {
+  taskId: string;
+  awarded: number;
+  error?: string | null;
+}
+
 export interface SubmitPointsResponse {
   pointsAwarded: number;
   newBalance: number;
   dailyTotal: number;
   recurringDailyTotal: number;
+  errors?: string[];
+  results?: TaskSubmissionResult[];
 }
 
 export const usersApi = {
