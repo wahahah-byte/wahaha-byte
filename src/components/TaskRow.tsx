@@ -339,7 +339,7 @@ export default function TaskRow({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: "absolute", top: 0, bottom: 0, right: 0,
-          flexDirection: "column", width: "28px",
+          flexDirection: "row",
           background: "#1e1f22", border: "1px solid #3a3b3f",
           overflow: "hidden", zIndex: 10,
         }}
@@ -351,7 +351,7 @@ export default function TaskRow({
                 onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
                 disabled={isAdvancing}
                 title="Resume — reschedule to today"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
+                style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
                 onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
@@ -367,7 +367,7 @@ export default function TaskRow({
               onClick={eligible ? () => onCheckIn(task) : undefined}
               disabled={isAdvancing || !eligible}
               title={eligible ? "Check In" : "Not yet available"}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
+              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
               onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
@@ -394,7 +394,7 @@ export default function TaskRow({
               onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
               disabled={isAdvancing}
               title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
@@ -410,7 +410,7 @@ export default function TaskRow({
             onClick={() => onPause(task)}
             disabled={pausing === task.taskId}
             title="Pause"
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
@@ -426,7 +426,7 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Complete"
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
@@ -441,7 +441,7 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Undo"
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
@@ -456,7 +456,7 @@ export default function TaskRow({
           onClick={() => onDelete(task.taskId)}
           disabled={slashingId === task.taskId}
           title="Delete"
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
+          style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
