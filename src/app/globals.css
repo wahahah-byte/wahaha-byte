@@ -64,15 +64,16 @@ body {
   opacity: 0.55;
 }
 .task-row-wrapper .task-actions {
-  display: none;
+  display: flex;
+  visibility: hidden;
 }
 @media (hover: hover) {
   .task-row-wrapper:hover .task-actions {
-    display: flex;
+    visibility: visible;
   }
 }
 .task-row-wrapper[data-revealed="true"] .task-actions {
-  display: flex;
+  visibility: visible;
 }
 .task-row-wrapper[data-revealed="true"] .task-row-inner {
   transform: translateX(calc(var(--actions-width, 28px) * -1));
