@@ -18,7 +18,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
   const [showYearSelect, setShowYearSelect] = useState(false);
   const [calMonth, setCalMonth] = useState(value?.getMonth() ?? today.getMonth());
   const [calYear, setCalYear] = useState(value?.getFullYear() ?? today.getFullYear());
-  const [yearPage, setYearPage] = useState(today.getFullYear());
+  const [yearPage, setYearPage] = useState(today.getFullYear() - 1);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
