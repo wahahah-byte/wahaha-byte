@@ -37,8 +37,10 @@ export default function TaskRow({
 }: TaskRowProps) {
   const isInProgress = task.status === "in_progress";
   const isCompleted = task.status === "completed";
-  const isGreyedOut = activeFilter === "pending" &&
-    task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+  const isGreyedOut = activeFilter === "pending" && (
+    (task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate))
+    || task.status === "in_progress"
+  );
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
   const isAdvancing = advancing === task.taskId;
   const isFiling = filingIds.has(task.taskId);
@@ -129,6 +131,11 @@ export default function TaskRow({
       inner.style.transition = "none";
       inner.style.transform = `translateX(${offset}px)`;
     }
+    const wrapper = wrapperRef.current;
+    if (wrapper) {
+      wrapper.setAttribute("data-dragging", "true");
+      wrapper.style.setProperty("--button-scale", String(-offset / drag.panelWidth));
+    }
 
     if (!drag.revealedDispatched && offset < 0) {
       drag.revealedDispatched = true;
@@ -141,6 +148,11 @@ export default function TaskRow({
     const drag = dragRef.current;
     dragRef.current = null;
     const inner = innerRef.current;
+    const wrapper = wrapperRef.current;
+    if (wrapper) {
+      wrapper.removeAttribute("data-dragging");
+      wrapper.style.removeProperty("--button-scale");
+    }
     if (!drag || drag.axis !== "horizontal" || !inner) {
       if (inner) {
         inner.style.transition = "";
@@ -176,11 +188,18 @@ export default function TaskRow({
     function onScroll() {
       setRevealed(false);
     }
+    function onOutsidePointer(e: PointerEvent) {
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
+      if (!wrapper.contains(e.target as Node)) setRevealed(false);
+    }
     window.addEventListener("task-row-reveal", onOtherReveal);
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("pointerdown", onOutsidePointer, true);
     return () => {
       window.removeEventListener("task-row-reveal", onOtherReveal);
       window.removeEventListener("scroll", onScroll, { capture: true } as EventListenerOptions);
+      window.removeEventListener("pointerdown", onOutsidePointer, true);
     };
   }, [task.taskId]);
 
@@ -196,13 +215,146 @@ export default function TaskRow({
     <div
       ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
-      style={{ position: "relative", height: "60px", touchAction: "pan-y" }}
+      style={{ position: "relative", height: "60px", touchAction: "pan-y", overflow: "hidden" }}
       data-revealed={revealed ? "true" : undefined}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
     >
+      <div
+        ref={actionsRef}
+        className="task-actions"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "absolute", top: 0, bottom: 0, right: 0,
+          flexDirection: "row",
+          overflow: "hidden",
+        }}
+      >
+        {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
+          if (overdueRecurring) {
+            return (
+              <button
+                onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
+                disabled={isAdvancing}
+                title="Resume — reschedule to today"
+                style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
+                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <polygon points="2,1 9,5 2,9" fill="#ef4444" />
+                </svg>
+              </button>
+            );
+          }
+          const eligible = canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+          return (
+            <button
+              onClick={eligible ? () => onCheckIn(task) : undefined}
+              disabled={isAdvancing || !eligible}
+              title={eligible ? "Check In" : "Not yet available"}
+              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
+              onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {eligible ? (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="#a78bfa" strokeWidth="1.2" fill="none" />
+                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                </svg>
+              )}
+            </button>
+          );
+        })()}
+
+        {task.status === "pending" && !task.isRecurring && !isGreyedOut && (() => {
+          const overdueRegular = isOverdue(task.dueDate);
+          const startColor = overdueRegular ? "#ef4444" : "#5bb8e0";
+          const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "rgba(91,184,224,0.15)";
+          return (
+            <button
+              onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
+              disabled={isAdvancing}
+              title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
+              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <polygon points="2,1 9,5 2,9" fill={startColor} />
+              </svg>
+            </button>
+          );
+        })()}
+
+        {isInProgress && (
+          <button
+            onClick={() => onPause(task)}
+            disabled={pausing === task.taskId}
+            title="Pause"
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
+              <rect x="5.5" y="1" width="3" height="8" fill="#f59e0b" />
+            </svg>
+          </button>
+        )}
+
+        {isInProgress && !isGreyedOut && (
+          <button
+            onClick={() => onAdvance(task)}
+            disabled={isAdvancing}
+            title="Complete"
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <polyline points="1,5 4,8 9,2" stroke="#5bb8e0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
+
+        {canUndo && !isGreyedOut && (
+          <button
+            onClick={() => onAdvance(task)}
+            disabled={isAdvancing}
+            title="Undo"
+            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
+              <polyline points="4,4.5 1.5,2 4,0" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </button>
+        )}
+
+        <button
+          onClick={() => onDelete(task.taskId)}
+          disabled={slashingId === task.taskId}
+          title="Delete"
+          style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+
       <div
         ref={innerRef}
         className={[
@@ -223,7 +375,6 @@ export default function TaskRow({
                 ? "2px solid rgba(239,68,68,0.55)"
                 : undefined,
           opacity: isCompleted && !canUndo ? 0.55 : isGreyedOut ? undefined : 1,
-          transition: "transform 0.2s ease-out, opacity 0.15s ease-out",
           cursor: "pointer",
         }}
       >
@@ -411,140 +562,6 @@ export default function TaskRow({
             </>
           )}
         </div>
-      </div>
-
-      <div
-        ref={actionsRef}
-        className="task-actions"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute", top: 0, bottom: 0, right: 0,
-          flexDirection: "row",
-          background: "#1e1f22", border: "1px solid #3a3b3f",
-          overflow: "hidden", zIndex: 10,
-        }}
-      >
-        {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
-          if (overdueRecurring) {
-            return (
-              <button
-                onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
-                disabled={isAdvancing}
-                title="Resume — reschedule to today"
-                style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
-                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <polygon points="2,1 9,5 2,9" fill="#ef4444" />
-                </svg>
-              </button>
-            );
-          }
-          const eligible = canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
-          return (
-            <button
-              onClick={eligible ? () => onCheckIn(task) : undefined}
-              disabled={isAdvancing || !eligible}
-              title={eligible ? "Check In" : "Not yet available"}
-              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
-              onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              {eligible ? (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="#a78bfa" strokeWidth="1.2" fill="none" />
-                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                </svg>
-              )}
-            </button>
-          );
-        })()}
-
-        {task.status === "pending" && !task.isRecurring && !isGreyedOut && (() => {
-          const overdueRegular = isOverdue(task.dueDate);
-          const startColor = overdueRegular ? "#ef4444" : "#5bb8e0";
-          const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "rgba(91,184,224,0.15)";
-          return (
-            <button
-              onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
-              disabled={isAdvancing}
-              title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
-              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <polygon points="2,1 9,5 2,9" fill={startColor} />
-              </svg>
-            </button>
-          );
-        })()}
-
-        {isInProgress && (
-          <button
-            onClick={() => onPause(task)}
-            disabled={pausing === task.taskId}
-            title="Pause"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
-              <rect x="5.5" y="1" width="3" height="8" fill="#f59e0b" />
-            </svg>
-          </button>
-        )}
-
-        {isInProgress && !isGreyedOut && (
-          <button
-            onClick={() => onAdvance(task)}
-            disabled={isAdvancing}
-            title="Complete"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <polyline points="1,5 4,8 9,2" stroke="#5bb8e0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        )}
-
-        {canUndo && !isGreyedOut && (
-          <button
-            onClick={() => onAdvance(task)}
-            disabled={isAdvancing}
-            title="Undo"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-              <polyline points="4,4.5 1.5,2 4,0" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            </svg>
-          </button>
-        )}
-
-        <button
-          onClick={() => onDelete(task.taskId)}
-          disabled={slashingId === task.taskId}
-          title="Delete"
-          style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
       </div>
 
       {slashingId === task.taskId && (

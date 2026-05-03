@@ -56,7 +56,7 @@ export function buildListItems(args: {
   }
   const activeTasks =
     activeFilter === "pending"
-      ? tasks.filter((t) => t.status === "pending")
+      ? tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
       : activeFilter === "in_progress"
         ? tasks.filter((t) => t.status === "in_progress")
         : tasks.filter((t) => t.status !== "completed");

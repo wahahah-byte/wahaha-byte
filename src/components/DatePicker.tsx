@@ -162,6 +162,16 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                   ›
                 </button>
               </div>
+              <button
+                onClick={() => setYearPage(today.getFullYear() - 1)}
+                disabled={yearPage === today.getFullYear() - 1}
+                className="mt-2 w-full text-[9px] tracking-widest uppercase transition-colors cursor-pointer py-1 disabled:opacity-30 disabled:cursor-default"
+                style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "none" }}
+                onMouseEnter={(e) => { if (yearPage !== today.getFullYear() - 1) e.currentTarget.style.color = "#5bb8e0"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+              >
+                Today
+              </button>
             </div>
           )}
 
