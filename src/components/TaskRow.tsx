@@ -52,9 +52,13 @@ export default function TaskRow({
   const hasError = errorIds?.has(task.taskId) ?? false;
 
   const [revealed, setRevealed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuPopoverRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -134,7 +138,10 @@ export default function TaskRow({
     const wrapper = wrapperRef.current;
     if (wrapper) {
       wrapper.setAttribute("data-dragging", "true");
-      wrapper.style.setProperty("--button-scale", String(-offset / drag.panelWidth));
+      const parent = wrapper.parentElement;
+      if (parent) {
+        parent.style.setProperty("--button-scale", String(-offset / drag.panelWidth));
+      }
     }
 
     if (!drag.revealedDispatched && offset < 0) {
@@ -151,7 +158,10 @@ export default function TaskRow({
     const wrapper = wrapperRef.current;
     if (wrapper) {
       wrapper.removeAttribute("data-dragging");
-      wrapper.style.removeProperty("--button-scale");
+      const parent = wrapper.parentElement;
+      if (parent) {
+        parent.style.removeProperty("--button-scale");
+      }
     }
     if (!drag || drag.axis !== "horizontal" || !inner) {
       if (inner) {
@@ -211,12 +221,50 @@ export default function TaskRow({
     onOpenDetail(task);
   }
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onOutside(e: MouseEvent) {
+      if (
+        menuPopoverRef.current && !menuPopoverRef.current.contains(e.target as Node) &&
+        menuTriggerRef.current && !menuTriggerRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    }
+    function onEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    function onScroll() {
+      setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("keydown", onEscape);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("keydown", onEscape);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [menuOpen]);
+
+  function openMenu(e: React.MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    setMenuOpen(true);
+  }
+
+  const closeMenu = () => setMenuOpen(false);
+  const eligibleCheckIn = task.isRecurring && canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+  const overdueRegular = !task.isRecurring && task.status === "pending" && isOverdue(task.dueDate);
+
   return (
     <div
       ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
       style={{ position: "relative", height: "60px", touchAction: "pan-y", overflow: "hidden" }}
       data-revealed={revealed ? "true" : undefined}
+      data-menu-open={menuOpen ? "true" : undefined}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -229,6 +277,9 @@ export default function TaskRow({
         style={{
           position: "absolute", top: 0, bottom: 0, right: 0,
           flexDirection: "row",
+          alignItems: "center",
+          gap: "4px",
+          padding: "0 6px",
           overflow: "hidden",
         }}
       >
@@ -239,9 +290,9 @@ export default function TaskRow({
                 onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
                 disabled={isAdvancing}
                 title="Resume — reschedule to today"
-                style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
+                style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
                 onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <polygon points="2,1 9,5 2,9" fill="#ef4444" />
@@ -255,9 +306,9 @@ export default function TaskRow({
               onClick={eligible ? () => onCheckIn(task) : undefined}
               disabled={isAdvancing || !eligible}
               title={eligible ? "Check In" : "Not yet available"}
-              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "transparent", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
+              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "#1a1b1f", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
               onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
             >
               {eligible ? (
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -282,9 +333,9 @@ export default function TaskRow({
               onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
               disabled={isAdvancing}
               title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
-              style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <polygon points="2,1 9,5 2,9" fill={startColor} />
@@ -298,9 +349,9 @@ export default function TaskRow({
             onClick={() => onPause(task)}
             disabled={pausing === task.taskId}
             title="Pause"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
@@ -314,9 +365,9 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Complete"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <polyline points="1,5 4,8 9,2" stroke="#5bb8e0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -329,9 +380,9 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Undo"
-            style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
@@ -344,9 +395,9 @@ export default function TaskRow({
           onClick={() => onDelete(task.taskId)}
           disabled={slashingId === task.taskId}
           title="Delete"
-          style={{ width: "44px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "transparent", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
+          style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
             <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
@@ -360,7 +411,6 @@ export default function TaskRow({
         className={[
           "task-row-inner grid items-center px-4",
           isGreyedOut ? "greyed" : "",
-          !isInProgress && !canUndo ? "default-border" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
         style={{
@@ -591,6 +641,74 @@ export default function TaskRow({
           }}
         >
           +{recurringPopup} pts
+        </div>
+      )}
+
+      <button
+        ref={menuTriggerRef}
+        type="button"
+        className="row-menu-trigger"
+        aria-label="More actions"
+        onClick={openMenu}
+      >
+        ⋯
+      </button>
+
+      {menuOpen && menuPos && (
+        <div
+          ref={menuPopoverRef}
+          className="row-menu-popover"
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {task.status === "pending" && task.isRecurring && !isInProgress && (
+            overdueRecurring ? (
+              <button
+                onClick={() => { onRestartOverdue ? onRestartOverdue(task) : onSkip(task); closeMenu(); }}
+                disabled={isAdvancing}
+                style={{ "--menu-color": "#ef4444" } as React.CSSProperties}
+              >RESUME</button>
+            ) : (
+              <button
+                onClick={eligibleCheckIn ? () => { onCheckIn(task); closeMenu(); } : undefined}
+                disabled={isAdvancing || !eligibleCheckIn}
+                style={{ "--menu-color": "#a78bfa" } as React.CSSProperties}
+              >{eligibleCheckIn ? "CHECK IN" : "LOCKED"}</button>
+            )
+          )}
+          {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
+            <button
+              onClick={() => { (overdueRegular && onRestartOverdue) ? onRestartOverdue(task) : onAdvance(task); closeMenu(); }}
+              disabled={isAdvancing}
+              style={{ "--menu-color": overdueRegular ? "#ef4444" : "#5bb8e0" } as React.CSSProperties}
+            >{overdueRegular ? "OVERDUE" : "START"}</button>
+          )}
+          {isInProgress && (
+            <button
+              onClick={() => { onPause(task); closeMenu(); }}
+              disabled={pausing === task.taskId}
+              style={{ "--menu-color": "#f59e0b" } as React.CSSProperties}
+            >PAUSE</button>
+          )}
+          {isInProgress && !isGreyedOut && (
+            <button
+              onClick={() => { onAdvance(task); closeMenu(); }}
+              disabled={isAdvancing}
+              style={{ "--menu-color": "#5bb8e0" } as React.CSSProperties}
+            >DONE</button>
+          )}
+          {canUndo && !isGreyedOut && (
+            <button
+              onClick={() => { onAdvance(task); closeMenu(); }}
+              disabled={isAdvancing}
+              style={{ "--menu-color": "#f59e0b" } as React.CSSProperties}
+            >UNDO</button>
+          )}
+          <button
+            onClick={() => { onDelete(task.taskId); closeMenu(); }}
+            disabled={slashingId === task.taskId}
+            style={{ "--menu-color": "#ef4444" } as React.CSSProperties}
+          >DELETE</button>
         </div>
       )}
 

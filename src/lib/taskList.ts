@@ -7,6 +7,23 @@ export type SortMode = "due" | "priority" | "title" | "points";
 export type Sep = { __sep: true; label: string; sepKey: string };
 export const sep = (label: string, sepKey: string): Sep => ({ __sep: true, label, sepKey });
 
+export type Chunk = { sep: Sep | null; tasks: TaskDto[] };
+
+export function chunkListItems(items: (TaskDto | Sep)[]): Chunk[] {
+  const chunks: Chunk[] = [];
+  let current: Chunk = { sep: null, tasks: [] };
+  for (const item of items) {
+    if ("__sep" in item) {
+      if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+      current = { sep: item, tasks: [] };
+    } else {
+      current.tasks.push(item);
+    }
+  }
+  if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+  return chunks;
+}
+
 export const completedSort =
   (submittedTaskIds: Set<string>) =>
   (a: TaskDto, b: TaskDto) => {

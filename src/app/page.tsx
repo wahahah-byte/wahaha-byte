@@ -17,7 +17,7 @@ import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
 import { canCheckInNow } from "@/lib/dateUtils";
 import { FILTERS } from "@/lib/constants";
-import { buildListItems, GroupMode, SortMode, Sep } from "@/lib/taskList";
+import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
 
 function Home() {
@@ -155,41 +155,43 @@ function Home() {
             </div>
           )}
 
-          <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
+          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "#1e1f22" }}>
+            <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
 
-          <div className="flex items-center mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
-            {FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => applyFilter(f.value)}
-                className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                style={{ color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
-              >
-                {f.label}
-                {f.value === "completed" && unsubmitted.length > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
-                )}
-                {activeFilter === f.value && (
-                  <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "#5bb8e0" }} />
-                )}
-              </button>
-            ))}
-            <div className="flex-1" />
-            <TaskListControls
-              sortMode={sortMode}
-              groupMode={groupMode}
-              onSortChange={setSortMode}
-              onGroupChange={setGroupMode}
-            />
-          </div>
+            <div className="flex items-center mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
+              {FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => applyFilter(f.value)}
+                  className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
+                  style={{ color: activeFilter === f.value ? "#5bb8e0" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
+                >
+                  {f.label}
+                  {f.value === "completed" && unsubmitted.length > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#f59e0b" }} />
+                  )}
+                  {activeFilter === f.value && (
+                    <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "#5bb8e0" }} />
+                  )}
+                </button>
+              ))}
+              <div className="flex-1" />
+              <TaskListControls
+                sortMode={sortMode}
+                groupMode={groupMode}
+                onSortChange={setSortMode}
+                onGroupChange={setGroupMode}
+              />
+            </div>
 
-          <div
-            className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
-            style={{ gridTemplateColumns: "1fr 64px 80px", color: "rgba(255,255,255,0.55)", position: "relative", zIndex: 2, background: "#1e1f22" }}
-          >
-            <span>Name</span>
-            <span className="text-center">Due</span>
-            <span className="text-center">Points</span>
+            <div
+              className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
+              style={{ gridTemplateColumns: "1fr 64px 80px", color: "rgba(255,255,255,0.55)", position: "relative", zIndex: 2, background: "#1e1f22" }}
+            >
+              <span>Name</span>
+              <span className="text-center">Due</span>
+              <span className="text-center">Points</span>
+            </div>
           </div>
 
           {loading && (
@@ -230,44 +232,51 @@ function Home() {
             />
           )}
 
-          <div className="flex flex-col gap-1">
-            {!loading && listItems.map((item: TaskDto | Sep) => {
-              if ("__sep" in item) {
-                const s = item as Sep;
-                return (
-                  <div key={s.sepKey} className="flex items-center gap-3 px-1 mt-2 mb-1">
-                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>{s.label}</span>
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+          {!loading && chunkListItems(listItems).map((chunk, idx) => (
+            <div key={chunk.sep?.sepKey ?? `__chunk-${idx}`}>
+              {chunk.sep && (
+                <div className={`flex items-center gap-3 px-1 ${idx === 0 ? "mb-1" : "mt-2 mb-1"}`}>
+                  <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>{chunk.sep.label}</span>
+                  <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                </div>
+              )}
+              {chunk.tasks.length > 0 && (
+                <div className="flex flex-col" style={{ background: "#1a1b1f", overflow: "hidden" }}>
+                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
                   </div>
-                );
-              }
-              return (
-                <TaskRow
-                  key={item.taskId}
-                  task={item}
-                  activeFilter={activeFilter}
-                  advancing={advancing}
-                  pausing={pausing}
-                  slashingId={slashingId}
-                  filingIds={filingIds}
-                  recentlyFiledIds={recentlyFiledIds}
-                  errorIds={errorIds}
-                  selectedIds={selectedIds}
-                  submittedTaskIds={submittedTaskIds}
-                  recurringPopup={recurringPopups.get(item.taskId)}
-                  penalizedTaskIds={penalizedTaskIds}
-                  onAdvance={handleAdvance}
-                  onCheckIn={handleCheckIn}
-                  onPause={handlePause}
-                  onDelete={handleDelete}
-                  onSkip={handleSkip}
-                  onToggleSelect={toggleSelect}
-                  onOpenDetail={setDetailTask}
-                  onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
-                />
-              );
-            })}
-          </div>
+                  {chunk.tasks.map((item) => (
+                    <TaskRow
+                      key={item.taskId}
+                      task={item}
+                      activeFilter={activeFilter}
+                      advancing={advancing}
+                      pausing={pausing}
+                      slashingId={slashingId}
+                      filingIds={filingIds}
+                      recentlyFiledIds={recentlyFiledIds}
+                      errorIds={errorIds}
+                      selectedIds={selectedIds}
+                      submittedTaskIds={submittedTaskIds}
+                      recurringPopup={recurringPopups.get(item.taskId)}
+                      penalizedTaskIds={penalizedTaskIds}
+                      onAdvance={handleAdvance}
+                      onCheckIn={handleCheckIn}
+                      onPause={handlePause}
+                      onDelete={handleDelete}
+                      onSkip={handleSkip}
+                      onToggleSelect={toggleSelect}
+                      onOpenDetail={setDetailTask}
+                      onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
+                    />
+                  ))}
+                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
 
           {!loading && tasks.length > 0 && (
             <div className="flex justify-between items-center mt-2 px-1">

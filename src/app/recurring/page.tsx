@@ -227,6 +227,7 @@ function Recurring() {
             </div>
           )}
 
+          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "#1e1f22" }}>
           <div style={{ display: "flex", alignItems: "stretch", background: "#1e2025", marginBottom: "6px", height: "38px" }}>
             <CategoryCapsTooltip variant="recurring">
               <div
@@ -451,6 +452,7 @@ function Recurring() {
             <span className="text-center">Next</span>
             <span className="text-center">Points</span>
           </div>
+          </div>
 
           {loading && (
             <div className="flex items-center justify-center py-20">
@@ -483,43 +485,63 @@ function Recurring() {
             </div>
           )}
 
-          <div className="flex flex-col gap-1">
-            {!loading && listItems.map((item) => {
+          {(() => {
+            const chunks: { sep: Sep | null; tasks: TaskDto[] }[] = [];
+            let current: { sep: Sep | null; tasks: TaskDto[] } = { sep: null, tasks: [] };
+            for (const item of listItems) {
               if ("__sep" in item) {
-                const s = item as Sep;
-                return (
-                  <div key={s.sepKey} className="flex items-center gap-3 px-1 mt-2 mb-1">
-                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>{s.label}</span>
+                if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+                current = { sep: item, tasks: [] };
+              } else {
+                current.tasks.push(item);
+              }
+            }
+            if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+            return !loading && chunks.map((chunk, idx) => (
+              <div key={chunk.sep?.sepKey ?? `__chunk-${idx}`}>
+                {chunk.sep && (
+                  <div className={`flex items-center gap-3 px-1 ${idx === 0 ? "mb-1" : "mt-2 mb-1"}`}>
+                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>{chunk.sep.label}</span>
                     <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
                   </div>
-                );
-              }
-              return (
-                <TaskRow
-                  key={item.taskId}
-                  task={item}
-                  activeFilter="all"
-                  advancing={advancing}
-                  pausing={pausing}
-                  slashingId={slashingId}
-                  filingIds={new Set()}
-                  recentlyFiledIds={new Set()}
-                  selectedIds={new Set()}
-                  submittedTaskIds={submittedTaskIds}
-                  recurringPopup={recurringPopups.get(item.taskId)}
-                  penalizedTaskIds={new Set()}
-                  onAdvance={handleAdvance}
-                  onCheckIn={handleCheckIn}
-                  onPause={handlePause}
-                  onDelete={handleDelete}
-                  onSkip={handleSkip}
-                  onToggleSelect={() => {}}
-                  onOpenDetail={setDetailTask}
-                  onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
-                />
-              );
-            })}
-          </div>
+                )}
+                {chunk.tasks.length > 0 && (
+                  <div className="flex flex-col" style={{ background: "#1a1b1f", overflow: "hidden" }}>
+                    <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                      <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                    </div>
+                    {chunk.tasks.map((item) => (
+                      <TaskRow
+                        key={item.taskId}
+                        task={item}
+                        activeFilter="all"
+                        advancing={advancing}
+                        pausing={pausing}
+                        slashingId={slashingId}
+                        filingIds={new Set()}
+                        recentlyFiledIds={new Set()}
+                        selectedIds={new Set()}
+                        submittedTaskIds={submittedTaskIds}
+                        recurringPopup={recurringPopups.get(item.taskId)}
+                        penalizedTaskIds={new Set()}
+                        onAdvance={handleAdvance}
+                        onCheckIn={handleCheckIn}
+                        onPause={handlePause}
+                        onDelete={handleDelete}
+                        onSkip={handleSkip}
+                        onToggleSelect={() => {}}
+                        onOpenDetail={setDetailTask}
+                        onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
+                      />
+                    ))}
+                    <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                      <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ));
+          })()}
 
           {!loading && tasks.length > 0 && (
             <div className="flex justify-between items-center mt-2 px-1">

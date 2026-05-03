@@ -20,7 +20,7 @@
 }
 
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 body {
@@ -46,55 +46,143 @@ body {
 }
 
 .task-row-inner {
-  background: #2a2b2f;
-  transition: transform 0.2s ease-out, opacity 0.15s ease-out;
+  background: #1e1f22;
+  transition: transform 0.2s ease-out, opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
 }
-.task-row-wrapper:hover .task-row-inner {
-  background: #363840;
-}
-.task-row-inner.default-border {
-  border-left: 2px solid transparent;
-}
-.task-row-wrapper:hover .task-row-inner.default-border {
-  border-left-color: rgba(91, 184, 224, 0.4);
+@media (hover: hover) {
+  .task-row-wrapper:hover .task-row-inner {
+    background: #26272b;
+  }
 }
 .task-row-inner.greyed {
   opacity: 0.4;
 }
+.task-row-wrapper.task-row-phantom {
+  position: relative;
+  height: 30px !important;
+  pointer-events: none;
+  overflow: hidden;
+}
 .task-row-wrapper:hover .task-row-inner.greyed {
   opacity: 0.55;
-}
-.task-row-wrapper {
-  --button-scale: 0;
 }
 .task-row-wrapper .task-actions {
   display: flex;
 }
-.task-row-wrapper[data-revealed="true"] {
-  --button-scale: 1;
-}
 .task-row-wrapper[data-revealed="true"] .task-row-inner {
   transform: translateX(calc(var(--actions-width, 28px) * -1));
 }
-@media (hover: hover) {
-  .task-row-wrapper:hover {
-    --button-scale: 1;
-  }
-  .task-row-wrapper:hover .task-row-inner {
-    transform: translateX(calc(var(--actions-width, 28px) * -1));
-  }
-}
 .task-actions {
-  background: rgba(30, 31, 34, var(--button-scale));
-  border: 1px solid rgba(58, 59, 63, var(--button-scale));
-  transition: background 0.2s ease-out, border-color 0.2s ease-out;
+  background: #1a1b1f;
+  visibility: hidden;
 }
-.task-actions button {
-  transform: scale(var(--button-scale));
-  transition: transform 0.2s ease-out;
+.task-row-wrapper[data-revealed="true"] .task-actions,
+.task-row-wrapper[data-dragging="true"] .task-actions {
+  visibility: visible;
+}
+.row-menu-trigger {
+  display: none;
+}
+@media (hover: hover) {
+  .row-menu-trigger {
+    display: flex;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 11;
+    transition: opacity 0.15s ease-out, color 0.15s ease-out;
+  }
+  .task-row-wrapper:hover .row-menu-trigger,
+  .task-row-wrapper[data-menu-open="true"] .row-menu-trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .row-menu-trigger:hover,
+  .task-row-wrapper[data-menu-open="true"] .row-menu-trigger {
+    color: #fff;
+  }
+}
+
+.row-menu-popover {
+  background: #1e1f22;
+  border: 1px solid #3a3b3f;
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 130px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+.row-menu-popover button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.row-menu-popover button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--menu-color, #5bb8e0);
+}
+.row-menu-popover button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 .task-row-wrapper[data-dragging="true"] .task-actions,
 .task-row-wrapper[data-dragging="true"] .task-actions button {
+  transition: none;
+}
+
+/* Resting open: swiped row caps at 6px; neighbors at 10px */
+.task-row-wrapper[data-revealed="true"] .task-row-inner {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.task-row-wrapper:has(+ .task-row-wrapper[data-revealed="true"]) .task-row-inner {
+  border-bottom-right-radius: 10px;
+}
+.task-row-wrapper[data-revealed="true"] + .task-row-wrapper .task-row-inner {
+  border-top-right-radius: 10px;
+}
+
+/* During drag: swiped row tracks --button-scale up to 6px max;
+   neighbors track up to 10px max */
+.task-row-wrapper[data-dragging="true"] .task-row-inner {
+  border-top-right-radius: calc(6px * var(--button-scale, 0));
+  border-bottom-right-radius: calc(6px * var(--button-scale, 0));
+}
+.task-row-wrapper:has(+ .task-row-wrapper[data-dragging="true"]) .task-row-inner {
+  border-bottom-right-radius: calc(10px * var(--button-scale, 0));
+}
+.task-row-wrapper[data-dragging="true"] + .task-row-wrapper .task-row-inner {
+  border-top-right-radius: calc(10px * var(--button-scale, 0));
+}
+
+/* Suppress border-radius transition during drag so it tracks finger 1:1.
+   On release, dragging attr is removed and the CSS transition takes over,
+   easing back to either 25px (open) or 0 (closed). */
+.task-row-wrapper[data-dragging="true"] .task-row-inner,
+.task-row-wrapper:has(+ .task-row-wrapper[data-dragging="true"]) .task-row-inner,
+.task-row-wrapper[data-dragging="true"] + .task-row-wrapper .task-row-inner {
   transition: none;
 }
 
