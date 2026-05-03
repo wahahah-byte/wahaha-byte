@@ -50,9 +50,20 @@ export default function TaskRow({
   const hasError = errorIds?.has(task.taskId) ?? false;
 
   const [revealed, setRevealed] = useState(false);
-  const touchRef = useRef<{ x: number; y: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startOffset: number;
+    panelWidth: number;
+    axis: "none" | "horizontal" | "vertical";
+    lastX: number;
+    lastT: number;
+    velocity: number;
+    revealedDispatched: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -68,25 +79,93 @@ export default function TaskRow({
   }, []);
 
   function handleTouchStart(e: React.TouchEvent) {
+    if (e.touches.length > 1) {
+      dragRef.current = null;
+      return;
+    }
     const t = e.touches[0];
-    touchRef.current = { x: t.clientX, y: t.clientY };
+    const panelWidth = actionsRef.current?.offsetWidth ?? 0;
+    dragRef.current = {
+      startX: t.clientX,
+      startY: t.clientY,
+      startOffset: revealed ? -panelWidth : 0,
+      panelWidth,
+      axis: "none",
+      lastX: t.clientX,
+      lastT: performance.now(),
+      velocity: 0,
+      revealedDispatched: revealed,
+    };
   }
+
   function handleTouchMove(e: React.TouchEvent) {
-    if (!touchRef.current) return;
+    const drag = dragRef.current;
+    if (!drag || e.touches.length > 1) return;
     const t = e.touches[0];
-    const dx = t.clientX - touchRef.current.x;
-    const dy = t.clientY - touchRef.current.y;
-    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 30) {
-      if (dx < 0 && !revealed) {
-        setRevealed(true);
-        window.dispatchEvent(new CustomEvent("task-row-reveal", { detail: { id: task.taskId } }));
-      } else if (dx > 0 && revealed) {
-        setRevealed(false);
+    const dx = t.clientX - drag.startX;
+    const dy = t.clientY - drag.startY;
+
+    if (drag.axis === "none") {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        drag.axis = "horizontal";
+      } else {
+        drag.axis = "vertical";
+        dragRef.current = null;
+        return;
       }
     }
+    if (drag.axis !== "horizontal" || drag.panelWidth === 0) return;
+
+    const now = performance.now();
+    const dt = Math.max(1, now - drag.lastT);
+    drag.velocity = (t.clientX - drag.lastX) / dt;
+    drag.lastX = t.clientX;
+    drag.lastT = now;
+
+    const offset = Math.max(-drag.panelWidth, Math.min(0, drag.startOffset + dx));
+    const inner = innerRef.current;
+    if (inner) {
+      inner.style.transition = "none";
+      inner.style.transform = `translateX(${offset}px)`;
+    }
+
+    if (!drag.revealedDispatched && offset < 0) {
+      drag.revealedDispatched = true;
+      setRevealed(true);
+      window.dispatchEvent(new CustomEvent("task-row-reveal", { detail: { id: task.taskId } }));
+    }
   }
+
+  function settleDrag() {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    const inner = innerRef.current;
+    if (!drag || drag.axis !== "horizontal" || !inner) {
+      if (inner) {
+        inner.style.transition = "";
+        inner.style.transform = "";
+      }
+      return;
+    }
+    const match = inner.style.transform.match(/translateX\((-?[\d.]+)px\)/);
+    const offset = match ? parseFloat(match[1]) : drag.startOffset;
+    const FLICK = 0.4;
+    let willOpen: boolean;
+    if (drag.velocity < -FLICK) willOpen = true;
+    else if (drag.velocity > FLICK) willOpen = false;
+    else willOpen = Math.abs(offset) > drag.panelWidth / 2;
+
+    inner.style.transition = "";
+    inner.style.transform = "";
+    setRevealed(willOpen);
+    if (willOpen && !drag.revealedDispatched) {
+      window.dispatchEvent(new CustomEvent("task-row-reveal", { detail: { id: task.taskId } }));
+    }
+  }
+
   function handleTouchEnd() {
-    touchRef.current = null;
+    settleDrag();
   }
 
   useEffect(() => {
@@ -125,6 +204,7 @@ export default function TaskRow({
       onTouchCancel={handleTouchEnd}
     >
       <div
+        ref={innerRef}
         className={[
           "task-row-inner grid items-center px-4",
           isGreyedOut ? "greyed" : "",
