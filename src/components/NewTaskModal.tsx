@@ -16,7 +16,7 @@ const RECURRENCE_RULES = [
 const PRIORITIES = [
   { label: "Low", value: "low", color: "#22c55e" },
   { label: "Medium", value: "medium", color: "#f59e0b" },
-  { label: "High", value: "high", color: "#ef4444" },
+  { label: "High", value: "high", color: "var(--color-danger)" },
 ];
 
 interface Props {
@@ -88,18 +88,19 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
     >
       <div
         className="w-full max-w-md flex flex-col"
-        style={{ background: "#2a2b2f", border: "1px solid #3a3b3f", borderRadius: "4px", boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}
+        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", borderRadius: "4px", boxShadow: "var(--shadow-popover)" }}
       >
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ background: "#23242a", borderBottom: "1px solid #3a3b3f", borderRadius: "4px 4px 0 0" }}
+          style={{ background: "var(--color-panel-header)", borderBottom: "1px solid var(--color-border)", borderRadius: "4px 4px 0 0" }}
         >
-          <h2 className="text-xs font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.75)" }}>New Task</h2>
+          <h2 className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--color-fg)" }}>New Task</h2>
           <button
             onClick={onClose}
-            className="text-[#555] transition-colors text-lg leading-none cursor-pointer flex items-center justify-center min-w-[32px] min-h-[32px]"
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#999")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
+            className="transition-colors text-lg leading-none cursor-pointer flex items-center justify-center min-w-[32px] min-h-[32px]"
+            style={{ color: "var(--color-fg-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
           >
             ✕
           </button>
@@ -114,11 +115,11 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               placeholder="What needs to be done?"
               className="w-full px-3 py-2 text-sm outline-none placeholder-white/20"
-              style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+              style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
             />
-            <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <span className="text-[9px] leading-tight mt-1 block" style={{ color: "var(--color-fg-subtle)" }}>
               Title and points cannot be edited 24 hours after creation.
             </span>
           </Field>
@@ -130,14 +131,14 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               placeholder="Optional details..."
               rows={2}
               className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
-              style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+              style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
             />
           </Field>
 
           <Field label="Priority">
-            <div className="flex" style={{ border: "1px solid #3a3b3f", borderRadius: "3px", overflow: "hidden" }}>
+            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
               {PRIORITIES.map((p, i) => (
                 <button
                   key={p.value}
@@ -145,8 +146,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
                   style={{
                     background: priority === p.value ? `${p.color}18` : "transparent",
-                    color: priority === p.value ? p.color : "rgba(255,255,255,0.3)",
-                    borderRight: i < PRIORITIES.length - 1 ? "1px solid #3a3b3f" : "none",
+                    color: priority === p.value ? p.color : "var(--color-fg-subtle)",
+                    borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
                     fontWeight: priority === p.value ? 600 : 400,
                     borderBottom: priority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
                   }}
@@ -164,13 +165,13 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
+                  style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c} style={{ background: "#1e1f22" }}>{c}</option>
+                    <option key={c} value={c} style={{ background: "var(--color-input)" }}>{c}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>▾</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
               </div>
             </Field>
 
@@ -180,13 +181,13 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   value={pointValue}
                   onChange={(e) => setPointValue(Number(e.target.value))}
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "#1e1f22", color: "#5bb8e0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
+                  style={{ background: "var(--color-input)", color: "var(--color-accent)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
                 >
                   {(isRecurring
                     ? [1, 2, 3, 4, 5]
                     : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(category))
                   ).map((v) => (
-                    <option key={v} value={v} style={{ background: "#1e1f22" }}>{v}</option>
+                    <option key={v} value={v} style={{ background: "var(--color-input)" }}>{v}</option>
                   ))}
                 </select>
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(91,184,224,0.5)" }}>▾</span>
@@ -204,13 +205,13 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           </Field>
 
           <div className="flex items-center justify-between">
-            <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>Recurring</span>
+            <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>Recurring</span>
             <button
               onClick={() => setIsRecurring((v) => !v)}
               className="relative w-10 h-[22px] cursor-pointer flex-shrink-0"
               style={{
-                background: isRecurring ? "rgba(91,184,224,0.15)" : "rgba(255,255,255,0.06)",
-                border: `1px solid ${isRecurring ? "#1e5068" : "#3a3b3f"}`,
+                background: isRecurring ? "rgba(91,184,224,0.15)" : "var(--color-overlay-hover)",
+                border: `1px solid ${isRecurring ? "var(--color-accent-border)" : "var(--color-border)"}`,
                 borderRadius: "999px",
               }}
             >
@@ -218,7 +219,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                 className="absolute top-[3px] w-3.5 h-3.5 transition-all"
                 style={{
                   left: isRecurring ? "calc(100% - 18px)" : "3px",
-                  background: isRecurring ? "#5bb8e0" : "rgba(255,255,255,0.2)",
+                  background: isRecurring ? "var(--color-accent)" : "var(--color-border-faint)",
                   borderRadius: "50%",
                 }}
               />
@@ -231,18 +232,18 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                 value={recurrenceRule}
                 onChange={(e) => setRecurrenceRule(e.target.value)}
                 className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
+                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
               >
                 {RECURRENCE_RULES.map((r) => (
-                  <option key={r.value} value={r.value} style={{ background: "#1e1f22" }}>{r.label}</option>
+                  <option key={r.value} value={r.value} style={{ background: "var(--color-input)" }}>{r.label}</option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>▾</span>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
             </div>
           )}
 
           {error && (
-            <p className="text-xs px-3 py-2" style={{ color: "#ef4444", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
+            <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
               {error}
             </p>
           )}
@@ -250,14 +251,14 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
         <div
           className="flex gap-2 px-5 py-3"
-          style={{ borderTop: "1px solid #3a3b3f", background: "#23242a", borderRadius: "0 0 4px 4px" }}
+          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)", borderRadius: "0 0 4px 4px" }}
         >
           <button
             onClick={onClose}
             className="flex-1 py-2.5 text-xs tracking-widest uppercase cursor-pointer transition-colors"
-            style={{ color: "rgba(255,255,255,0.35)", border: "1px solid #3a3b3f", background: "transparent", borderRadius: "3px" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.6)"; e.currentTarget.style.borderColor = "#555"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.35)"; e.currentTarget.style.borderColor = "#3a3b3f"; }}
+            style={{ color: "var(--color-fg-subtle)", border: "1px solid var(--color-border)", background: "transparent", borderRadius: "3px" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-fg-muted)"; e.currentTarget.style.borderColor = "var(--color-button-border)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-fg-subtle)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
           >
             Cancel
           </button>
@@ -265,9 +266,9 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
             onClick={handleSubmit}
             disabled={submitting}
             className="flex-1 py-2.5 text-xs tracking-widest uppercase font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068", borderRadius: "3px" }}
-            onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#1e4d63"; }}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a3a4a")}
+            style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}
+            onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-accent-bg)")}
           >
             {submitting ? "Creating…" : "Create Task"}
           </button>
@@ -280,7 +281,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className ?? ""}`}>
-      <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>
+      <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
         {label}
       </span>
       {children}

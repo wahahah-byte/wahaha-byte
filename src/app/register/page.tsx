@@ -37,25 +37,25 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#1e1f22" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--color-bg)" }}>
       <div className="w-full max-w-sm flex flex-col gap-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-widest uppercase text-white mb-1">
+          <h1 className="text-2xl font-bold tracking-widest uppercase mb-1" style={{ color: "var(--color-fg)" }}>
             Create Account
           </h1>
-          <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "12px", letterSpacing: "0.08em" }}>
+          <p style={{ color: "var(--color-fg-muted)", fontSize: "12px", letterSpacing: "0.08em" }}>
             Start tracking tasks and earning points.
           </p>
         </div>
 
         <div
           className="flex flex-col gap-4 p-7"
-          style={{ background: "#2a2b2f", border: "1px solid #3a3b3f", borderRadius: "4px" }}
+          style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", borderRadius: "4px" }}
         >
           {error && (
             <div
               className="px-3 py-2.5 text-xs leading-relaxed"
-              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: "3px", color: "#ef4444" }}
+              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: "3px", color: "var(--color-danger)" }}
             >
               {error}
             </div>
@@ -63,8 +63,8 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.5)" }}>
-                Username <span style={{ color: "#ef4444" }}>*</span>
+              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                Username <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               <input
                 type="text"
@@ -76,19 +76,19 @@ export default function RegisterPage() {
                 placeholder="your_handle"
                 className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
                 style={{
-                  background: "#1e1f22",
-                  border: "1px solid #3a3b3f",
+                  background: "var(--color-input)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: "3px",
-                  color: "#e0e0e0",
+                  color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.5)" }}>
-                Email <span style={{ color: "#ef4444" }}>*</span>
+              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                Email <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               <input
                 type="email"
@@ -99,19 +99,19 @@ export default function RegisterPage() {
                 placeholder="you@example.com"
                 className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
                 style={{
-                  background: "#1e1f22",
-                  border: "1px solid #3a3b3f",
+                  background: "var(--color-input)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: "3px",
-                  color: "#e0e0e0",
+                  color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.5)" }}>
-                Password <span style={{ color: "#ef4444" }}>*</span>
+              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                Password <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               <input
                 type="password"
@@ -122,19 +122,19 @@ export default function RegisterPage() {
                 placeholder="Min. 8 characters"
                 className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
                 style={{
-                  background: "#1e1f22",
-                  border: "1px solid #3a3b3f",
+                  background: "var(--color-input)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: "3px",
-                  color: "#e0e0e0",
+                  color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.5)" }}>
-                Confirm Password <span style={{ color: "#ef4444" }}>*</span>
+              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                Confirm Password <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               <input
                 type="password"
@@ -145,13 +145,13 @@ export default function RegisterPage() {
                 placeholder="Repeat your password"
                 className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
                 style={{
-                  background: "#1e1f22",
-                  border: `1px solid ${confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "#3a3b3f"}`,
+                  background: "var(--color-input)",
+                  border: `1px solid ${confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-border)"}`,
                   borderRadius: "3px",
-                  color: "#e0e0e0",
+                  color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = confirm !== password ? "rgba(239,68,68,0.6)" : "#5bb8e0")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "#3a3b3f")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-border)")}
               />
               {confirm && confirm !== password && (
                 <span style={{ color: "rgba(239,68,68,0.75)", fontSize: "10px", letterSpacing: "0.04em" }}>
@@ -164,18 +164,18 @@ export default function RegisterPage() {
               type="submit"
               disabled={loading}
               className="w-full py-2.5 text-xs font-semibold tracking-widest uppercase cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-              style={{ background: "#1a3a4a", color: "#5bb8e0", border: "1px solid #1e5068", borderRadius: "3px" }}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#1e4d63"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#1a3a4a"; }}
+              style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-accent-bg)"; }}
             >
               {loading ? "Creating account…" : "Create Account"}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+        <p className="text-center text-xs" style={{ color: "var(--color-fg-subtle)" }}>
           Already have an account?{" "}
-          <Link href="/login" className="transition-colors" style={{ color: "#5bb8e0" }}
+          <Link href="/login" className="transition-colors" style={{ color: "var(--color-accent)" }}
             onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
             onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
           >
