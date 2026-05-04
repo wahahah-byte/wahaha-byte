@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
+import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 
 export default function AuthHeader() {
@@ -16,6 +17,7 @@ export default function AuthHeader() {
     balance, username, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
     setBalance, setUsername, setRecurringSubmittedToday, setDailySubmitted,
   } = usePoints();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     setIsMounted(true);
@@ -45,9 +47,9 @@ export default function AuthHeader() {
       {unsubmittedPoints > 0 && (
         <div className="flex items-center gap-1.5 shrink-0" title={`${unsubmittedPoints} unsubmitted pts`}>
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
-            <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
+            <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
           </svg>
-          <span style={{ color: "#f59e0b", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+          <span style={{ color: "var(--color-warning)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
             +{unsubmittedPoints.toLocaleString()}
           </span>
         </div>
@@ -56,9 +58,9 @@ export default function AuthHeader() {
       {balance !== null && (
         <div className="flex items-center gap-1.5 shrink-0">
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
-            <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.85" />
+            <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-accent)" }} opacity="0.85" />
           </svg>
-          <span style={{ color: "#5bb8e0", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+          <span style={{ color: "var(--color-accent)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
             {balance.toLocaleString()}
           </span>
         </div>
@@ -67,8 +69,8 @@ export default function AuthHeader() {
       <div className="relative shrink-0">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shrink-0"
-          style={{ background: "var(--color-button-bg)", border: "1px solid var(--color-button-border)", color: "var(--color-button-fg)" }}
+          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+          style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
@@ -82,10 +84,10 @@ export default function AuthHeader() {
             <div
               className="absolute right-0 mt-2 z-20 min-w-[160px] overflow-hidden"
               style={{
-                background: "#1e1f22",
-                border: "1px solid #3e3f42",
+                background: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
                 borderRadius: "4px",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.55)",
+                boxShadow: "var(--shadow-popover)",
               }}
             >
               {(() => {
@@ -96,45 +98,45 @@ export default function AuthHeader() {
                 const regCapped = regSubmitted >= REGULAR_CAP;
                 const recCapped = recSubmitted >= RECURRING_CAP;
                 return (
-                  <div className="px-4 py-3 border-b flex flex-col gap-2.5" style={{ borderColor: "#2e2f34" }}>
+                  <div className="px-4 py-3 border-b flex flex-col gap-2.5" style={{ borderColor: "var(--color-border-soft)" }}>
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
                           Regular
                         </span>
-                        <span style={{ color: regCapped ? "#4ade80" : "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
+                        <span style={{ color: regCapped ? "var(--color-success)" : "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
                           {regSubmitted} / {REGULAR_CAP}
                         </span>
                       </div>
-                      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "#2e2f34" }}>
+                      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--color-track)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${regPct}%`, background: regCapped ? "#4ade80" : regPct >= 75 ? "#f59e0b" : "#5bb8e0" }}
+                          style={{ width: `${regPct}%`, background: regCapped ? "var(--color-success)" : regPct >= 75 ? "var(--color-warning)" : "var(--color-accent)" }}
                         />
                       </div>
                       {regCapped && (
-                        <p style={{ color: "#4ade80", fontSize: "9px", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px" }}>
+                        <p style={{ color: "var(--color-success)", fontSize: "9px", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px" }}>
                           Cap reached
                         </p>
                       )}
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
                           Recurring
                         </span>
-                        <span style={{ color: recCapped ? "#4ade80" : "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
+                        <span style={{ color: recCapped ? "var(--color-success)" : "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
                           {recSubmitted} / {RECURRING_CAP}
                         </span>
                       </div>
-                      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "#2e2f34" }}>
+                      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--color-track)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${recPct}%`, background: recCapped ? "#4ade80" : recPct >= 75 ? "#f59e0b" : "#a78bfa" }}
+                          style={{ width: `${recPct}%`, background: recCapped ? "var(--color-success)" : recPct >= 75 ? "var(--color-warning)" : "var(--color-secondary-accent)" }}
                         />
                       </div>
                       {recCapped && (
-                        <p style={{ color: "#4ade80", fontSize: "9px", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px" }}>
+                        <p style={{ color: "var(--color-success)", fontSize: "9px", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: "4px" }}>
                           Cap reached
                         </p>
                       )}
@@ -144,15 +146,34 @@ export default function AuthHeader() {
               })()}
               <div className="py-1">
                 <button
+                  onClick={toggleTheme}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors"
+                  style={{ color: "var(--color-fg-muted)", background: "transparent" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; e.currentTarget.style.color = "var(--color-fg)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-fg-muted)"; }}
+                >
+                  <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+                  {theme === "dark" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                  )}
+                </button>
+                <button
                   onClick={() => {
                     setMenuOpen(false);
                     localStorage.removeItem("auth_token");
                     window.location.replace("/");
                   }}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors"
-                  style={{ color: "#aaa", background: "transparent" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#2a2b2f"; e.currentTarget.style.color = "#ef4444"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+                  style={{ color: "var(--color-fg-muted)", background: "transparent" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; e.currentTarget.style.color = "var(--color-danger)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-fg-muted)"; }}
                 >
                   Sign Out
                 </button>
