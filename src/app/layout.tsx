@@ -4,7 +4,12 @@ import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
 import { PointsProvider } from "@/context/PointsContext";
 import { ToastProvider, ToastBanner } from "@/context/ToastContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import "./globals.css";
+
+const themeInitScript = `
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t='dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,19 +36,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ThemeProvider>
         <PointsProvider>
         <ToastProvider>
         <header
           className="flex items-center justify-between px-6 py-3"
           style={{
-            background: "#35363b",
-            borderTop: "2px solid #5bb8e0",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
+            background: "var(--color-header)",
+            borderTop: "2px solid var(--color-accent)",
+            borderBottom: "1px solid var(--color-border-soft)",
+            boxShadow: "var(--shadow-header)",
             position: "sticky",
             top: 0,
             zIndex: 30,
@@ -51,8 +60,8 @@ export default function RootLayout({
         >
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "#4ade80" }} />
-              <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+              <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--color-success)" }} />
+              <span style={{ color: "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
                 Wahaha Byte
               </span>
             </div>
@@ -65,6 +74,7 @@ export default function RootLayout({
         {children}
         </ToastProvider>
         </PointsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -22,12 +22,12 @@ export default function HeaderNav() {
             href={l.href}
             className="px-3 py-1.5 transition-colors"
             style={{
-              color: active ? "#5bb8e0" : "rgba(255,255,255,0.45)",
+              color: active ? "var(--color-accent)" : "var(--color-fg-muted)",
               fontSize: "10px",
               letterSpacing: "0.2em",
               textTransform: "uppercase",
               fontWeight: active ? 600 : 500,
-              borderBottom: active ? "1px solid #5bb8e0" : "1px solid transparent",
+              borderBottom: active ? "1px solid var(--color-accent)" : "1px solid transparent",
             }}
           >
             {l.label}

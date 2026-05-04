@@ -41,7 +41,7 @@ export default function TaskRow({
     (task.isRecurring && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate))
     || task.status === "in_progress"
   );
-  const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
+  const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const isAdvancing = advancing === task.taskId;
   const isFiling = filingIds.has(task.taskId);
   const canUndo = !isFiling && isCompleted && task.submitted === false && !task.pointsAwarded && !submittedTaskIds.has(task.taskId);
@@ -290,12 +290,12 @@ export default function TaskRow({
                 onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
                 disabled={isAdvancing}
                 title="Resume — reschedule to today"
-                style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
+                style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
                 onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <polygon points="2,1 9,5 2,9" fill="#ef4444" />
+                  <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-danger)" }} />
                 </svg>
               </button>
             );
@@ -306,18 +306,18 @@ export default function TaskRow({
               onClick={eligible ? () => onCheckIn(task) : undefined}
               disabled={isAdvancing || !eligible}
               title={eligible ? "Check In" : "Not yet available"}
-              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "#1a1b1f", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
+              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
               onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
             >
               {eligible ? (
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ) : (
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="#a78bfa" strokeWidth="1.2" fill="none" />
-                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.2" fill="none" />
+                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.2" strokeLinecap="round" fill="none" />
                 </svg>
               )}
             </button>
@@ -326,19 +326,19 @@ export default function TaskRow({
 
         {task.status === "pending" && !task.isRecurring && !isGreyedOut && (() => {
           const overdueRegular = isOverdue(task.dueDate);
-          const startColor = overdueRegular ? "#ef4444" : "#5bb8e0";
+          const startColor = overdueRegular ? "var(--color-danger)" : "var(--color-accent)";
           const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "rgba(91,184,224,0.15)";
           return (
             <button
               onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
               disabled={isAdvancing}
               title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
-              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+              style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <polygon points="2,1 9,5 2,9" fill={startColor} />
+                <polygon points="2,1 9,5 2,9" style={{ fill: startColor }} />
               </svg>
             </button>
           );
@@ -349,13 +349,13 @@ export default function TaskRow({
             onClick={() => onPause(task)}
             disabled={pausing === task.taskId}
             title="Pause"
-            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none", opacity: pausing === task.taskId ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
-              <rect x="5.5" y="1" width="3" height="8" fill="#f59e0b" />
+              <rect x="1.5" y="1" width="3" height="8" style={{ fill: "var(--color-warning)" }} />
+              <rect x="5.5" y="1" width="3" height="8" style={{ fill: "var(--color-warning)" }} />
             </svg>
           </button>
         )}
@@ -365,12 +365,12 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Complete"
-            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <polyline points="1,5 4,8 9,2" stroke="#5bb8e0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-accent)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         )}
@@ -380,13 +380,13 @@ export default function TaskRow({
             onClick={() => onAdvance(task)}
             disabled={isAdvancing}
             title="Undo"
-            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing ? 0.4 : 1 }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(245,158,11,0.15)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-              <polyline points="4,4.5 1.5,2 4,0" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" />
+              <polyline points="4,4.5 1.5,2 4,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
           </button>
         )}
@@ -395,13 +395,13 @@ export default function TaskRow({
           onClick={() => onDelete(task.taskId)}
           disabled={slashingId === task.taskId}
           title="Delete"
-          style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#1a1b1f", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
+          style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none", opacity: slashingId === task.taskId ? 0.4 : 1 }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "#1a1b1f")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="1" y1="1" x2="9" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="9" y1="1" x2="1" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
       </div>
@@ -418,13 +418,13 @@ export default function TaskRow({
           inset: 0,
           gridTemplateColumns: "1fr 64px 80px",
           borderLeft: isInProgress
-            ? "2px solid #5bb8e0"
+            ? "2px solid var(--color-accent)"
             : canUndo
               ? "2px solid rgba(245,158,11,0.7)"
               : overdueRecurring
                 ? "2px solid rgba(239,68,68,0.55)"
                 : undefined,
-          opacity: isCompleted && !canUndo ? 0.55 : isGreyedOut ? undefined : 1,
+          background: isCompleted && !canUndo ? "var(--color-row-greyed)" : undefined,
           cursor: "pointer",
         }}
       >
@@ -434,14 +434,14 @@ export default function TaskRow({
               onClick={(e) => { e.stopPropagation(); onToggleSelect(task.taskId); }}
               className="w-4 h-4 flex-shrink-0 flex items-center justify-center transition-all duration-150"
               style={{
-                border: `1px solid ${selectedIds.has(task.taskId) ? "#4ade80" : "rgba(255,255,255,0.25)"}`,
+                border: `1px solid ${selectedIds.has(task.taskId) ? "var(--color-success)" : "var(--color-border-faint)"}`,
                 borderRadius: "2px",
                 background: selectedIds.has(task.taskId) ? "rgba(74,222,128,0.12)" : "transparent",
               }}
             >
               {selectedIds.has(task.taskId) && (
                 <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                  <polyline points="1,3 3,5 7,1" stroke="#4ade80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="1,3 3,5 7,1" style={{ stroke: "var(--color-success)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </button>
@@ -452,7 +452,7 @@ export default function TaskRow({
             <p
               className="text-sm truncate"
               style={{
-                color: isCompleted && !canUndo ? "rgba(255,255,255,0.45)" : "#ffffff",
+                color: isCompleted && !canUndo ? "var(--color-fg-muted)" : "var(--color-fg)",
                 textDecoration: isCompleted ? "line-through" : "none",
               }}
             >
@@ -460,7 +460,7 @@ export default function TaskRow({
             </p>
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
               {task.category && (() => {
-                const cc = CATEGORY_COLOR[task.category] ?? "rgba(255,255,255,0.45)";
+                const cc = CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)";
                 return (
                   <span style={{
                     fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase",
@@ -476,8 +476,8 @@ export default function TaskRow({
               })()}
               {isInProgress && (
                 <>
-                  <span style={{ color: "#5bb8e0", fontSize: "8px", lineHeight: 1, flexShrink: 0 }}>█</span>
-                  <span style={{ color: "#5bb8e0", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Active</span>
+                  <span style={{ color: "var(--color-accent)", fontSize: "8px", lineHeight: 1, flexShrink: 0 }}>█</span>
+                  <span style={{ color: "var(--color-accent)", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Active</span>
                 </>
               )}
               {task.status === "pending" && !task.isRecurring && penalizedTaskIds?.has(task.taskId) && (
@@ -489,10 +489,10 @@ export default function TaskRow({
               {canUndo && (
                 <>
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-                    <path d="M7 1.5H4C2.3 1.5 1 2.8 1 4.5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.4" strokeLinecap="round" />
-                    <polyline points="3.5,4 1,1.5 3.5,0" stroke="#f59e0b" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <path d="M7 1.5H4C2.3 1.5 1 2.8 1 4.5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" />
+                    <polyline points="3.5,4 1,1.5 3.5,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                   </svg>
-                  <span style={{ color: "#f59e0b", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Undo</span>
+                  <span style={{ color: "var(--color-warning)", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Undo</span>
                 </>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
@@ -505,7 +505,7 @@ export default function TaskRow({
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
                   : task.recurrenceRule === "biweekly" ? "Biweekly"
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
-                const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "#a78bfa";
+                const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "var(--color-secondary-accent)";
                 const streakCount = task.currentStreakCount ?? 0;
                 return (
                   <>
@@ -569,7 +569,7 @@ export default function TaskRow({
         </div>
 
         <div className="flex items-center justify-center">
-          <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+          <span className="text-[10px]" style={{ color: "var(--color-fg-muted)" }}>
             {task.dueDate
               ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
               : "—"}
@@ -583,7 +583,7 @@ export default function TaskRow({
               style={{ border: "1px solid rgba(74,222,128,0.35)", borderRadius: "2px", background: "rgba(74,222,128,0.06)" }}
             >
               <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                <polyline points="1.5,5 4,7.5 8.5,2" stroke="#4ade80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="1.5,5 4,7.5 8.5,2" style={{ stroke: "var(--color-success)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span style={{ color: "rgba(74,222,128,0.75)", fontSize: "8px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>
                 Filed
@@ -595,7 +595,7 @@ export default function TaskRow({
               style={{ border: "1px solid rgba(245,158,11,0.35)", borderRadius: "2px", background: "rgba(245,158,11,0.06)" }}
             >
               <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
-                <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
+                <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
               </svg>
               <span style={{ color: "rgba(245,158,11,0.9)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.03em" }}>
                 {task.pointValue.toLocaleString()}
@@ -604,9 +604,9 @@ export default function TaskRow({
           ) : (
             <>
               <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
-                <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
+                <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-accent)" }} opacity="0.9" />
               </svg>
-              <span className="text-xs font-semibold" style={{ color: "#5bb8e0" }}>
+              <span className="text-xs font-semibold" style={{ color: "var(--color-accent)" }}>
                 {task.pointValue.toLocaleString()}
               </span>
             </>
@@ -617,7 +617,7 @@ export default function TaskRow({
       {slashingId === task.taskId && (
         <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
           <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 6px rgba(239,68,68,1)) drop-shadow(0 0 14px rgba(239,68,68,0.6))" }}>
-            <line x1="1" y1="30" x2="99" y2="30" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" className="slash-line" />
+            <line x1="1" y1="30" x2="99" y2="30" style={{ stroke: "var(--color-danger)" }} strokeWidth="2" strokeLinecap="round" className="slash-line" />
             <line x1="1" y1="30" x2="99" y2="30" stroke="rgba(255,180,180,0.45)" strokeWidth="5" strokeLinecap="round" className="slash-line" />
           </svg>
         </div>
@@ -626,7 +626,7 @@ export default function TaskRow({
       {hasError && (
         <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
           <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 4px rgba(239,68,68,0.85)) drop-shadow(0 0 10px rgba(239,68,68,0.45))" }}>
-            <rect x="0.75" y="0.75" width="98.5" height="58.5" fill="none" stroke="#ef4444" strokeWidth="1.25" className="error-outline" />
+            <rect x="0.75" y="0.75" width="98.5" height="58.5" fill="none" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.25" className="error-outline" />
           </svg>
         </div>
       )}
@@ -636,7 +636,7 @@ export default function TaskRow({
           className="recurring-pts-popup"
           style={{
             position: "absolute", right: "80px", top: "4px", zIndex: 30,
-            color: "#a78bfa", fontSize: "12px", fontWeight: 700,
+            color: "var(--color-secondary-accent)", fontSize: "12px", fontWeight: 700,
             letterSpacing: "0.06em", textShadow: "0 0 8px rgba(167,139,250,0.7)",
           }}
         >
@@ -666,13 +666,13 @@ export default function TaskRow({
               <button
                 onClick={() => { onRestartOverdue ? onRestartOverdue(task) : onSkip(task); closeMenu(); }}
                 disabled={isAdvancing}
-                style={{ "--menu-color": "#ef4444" } as React.CSSProperties}
+                style={{ "--menu-color": "var(--color-danger)" } as React.CSSProperties}
               >RESUME</button>
             ) : (
               <button
                 onClick={eligibleCheckIn ? () => { onCheckIn(task); closeMenu(); } : undefined}
                 disabled={isAdvancing || !eligibleCheckIn}
-                style={{ "--menu-color": "#a78bfa" } as React.CSSProperties}
+                style={{ "--menu-color": "var(--color-secondary-accent)" } as React.CSSProperties}
               >{eligibleCheckIn ? "CHECK IN" : "LOCKED"}</button>
             )
           )}
@@ -680,34 +680,34 @@ export default function TaskRow({
             <button
               onClick={() => { (overdueRegular && onRestartOverdue) ? onRestartOverdue(task) : onAdvance(task); closeMenu(); }}
               disabled={isAdvancing}
-              style={{ "--menu-color": overdueRegular ? "#ef4444" : "#5bb8e0" } as React.CSSProperties}
+              style={{ "--menu-color": overdueRegular ? "var(--color-danger)" : "var(--color-accent)" } as React.CSSProperties}
             >{overdueRegular ? "OVERDUE" : "START"}</button>
           )}
           {isInProgress && (
             <button
               onClick={() => { onPause(task); closeMenu(); }}
               disabled={pausing === task.taskId}
-              style={{ "--menu-color": "#f59e0b" } as React.CSSProperties}
+              style={{ "--menu-color": "var(--color-warning)" } as React.CSSProperties}
             >PAUSE</button>
           )}
           {isInProgress && !isGreyedOut && (
             <button
               onClick={() => { onAdvance(task); closeMenu(); }}
               disabled={isAdvancing}
-              style={{ "--menu-color": "#5bb8e0" } as React.CSSProperties}
+              style={{ "--menu-color": "var(--color-accent)" } as React.CSSProperties}
             >DONE</button>
           )}
           {canUndo && !isGreyedOut && (
             <button
               onClick={() => { onAdvance(task); closeMenu(); }}
               disabled={isAdvancing}
-              style={{ "--menu-color": "#f59e0b" } as React.CSSProperties}
+              style={{ "--menu-color": "var(--color-warning)" } as React.CSSProperties}
             >UNDO</button>
           )}
           <button
             onClick={() => { onDelete(task.taskId); closeMenu(); }}
             disabled={slashingId === task.taskId}
-            style={{ "--menu-color": "#ef4444" } as React.CSSProperties}
+            style={{ "--menu-color": "var(--color-danger)" } as React.CSSProperties}
           >DELETE</button>
         </div>
       )}

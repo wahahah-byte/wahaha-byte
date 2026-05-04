@@ -132,8 +132,8 @@ function Recurring() {
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#1e1f22" }}>
-        <div className="w-5 h-5 border-2 border-[#333] border-t-[#5bb8e0] rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-bg)" }}>
+        <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
       </div>
     );
   }
@@ -218,26 +218,26 @@ function Recurring() {
 
   return (
     <>
-      <div className="min-h-screen text-white flex flex-col bg-scanlines" style={{ background: "#1e1f22" }}>
+      <div className="min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1">
           {!isAuthenticated && (
             <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
               <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
-              <Link href="/login" style={{ color: "#5bb8e0", letterSpacing: "0.18em" }}>Sign in →</Link>
+              <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em" }}>Sign in →</Link>
             </div>
           )}
 
-          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "#1e1f22" }}>
-          <div style={{ display: "flex", alignItems: "stretch", background: "#1e2025", marginBottom: "6px", height: "38px" }}>
+          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "var(--color-bg)" }}>
+          <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "6px", height: "38px" }}>
             <CategoryCapsTooltip variant="recurring">
               <div
                 tabIndex={0}
                 aria-label="Show recurring point caps"
                 style={{
                   width: "38px", minWidth: "38px", height: "38px",
-                  background: "#2a2d33",
+                  background: "var(--color-surface-2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  borderRight: "1px solid rgba(255,255,255,0.08)",
+                  borderRight: "1px solid var(--color-border-hairline)",
                   cursor: "help",
                 }}
               >
@@ -252,7 +252,7 @@ function Recurring() {
             <div style={{ position: "relative", display: "flex", alignItems: "center", paddingLeft: "14px", overflow: "hidden" }}>
               <span style={{
                 fontSize: "12px", fontWeight: 700, letterSpacing: "0.22em",
-                textTransform: "uppercase", color: "rgba(255,255,255,0.9)",
+                textTransform: "uppercase", color: "var(--color-fg)",
                 whiteSpace: "nowrap", position: "relative", zIndex: 1,
               }}>Recurring</span>
               <div style={{
@@ -274,37 +274,37 @@ function Recurring() {
               title={!isAuthenticated ? "Sign in to create tasks" : undefined}
               style={{
                 background: "transparent",
-                color: !isAuthenticated ? "rgba(167,139,250,0.35)" : "#a78bfa",
+                color: !isAuthenticated ? "rgba(167,139,250,0.35)" : "var(--color-secondary-accent)",
                 fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase",
                 fontWeight: 600, padding: "0 20px",
                 cursor: !isAuthenticated ? "default" : "pointer",
-                borderLeft: "1px solid rgba(255,255,255,0.08)",
+                borderLeft: "1px solid var(--color-border-hairline)",
                 transition: "color 0.15s",
               }}
-              onMouseEnter={(e) => { if (!isAuthenticated) return; e.currentTarget.style.color = "#bfa8ff"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "#a78bfa"; }}
+              onMouseEnter={(e) => { if (!isAuthenticated) return; e.currentTarget.style.color = "var(--color-fg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-secondary-accent)"; }}
             >
               + New
             </button>
           </div>
 
-          <div className="flex items-center mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
+          <div className="flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
             {RECURRING_FILTERS.map((f) => {
               const dotCount = f.value === "today" ? todayCount : f.value === "missed" ? missedCount : 0;
-              const dotColor = f.value === "today" ? "#a78bfa" : "#ef4444";
+              const dotColor = f.value === "today" ? "var(--color-secondary-accent)" : "var(--color-danger)";
               return (
                 <button
                   key={f.value}
                   onClick={() => applyFilter(f.value)}
                   className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                  style={{ color: activeFilter === f.value ? "#a78bfa" : "rgba(255,255,255,0.65)", background: "transparent", border: "none" }}
+                  style={{ color: activeFilter === f.value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
                 >
                   {f.label}
                   {dotCount > 0 && (
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
                   )}
                   {activeFilter === f.value && (
-                    <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "#a78bfa" }} />
+                    <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-secondary-accent)" }} />
                   )}
                 </button>
               );
@@ -318,9 +318,9 @@ function Recurring() {
                 onClick={() => { setShowGroupMenu(false); setShowSortMenu((v) => !v); }}
                 className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
                 style={{
-                  color: sortMode !== "due" ? "#a78bfa" : "rgba(255,255,255,0.35)",
+                  color: sortMode !== "due" ? "var(--color-secondary-accent)" : "var(--color-fg-subtle)",
                   background: sortMode !== "due" ? "rgba(167,139,250,0.08)" : "transparent",
-                  border: `1px solid ${sortMode !== "due" ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.1)"}`,
+                  border: `1px solid ${sortMode !== "due" ? "rgba(167,139,250,0.3)" : "var(--color-border-hairline)"}`,
                   borderRadius: "2px",
                   position: "relative",
                   zIndex: 16,
@@ -343,10 +343,10 @@ function Recurring() {
                     top: "calc(100% + 4px)",
                     right: 0,
                     zIndex: 20,
-                    background: "#23242a",
-                    border: "1px solid #3a3b3f",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: "3px",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.55)",
+                    boxShadow: "var(--shadow-popover)",
                     minWidth: "120px",
                     overflow: "hidden",
                   }}
@@ -360,16 +360,16 @@ function Recurring() {
                         padding: "8px 12px",
                         background: "transparent",
                         border: "none",
-                        color: sortMode === value ? "#a78bfa" : "rgba(255,255,255,0.6)",
+                        color: sortMode === value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)",
                         fontSize: "9px",
                         letterSpacing: "0.15em",
                         textTransform: "uppercase",
                         textAlign: "left",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: sortMode === value ? "#a78bfa" : "rgba(255,255,255,0.18)", display: "inline-block" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: sortMode === value ? "var(--color-secondary-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
                       {label}
                     </button>
                   ))}
@@ -384,9 +384,9 @@ function Recurring() {
                 onClick={() => { setShowSortMenu(false); setShowGroupMenu((v) => !v); }}
                 className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
                 style={{
-                  color: groupMode !== "none" ? "#a78bfa" : "rgba(255,255,255,0.35)",
+                  color: groupMode !== "none" ? "var(--color-secondary-accent)" : "var(--color-fg-subtle)",
                   background: groupMode !== "none" ? "rgba(167,139,250,0.08)" : "transparent",
-                  border: `1px solid ${groupMode !== "none" ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.1)"}`,
+                  border: `1px solid ${groupMode !== "none" ? "rgba(167,139,250,0.3)" : "var(--color-border-hairline)"}`,
                   borderRadius: "2px",
                   position: "relative",
                   zIndex: 16,
@@ -409,10 +409,10 @@ function Recurring() {
                     top: "calc(100% + 4px)",
                     right: 0,
                     zIndex: 20,
-                    background: "#23242a",
-                    border: "1px solid #3a3b3f",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: "3px",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.55)",
+                    boxShadow: "var(--shadow-popover)",
                     minWidth: "120px",
                     overflow: "hidden",
                   }}
@@ -426,16 +426,16 @@ function Recurring() {
                         padding: "8px 12px",
                         background: "transparent",
                         border: "none",
-                        color: groupMode === value ? "#a78bfa" : "rgba(255,255,255,0.6)",
+                        color: groupMode === value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)",
                         fontSize: "9px",
                         letterSpacing: "0.15em",
                         textTransform: "uppercase",
                         textAlign: "left",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: groupMode === value ? "#a78bfa" : "rgba(255,255,255,0.18)", display: "inline-block" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: groupMode === value ? "var(--color-secondary-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
                       {label}
                     </button>
                   ))}
@@ -446,7 +446,7 @@ function Recurring() {
 
           <div
             className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
-            style={{ gridTemplateColumns: "1fr 64px 80px", color: "rgba(255,255,255,0.55)", position: "relative", zIndex: 2, background: "#1e1f22" }}
+            style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
           >
             <span>Name</span>
             <span className="text-center">Next</span>
@@ -456,18 +456,18 @@ function Recurring() {
 
           {loading && (
             <div className="flex items-center justify-center py-20">
-              <div className="w-5 h-5 border-2 border-[#333] border-t-[#a78bfa] rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-secondary-accent)" }} />
             </div>
           )}
 
           {!loading && tasks.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>No recurring tasks</p>
+              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No recurring tasks</p>
               {isAuthenticated && (
                 <button
                   onClick={() => setShowNewTask(true)}
                   className="text-[10px] tracking-widest uppercase mt-2 cursor-pointer"
-                  style={{ color: "#a78bfa", background: "transparent", border: "1px solid rgba(167,139,250,0.4)", borderRadius: "3px", padding: "6px 14px" }}
+                  style={{ color: "var(--color-secondary-accent)", background: "transparent", border: "1px solid rgba(167,139,250,0.4)", borderRadius: "3px", padding: "6px 14px" }}
                 >
                   + Create one
                 </button>
@@ -477,7 +477,7 @@ function Recurring() {
 
           {!loading && tasks.length > 0 && filteredTasks.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>
+              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
                 {activeFilter === "today" ? "Nothing due today" :
                  activeFilter === "upcoming" ? "Nothing upcoming" :
                  activeFilter === "missed" ? "Nothing missed" : "No tasks"}
@@ -501,12 +501,12 @@ function Recurring() {
               <div key={chunk.sep?.sepKey ?? `__chunk-${idx}`}>
                 {chunk.sep && (
                   <div className={`flex items-center gap-3 px-1 ${idx === 0 ? "mb-1" : "mt-2 mb-1"}`}>
-                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>{chunk.sep.label}</span>
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>{chunk.sep.label}</span>
+                    <div className="flex-1 h-px" style={{ background: "var(--color-border-hairline)" }} />
                   </div>
                 )}
                 {chunk.tasks.length > 0 && (
-                  <div className="flex flex-col" style={{ background: "#1a1b1f", overflow: "hidden" }}>
+                  <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", overflow: "hidden" }}>
                     <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
                       <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
                     </div>
@@ -545,10 +545,10 @@ function Recurring() {
 
           {!loading && tasks.length > 0 && (
             <div className="flex justify-between items-center mt-2 px-1">
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
+              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {todayCount} ready
               </span>
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
+              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {tasks.length} total
               </span>
             </div>

@@ -38,10 +38,10 @@ export default function CategoryCapsTooltip({ variant, children }: Props) {
             top: "calc(100% + 8px)",
             left: 0,
             zIndex: 40,
-            background: "#1c1d21",
-            border: "1px solid #3a3b3f",
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
             borderRadius: 4,
-            boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
+            boxShadow: "var(--shadow-popover)",
             padding: "10px 12px",
             minWidth: 220,
             pointerEvents: "none",
@@ -61,7 +61,7 @@ function SectionHeader({ children }: { children: ReactNode }) {
         fontSize: 9,
         letterSpacing: "0.18em",
         textTransform: "uppercase",
-        color: "rgba(255,255,255,0.4)",
+        color: "var(--color-fg-subtle)",
         marginBottom: 6,
       }}
     >
@@ -82,14 +82,14 @@ function Row({ left, right, leftColor }: { left: string; right: string; leftColo
         fontSize: 10,
       }}
     >
-      <span style={{ color: leftColor ?? "rgba(255,255,255,0.7)" }}>{left}</span>
-      <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>{right}</span>
+      <span style={{ color: leftColor ?? "var(--color-fg-muted)" }}>{left}</span>
+      <span style={{ color: "var(--color-fg)", fontWeight: 600 }}>{right}</span>
     </div>
   );
 }
 
 function Divider() {
-  return <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 0" }} />;
+  return <div style={{ height: 1, background: "var(--color-border-hairline)", margin: "8px 0" }} />;
 }
 
 function RegularCapsContent() {
