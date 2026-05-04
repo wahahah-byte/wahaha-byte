@@ -35,15 +35,15 @@ export default function AuthHeader() {
   if (!isMounted || !hasToken) return null;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
       {username && (
-        <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+        <span className="hidden sm:inline" style={{ color: "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
           {username}
         </span>
       )}
 
       {unsubmittedPoints > 0 && (
-        <div className="flex items-center gap-1.5" title={`${unsubmittedPoints} unsubmitted pts`}>
+        <div className="flex items-center gap-1.5 shrink-0" title={`${unsubmittedPoints} unsubmitted pts`}>
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
             <polygon points="5,0 10,4 5,12 0,4" fill="#f59e0b" opacity="0.85" />
           </svg>
@@ -54,7 +54,7 @@ export default function AuthHeader() {
       )}
 
       {balance !== null && (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <svg width="9" height="11" viewBox="0 0 10 12" fill="none">
             <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.85" />
           </svg>
@@ -64,11 +64,11 @@ export default function AuthHeader() {
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-          style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
+          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shrink-0"
+          style={{ background: "var(--color-button-bg)", border: "1px solid var(--color-button-border)", color: "var(--color-button-fg)" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
