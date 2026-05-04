@@ -40,9 +40,9 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           onClick={() => { setShowGroup(false); setShowSort((v) => !v); }}
           className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
           style={{
-            color: sortMode !== "due" ? "#5bb8e0" : "rgba(255,255,255,0.35)",
+            color: sortMode !== "due" ? "var(--color-accent)" : "var(--color-fg-subtle)",
             background: sortMode !== "due" ? "rgba(91,184,224,0.08)" : "transparent",
-            border: `1px solid ${sortMode !== "due" ? "rgba(91,184,224,0.3)" : "rgba(255,255,255,0.1)"}`,
+            border: `1px solid ${sortMode !== "due" ? "rgba(91,184,224,0.3)" : "var(--color-border-hairline)"}`,
             borderRadius: "2px",
             position: "relative",
             zIndex: 16,
@@ -77,9 +77,9 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           onClick={() => { setShowSort(false); setShowGroup((v) => !v); }}
           className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
           style={{
-            color: groupMode !== "none" ? "#5bb8e0" : "rgba(255,255,255,0.35)",
+            color: groupMode !== "none" ? "var(--color-accent)" : "var(--color-fg-subtle)",
             background: groupMode !== "none" ? "rgba(91,184,224,0.08)" : "transparent",
-            border: `1px solid ${groupMode !== "none" ? "rgba(91,184,224,0.3)" : "rgba(255,255,255,0.1)"}`,
+            border: `1px solid ${groupMode !== "none" ? "rgba(91,184,224,0.3)" : "var(--color-border-hairline)"}`,
             borderRadius: "2px",
             position: "relative",
             zIndex: 16,
@@ -120,10 +120,10 @@ function Menu({ children }: { children: React.ReactNode }) {
         top: "calc(100% + 4px)",
         right: 0,
         zIndex: 20,
-        background: "#23242a",
-        border: "1px solid #3a3b3f",
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
         borderRadius: "3px",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.55)",
+        boxShadow: "var(--shadow-popover)",
         minWidth: "120px",
         overflow: "hidden",
       }}
@@ -142,16 +142,16 @@ function MenuItem({ active, onClick, label }: { active: boolean; onClick: () => 
         padding: "8px 12px",
         background: "transparent",
         border: "none",
-        color: active ? "#5bb8e0" : "rgba(255,255,255,0.6)",
+        color: active ? "var(--color-accent)" : "var(--color-fg-muted)",
         fontSize: "9px",
         letterSpacing: "0.15em",
         textTransform: "uppercase",
         textAlign: "left",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: active ? "#5bb8e0" : "rgba(255,255,255,0.18)", display: "inline-block" }} />
+      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: active ? "var(--color-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
       {label}
     </button>
   );

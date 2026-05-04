@@ -7,14 +7,14 @@ import DatePicker from "@/components/DatePicker";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "#22c55e" },
-  { label: "Medium", value: "medium", color: "#f59e0b" },
-  { label: "High",   value: "high",   color: "#ef4444" },
+  { label: "Medium", value: "medium", color: "var(--color-warning)" },
+  { label: "High",   value: "high",   color: "var(--color-danger)" },
 ];
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  pending:     { label: "Pending",     color: "rgba(255,255,255,0.45)" },
-  in_progress: { label: "In Progress", color: "#5bb8e0" },
-  completed:   { label: "Completed",   color: "#4ade80" },
+  pending:     { label: "Pending",     color: "var(--color-fg-muted)" },
+  in_progress: { label: "In Progress", color: "var(--color-accent)" },
+  completed:   { label: "Completed",   color: "var(--color-success)" },
 };
 
 export interface EditableTaskFields {
@@ -106,8 +106,8 @@ export default function TaskDetailModal({
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
   onSave, isActing, canUndo, initialEditMode, mustReschedule,
 }: Props) {
-  const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "#888";
-  const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "#aaa" };
+  const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
+  const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
 
   function todayMidnight() {
     const d = new Date();
@@ -193,20 +193,20 @@ export default function TaskDetailModal({
     >
       <div
         className={`w-full max-w-md flex flex-col rounded${isEditing ? "" : " overflow-hidden"}`}
-        style={{ background: "#2a2b2f", border: "1px solid #3a3b3f", boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}
+        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-popover)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ background: "#23242a", borderBottom: "1px solid #3a3b3f", ...(isEditing && { borderRadius: "4px 4px 0 0" }) }}
+          style={{ background: "var(--color-panel-header)", borderBottom: "1px solid var(--color-border)", ...(isEditing && { borderRadius: "4px 4px 0 0" }) }}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: isEditing ? (PRIORITY_DOT[editPriority] ?? "#888") : dot }} />
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: isEditing ? (PRIORITY_DOT[editPriority] ?? "var(--color-fg-muted)") : dot }} />
             <span
               className="text-sm font-semibold tracking-wide truncate"
               style={{
-                color: !isEditing && task.status === "completed" ? "rgba(255,255,255,0.5)" : "#f0f0f0",
+                color: !isEditing && task.status === "completed" ? "var(--color-fg-muted)" : "var(--color-input-fg)",
                 textDecoration: !isEditing && task.status === "completed" ? "line-through" : "none",
               }}
             >
@@ -215,7 +215,7 @@ export default function TaskDetailModal({
             {isEditing && (
               <span
                 className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
-                style={{ color: "#5bb8e0", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "2px" }}
+                style={{ color: "var(--color-accent)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "2px" }}
               >
                 Editing
               </span>
@@ -223,9 +223,10 @@ export default function TaskDetailModal({
           </div>
           <button
             onClick={isEditing ? () => setIsEditing(false) : onClose}
-            className="flex-shrink-0 ml-3 text-[#555] transition-colors text-lg leading-none cursor-pointer"
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#999")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#555")}
+            className="flex-shrink-0 ml-3 transition-colors text-lg leading-none cursor-pointer"
+            style={{ color: "var(--color-fg-subtle)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
           >
             ✕
           </button>
@@ -257,13 +258,13 @@ export default function TaskDetailModal({
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
                 className="w-full px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
                 style={{
-                  background: titleLocked ? "#1a1b1e" : "#1e1f22",
-                  color: titleLocked ? "rgba(255,255,255,0.4)" : "#f0f0f0",
-                  border: "1px solid #3a3b3f",
+                  background: titleLocked ? "var(--color-surface-deep)" : "var(--color-input)",
+                  color: titleLocked ? "var(--color-fg-subtle)" : "var(--color-input-fg)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: "3px",
                 }}
-                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "#5bb8e0"; }}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </EditField>
 
@@ -274,14 +275,14 @@ export default function TaskDetailModal({
                 placeholder="Optional details…"
                 rows={2}
                 className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
-                style={{ background: "#1e1f22", color: "#f0f0f0", border: "1px solid #3a3b3f", borderRadius: "3px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#5bb8e0")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#3a3b3f")}
+                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </EditField>
 
             <EditField label="Priority">
-              <div className="flex" style={{ border: "1px solid #3a3b3f", borderRadius: "3px", overflow: "hidden" }}>
+              <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
                 {PRIORITIES.map((p, i) => (
                   <button
                     key={p.value}
@@ -289,8 +290,8 @@ export default function TaskDetailModal({
                     className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
                     style={{
                       background: editPriority === p.value ? `${p.color}18` : "transparent",
-                      color: editPriority === p.value ? p.color : "rgba(255,255,255,0.3)",
-                      borderRight: i < PRIORITIES.length - 1 ? "1px solid #3a3b3f" : "none",
+                      color: editPriority === p.value ? p.color : "var(--color-fg-subtle)",
+                      borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
                       fontWeight: editPriority === p.value ? 600 : 400,
                       borderBottom: editPriority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
                     }}
@@ -308,18 +309,18 @@ export default function TaskDetailModal({
                   onChange={(e) => setEditCategory(e.target.value)}
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
                   style={{
-                    background: "#1e1f22",
-                    color: CATEGORY_COLOR[editCategory] ?? "#f0f0f0",
-                    border: `1px solid ${(CATEGORY_COLOR[editCategory] ?? "#3a3b3f") + "55"}`,
+                    background: "var(--color-input)",
+                    color: CATEGORY_COLOR[editCategory] ?? "var(--color-input-fg)",
+                    border: `1px solid ${(CATEGORY_COLOR[editCategory] ?? "var(--color-border)") + "55"}`,
                     borderRadius: "3px",
                     fontWeight: 600,
                   }}
                 >
                   {categoryOptions.map((c) => (
-                    <option key={c} value={c} style={{ background: "#1e1f22", color: "#f0f0f0", fontWeight: 400 }}>{c}</option>
+                    <option key={c} value={c} style={{ background: "var(--color-input)", color: "var(--color-input-fg)", fontWeight: 400 }}>{c}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: CATEGORY_COLOR[editCategory] ?? "rgba(255,255,255,0.3)" }}>▾</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: CATEGORY_COLOR[editCategory] ?? "var(--color-fg-subtle)" }}>▾</span>
               </div>
             </EditField>
 
@@ -330,7 +331,7 @@ export default function TaskDetailModal({
             )}
 
             {editError && (
-              <p className="text-xs px-3 py-2" style={{ color: "#ef4444", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
+              <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
                 {editError}
               </p>
             )}
@@ -338,7 +339,7 @@ export default function TaskDetailModal({
         ) : (
           <div className="flex flex-col gap-4 px-5 py-4">
             {task.description && (
-              <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.6)" }}>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--color-fg-muted)" }}>
                 {task.description}
               </p>
             )}
@@ -361,7 +362,7 @@ export default function TaskDetailModal({
 
               <Row label="Category">
                 <span style={{
-                  color: CATEGORY_COLOR[task.category] ?? "rgba(255,255,255,0.75)",
+                  color: CATEGORY_COLOR[task.category] ?? "var(--color-fg)",
                   fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600,
                 }}>
                   {task.category || "—"}
@@ -371,33 +372,33 @@ export default function TaskDetailModal({
               <Row label="Points">
                 <div className="flex items-center gap-1">
                   <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
-                    <polygon points="5,0 10,4 5,12 0,4" fill="#5bb8e0" opacity="0.9" />
+                    <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-accent)" }} opacity="0.9" />
                   </svg>
-                  <span style={{ color: "#5bb8e0", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em" }}>
+                  <span style={{ color: "var(--color-accent)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em" }}>
                     {task.pointValue.toLocaleString()}
                   </span>
                 </div>
               </Row>
 
               <Row label={task.isRecurring ? "Cycle Due" : "Due Date"}>
-                <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px" }}>{fmt(task.dueDate)}</span>
+                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmt(task.dueDate)}</span>
               </Row>
 
               <Row label="Created">
-                <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px" }}>{fmtLocalDate(task.createdAt)}</span>
+                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmtLocalDate(task.createdAt)}</span>
               </Row>
 
               {task.completedAt && (
                 <Row label="Completed">
-                  <span style={{ color: "#4ade80", fontSize: "11px" }}>{fmtFull(task.completedAt)}</span>
+                  <span style={{ color: "var(--color-success)", fontSize: "11px" }}>{fmtFull(task.completedAt)}</span>
                 </Row>
               )}
 
               {task.isRecurring && task.recurrenceRule && (
                 <Row label="Recurrence">
                   <div className="flex items-center gap-1.5">
-                    <span style={{ color: "#a78bfa", fontSize: "11px", lineHeight: 1 }}>↻</span>
-                    <span style={{ color: "#a78bfa", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
+                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", lineHeight: 1 }}>↻</span>
+                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
                       {task.recurrenceRule.charAt(0).toUpperCase() + task.recurrenceRule.slice(1)}
                     </span>
                   </div>
@@ -408,7 +409,7 @@ export default function TaskDetailModal({
                 <Row label="Streak">
                   <div className="flex items-center gap-1.5">
                     <span style={{ fontSize: "12px" }}>🔥</span>
-                    <span style={{ color: "#a78bfa", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
                       {currentStreakCount} &nbsp;
                       <span style={{ color: "rgba(167,139,250,0.5)", fontWeight: 400 }}>
                         / best {longestStreakCount}
@@ -424,7 +425,7 @@ export default function TaskDetailModal({
         {/* Actions */}
         <div
           className="flex items-center gap-2 flex-wrap px-5 py-3"
-          style={{ borderTop: "1px solid #3a3b3f", background: "#252629" }}
+          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)" }}
         >
           {isEditing ? (
             <>
@@ -432,8 +433,8 @@ export default function TaskDetailModal({
                 onClick={() => mustReschedule ? onClose() : setIsEditing(false)}
                 disabled={isSaving}
                 className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                style={{ color: "rgba(255,255,255,0.4)", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "3px" }}
-                onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                style={{ color: "var(--color-fg-subtle)", background: "transparent", border: "1px solid var(--color-border-faint)", borderRadius: "3px" }}
+                onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-overlay-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 Cancel
@@ -442,7 +443,7 @@ export default function TaskDetailModal({
                 onClick={handleSave}
                 disabled={isSaving}
                 className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                style={{ color: "#5bb8e0", background: "rgba(91,184,224,0.08)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "3px" }}
+                style={{ color: "var(--color-accent)", background: "rgba(91,184,224,0.08)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "3px" }}
                 onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(91,184,224,0.15)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(91,184,224,0.08)"; }}
               >
@@ -453,13 +454,13 @@ export default function TaskDetailModal({
                   onClick={onDelete}
                   disabled={isSaving}
                   className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
-                  style={{ color: "#ef4444", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "3px" }}
+                  style={{ color: "var(--color-danger)", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "3px" }}
                   onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                    <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                    <line x1="1" y1="1" x2="9" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
+                    <line x1="9" y1="1" x2="1" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                   Delete
                 </button>
@@ -471,12 +472,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onStart}
                   disabled={isActing}
-                  color="#5bb8e0"
+                  color="var(--color-accent)"
                   hoverBg="rgba(91,184,224,0.12)"
                   label="Start"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polygon points="2,1 9,5 2,9" fill="#5bb8e0" />
+                      <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-accent)" }} />
                     </svg>
                   }
                 />
@@ -486,12 +487,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onCheckIn}
                   disabled={isActing}
-                  color="#a78bfa"
+                  color="var(--color-secondary-accent)"
                   hoverBg="rgba(167,139,250,0.12)"
                   label="Check In"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polyline points="1,5 4,8 9,2" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   }
                 />
@@ -513,13 +514,13 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onPause}
                   disabled={isActing}
-                  color="#f59e0b"
+                  color="var(--color-warning)"
                   hoverBg="rgba(245,158,11,0.12)"
                   label="Pause"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <rect x="1.5" y="1" width="3" height="8" fill="#f59e0b" />
-                      <rect x="5.5" y="1" width="3" height="8" fill="#f59e0b" />
+                      <rect x="1.5" y="1" width="3" height="8" style={{ fill: "var(--color-warning)" }} />
+                      <rect x="5.5" y="1" width="3" height="8" style={{ fill: "var(--color-warning)" }} />
                     </svg>
                   }
                 />
@@ -529,12 +530,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onComplete}
                   disabled={isActing}
-                  color="#4ade80"
+                  color="var(--color-success)"
                   hoverBg="rgba(74,222,128,0.12)"
                   label="Complete"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polyline points="1,5 4,8 9,2" stroke="#4ade80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-success)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   }
                 />
@@ -544,13 +545,13 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onUndo}
                   disabled={isActing}
-                  color="#f59e0b"
+                  color="var(--color-warning)"
                   hoverBg="rgba(245,158,11,0.12)"
                   label="Undo"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-                      <polyline points="4,4.5 1.5,2 4,0" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" />
+                      <polyline points="4,4.5 1.5,2 4,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                     </svg>
                   }
                 />
@@ -560,12 +561,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={startEdit}
                   disabled={isActing}
-                  color="rgba(255,255,255,0.45)"
-                  hoverBg="rgba(255,255,255,0.06)"
+                  color="var(--color-fg-muted)"
+                  hoverBg="var(--color-overlay-hover)"
                   label="Edit"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <path d="M7 1.5L8.5 3 3.5 8H2V6.5L7 1.5Z" stroke="rgba(255,255,255,0.45)" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
+                      <path d="M7 1.5L8.5 3 3.5 8H2V6.5L7 1.5Z" style={{ stroke: "var(--color-fg-muted)" }} strokeWidth="1.2" strokeLinejoin="round" fill="none" />
                     </svg>
                   }
                 />
@@ -575,13 +576,13 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onDelete}
                   disabled={isActing}
-                  color="#ef4444"
+                  color="var(--color-danger)"
                   hoverBg="rgba(239,68,68,0.12)"
                   label="Delete"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-                      <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="1" y1="1" x2="9" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="9" y1="1" x2="1" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   }
                 />
@@ -593,12 +594,12 @@ export default function TaskDetailModal({
         {/* Footer */}
         <div
           className="flex items-center justify-between px-5 py-2"
-          style={{ borderTop: "1px solid #3a3b3f", background: "#23242a", ...(isEditing && { borderRadius: "0 0 4px 4px" }) }}
+          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)", ...(isEditing && { borderRadius: "0 0 4px 4px" }) }}
         >
-          <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "9px", letterSpacing: "0.15em", fontFamily: "monospace" }}>
+          <span style={{ color: "var(--color-border-faint)", fontSize: "9px", letterSpacing: "0.15em", fontFamily: "monospace" }}>
             {task.taskId.slice(0, 8).toUpperCase()}
           </span>
-          <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          <span style={{ color: "var(--color-border-faint)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {task.submitted ? "Filed" : "Unfiled"}
           </span>
         </div>
@@ -610,7 +611,7 @@ export default function TaskDetailModal({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+      <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
         {label}
       </span>
       <div>{children}</div>
@@ -621,7 +622,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function EditField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+      <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
         {label}
       </span>
       {children}

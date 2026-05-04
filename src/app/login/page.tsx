@@ -30,26 +30,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#313338]">
-      <div className="w-full max-w-md bg-[#2B2D31] rounded-lg shadow-2xl overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-bg)" }}>
+      <div className="w-full max-w-md rounded-lg overflow-hidden" style={{ background: "var(--color-panel)", boxShadow: "var(--shadow-popover)" }}>
         <div className="px-8 py-8">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-white">Welcome back!</h1>
-            <p className="text-[#B5BAC1] text-sm mt-1">
+            <h1 className="text-2xl font-bold" style={{ color: "var(--color-fg)" }}>Welcome back!</h1>
+            <p className="text-sm mt-1" style={{ color: "var(--color-fg-muted)" }}>
               We&apos;re so excited to see you again!
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-[#F23F43]/10 border border-[#F23F43]/30 rounded text-[#F23F43] text-sm px-3 py-2">
+              <div className="rounded text-sm px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "var(--color-danger)" }}>
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold tracking-wide text-[#B5BAC1] uppercase mb-2">
-                Email <span className="text-[#F23F43]">*</span>
+              <label className="block text-xs font-bold tracking-wide uppercase mb-2" style={{ color: "var(--color-fg-muted)" }}>
+                Email <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               <input
                 type="email"
@@ -57,17 +57,20 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                className="w-full bg-[#1E1F22] text-[#DBdEE1] rounded px-3 py-2.5 text-sm border border-transparent focus:outline-none focus:border-[#5865F2] placeholder-[#4E5058] transition-colors"
+                className="w-full rounded px-3 py-2.5 text-sm border focus:outline-none transition-colors"
+                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", borderColor: "var(--color-border)" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
                 placeholder="Enter your email"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold tracking-wide text-[#B5BAC1] uppercase">
-                  Password <span className="text-[#F23F43]">*</span>
+                <label className="block text-xs font-bold tracking-wide uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                  Password <span style={{ color: "var(--color-danger)" }}>*</span>
                 </label>
-                <a href="#" className="text-xs text-[#00A8FC] hover:underline">
+                <a href="#" className="text-xs hover:underline" style={{ color: "var(--color-accent)" }}>
                   Forgot your password?
                 </a>
               </div>
@@ -77,7 +80,10 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
-                className="w-full bg-[#1E1F22] text-[#DBdEE1] rounded px-3 py-2.5 text-sm border border-transparent focus:outline-none focus:border-[#5865F2] placeholder-[#4E5058] transition-colors"
+                className="w-full rounded px-3 py-2.5 text-sm border focus:outline-none transition-colors"
+                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", borderColor: "var(--color-border)" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
                 placeholder="Enter your password"
               />
             </div>
@@ -85,15 +91,18 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-medium rounded py-2.5 text-sm transition-colors cursor-pointer mt-2"
+              className="w-full disabled:opacity-50 font-medium rounded py-2.5 text-sm transition-colors cursor-pointer mt-2"
+              style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-accent-bg)")}
             >
               {loading ? "Signing in…" : "Log In"}
             </button>
           </form>
 
-          <p className="text-[#949BA4] text-sm mt-4">
+          <p className="text-sm mt-4" style={{ color: "var(--color-fg-muted)" }}>
             Need an account?{" "}
-            <a href="/register" className="text-[#00A8FC] hover:underline">
+            <a href="/register" className="hover:underline" style={{ color: "var(--color-accent)" }}>
               Register
             </a>
           </p>

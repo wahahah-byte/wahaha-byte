@@ -63,7 +63,7 @@ export function ToastBanner() {
       {error && (
         <div
           key={animKey}
-          className="toast-banner-anim text-xs text-red-400"
+          className="toast-banner-anim text-xs"
           style={{
             position: "absolute",
             top: 12,
@@ -72,11 +72,12 @@ export function ToastBanner() {
             margin: "0 auto",
             maxWidth: 480,
             width: "calc(100% - 32px)",
-            background: "#1e1e1e",
+            background: "var(--color-surface)",
+            color: "var(--color-danger)",
             border: "1px solid rgba(239,68,68,0.35)",
             borderRadius: 6,
             padding: "10px 14px",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.6)",
+            boxShadow: "var(--shadow-popover)",
             pointerEvents: "auto",
           }}
         >

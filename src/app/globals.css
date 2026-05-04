@@ -1,8 +1,94 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Theme tokens. Components can migrate to these incrementally;
+   anything still using inline hex stays dark-only until ported. */
+:root,
+[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  --color-bg: #0a0a0a;
+  --color-fg: rgba(255, 255, 255, 0.92);
+  --color-fg-muted: rgba(255, 255, 255, 0.55);
+  --color-fg-subtle: rgba(255, 255, 255, 0.35);
+
+  --color-header: #35363b;
+  --color-surface: #1e1f22;
+  --color-surface-hover: #26272b;
+  --color-surface-2: #2a2b2f;
+  --color-surface-deep: #1a1b1f;
+  --color-track: #2e2f34;
+  --color-border: #3e3f42;
+  --color-border-soft: #2e2f34;
+  --color-button-bg: #3e3f42;
+  --color-button-border: #555659;
+  --color-button-fg: #ddd;
+  --color-overlay-hover: rgba(255, 255, 255, 0.04);
+  --color-border-faint: rgba(255, 255, 255, 0.25);
+  --color-border-hairline: rgba(255, 255, 255, 0.06);
+  --color-panel: #2a2b2f;
+  --color-panel-header: #23242a;
+  --color-input: #1e1f22;
+  --color-input-fg: #f0f0f0;
+  --color-accent-bg: #1a3a4a;
+  --color-accent-bg-hover: #1e4d63;
+  --color-accent-border: #1e5068;
+  --color-on-accent: #0d1f28;
+  --color-row-greyed: #16171a;
+  --color-row-greyed-hover: #1a1b1f;
+
+  --color-accent: #5bb8e0;
+  --color-success: #4ade80;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-secondary-accent: #a78bfa;
+
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.55);
+  --shadow-header: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  --background: #eef0f3;
+  --foreground: #1a1a1a;
+
+  --color-bg: #eef0f3;
+  --color-fg: rgba(0, 0, 0, 0.85);
+  --color-fg-muted: rgba(0, 0, 0, 0.55);
+  --color-fg-subtle: rgba(0, 0, 0, 0.38);
+
+  --color-header: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f4f5f7;
+  --color-surface-2: #e7e9ed;
+  --color-surface-deep: #dde0e5;
+  --color-track: #d8dade;
+  --color-border: #d0d3d8;
+  --color-border-soft: #e0e2e6;
+  --color-button-bg: #ffffff;
+  --color-button-border: #c8cbd0;
+  --color-button-fg: #333;
+  --color-overlay-hover: rgba(0, 0, 0, 0.05);
+  --color-border-faint: rgba(0, 0, 0, 0.18);
+  --color-border-hairline: rgba(0, 0, 0, 0.06);
+  --color-panel: #ffffff;
+  --color-panel-header: #f3f4f7;
+  --color-input: #fafbfc;
+  --color-input-fg: #1a1a1a;
+  --color-accent-bg: #e0f0f9;
+  --color-accent-bg-hover: #cee5f1;
+  --color-accent-border: #8cc6e0;
+  --color-on-accent: #ffffff;
+  --color-row-greyed: #e4e6ea;
+  --color-row-greyed-hover: #dadce1;
+
+  --color-accent: #2b8fc0;
+  --color-success: #22a865;
+  --color-warning: #c97a07;
+  --color-danger: #d83232;
+  --color-secondary-accent: #7c5cf0;
+
+  --shadow-popover: 0 8px 24px rgba(15, 22, 38, 0.12), 0 1px 3px rgba(15, 22, 38, 0.06);
+  --shadow-header: 0 1px 0 rgba(0, 0, 0, 0.06), 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
 @theme inline {
@@ -10,13 +96,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 html, body {
@@ -46,16 +125,16 @@ body {
 }
 
 .task-row-inner {
-  background: #1e1f22;
+  background: var(--color-surface);
   transition: transform 0.2s ease-out, opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
 }
 @media (hover: hover) {
   .task-row-wrapper:hover .task-row-inner {
-    background: #26272b;
+    background: var(--color-surface-hover);
   }
 }
 .task-row-inner.greyed {
-  opacity: 0.4;
+  background: var(--color-row-greyed);
 }
 .task-row-wrapper.task-row-phantom {
   position: relative;
@@ -63,8 +142,10 @@ body {
   pointer-events: none;
   overflow: hidden;
 }
-.task-row-wrapper:hover .task-row-inner.greyed {
-  opacity: 0.55;
+@media (hover: hover) {
+  .task-row-wrapper:hover .task-row-inner.greyed {
+    background: var(--color-row-greyed-hover);
+  }
 }
 .task-row-wrapper .task-actions {
   display: flex;
@@ -73,7 +154,7 @@ body {
   transform: translateX(calc(var(--actions-width, 28px) * -1));
 }
 .task-actions {
-  background: #1a1b1f;
+  background: var(--color-surface-deep);
   visibility: hidden;
 }
 .task-row-wrapper[data-revealed="true"] .task-actions,
@@ -96,7 +177,7 @@ body {
     height: 20px;
     background: transparent;
     border: none;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--color-fg-subtle);
     font-size: 16px;
     line-height: 1;
     cursor: pointer;
@@ -112,18 +193,18 @@ body {
   }
   .row-menu-trigger:hover,
   .task-row-wrapper[data-menu-open="true"] .row-menu-trigger {
-    color: #fff;
+    color: var(--color-fg);
   }
 }
 
 .row-menu-popover {
-  background: #1e1f22;
-  border: 1px solid #3a3b3f;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 4px 0;
   min-width: 130px;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-popover);
 }
 .row-menu-popover button {
   display: block;
@@ -131,7 +212,7 @@ body {
   padding: 8px 14px;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--color-fg-muted);
   font-size: 9px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -140,8 +221,8 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 .row-menu-popover button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--menu-color, #5bb8e0);
+  background: var(--color-overlay-hover);
+  color: var(--menu-color, var(--color-accent));
 }
 .row-menu-popover button:disabled {
   opacity: 0.3;
