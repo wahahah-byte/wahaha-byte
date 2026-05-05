@@ -18,13 +18,14 @@ interface UseTaskActionsOptions {
   setSelectedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   submittedTaskIds: Set<string>;
   setError: (msg: string) => void;
+  setSuccess?: (msg: string) => void;
 }
 
 export function useTaskActions({
   tasks, setTasks, isAuthenticated, activeFilter,
   stagedTaskIds, setStagedTaskIds,
   selectedIds, setSelectedIds,
-  submittedTaskIds, setError,
+  submittedTaskIds, setError, setSuccess,
 }: UseTaskActionsOptions) {
   const { recurringSubmittedToday, setRecurringSubmittedToday, setDailySubmitted, setBalance, updateStaged } = usePoints();
 
@@ -182,6 +183,11 @@ export function useTaskActions({
     if (awarded > 0) {
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+    }
+
+    if (setSuccess && awarded > 0 && data!.bonusMultiplier > 1) {
+      const mult = Number.isInteger(data!.bonusMultiplier) ? data!.bonusMultiplier.toFixed(0) : data!.bonusMultiplier.toFixed(1);
+      setSuccess(`+${awarded} pts (${data!.basePoints} × ${mult}x streak 🔥${data!.streakCount})`);
     }
 
     let nextDueDate = data!.nextDueDate || task.dueDate;

@@ -190,7 +190,7 @@ export default function TaskDetailModal({
       onClick={isEditing ? undefined : onClose}
     >
       <div
-        className={`w-full max-w-md flex flex-col rounded${isEditing ? "" : " overflow-hidden"}`}
+        className={`w-full max-w-md sm:max-w-lg flex flex-col rounded${isEditing ? "" : " overflow-hidden"}`}
         style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-popover)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -210,12 +210,19 @@ export default function TaskDetailModal({
             >
               {isEditing ? (editTitle || "Edit Task") : task.title}
             </span>
-            {isEditing && (
+            {isEditing ? (
               <span
                 className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
                 style={{ color: "var(--color-active-highlight)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "2px" }}
               >
                 Editing
+              </span>
+            ) : (
+              <span
+                className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
+                style={{ color: status.color, border: `1px solid ${status.color}55`, borderRadius: "2px", fontWeight: 600 }}
+              >
+                {status.label}
               </span>
             )}
           </div>
@@ -335,20 +342,14 @@ export default function TaskDetailModal({
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-4 px-5 py-4">
+          <div className="flex flex-col gap-3 px-5 py-3">
             {task.description && (
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-fg-muted)" }}>
                 {task.description}
               </p>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-              <Row label="Status">
-                <span style={{ color: status.color, fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
-                  {status.label}
-                </span>
-              </Row>
-
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5">
               <Row label="Priority">
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot }} />
@@ -380,18 +381,12 @@ export default function TaskDetailModal({
               </Row>
 
               <Row label={task.isRecurring ? "Cycle Due" : "Due Date"}>
-                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmt(task.dueDate)}</span>
+                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmtShort(task.dueDate)}</span>
               </Row>
 
               <Row label="Created">
                 <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmtLocalDate(task.createdAt)}</span>
               </Row>
-
-              {task.completedAt && (
-                <Row label="Completed">
-                  <span style={{ color: "var(--color-success)", fontSize: "11px" }}>{fmtFull(task.completedAt)}</span>
-                </Row>
-              )}
 
               {task.isRecurring && task.recurrenceRule && (
                 <Row label="Recurrence">
@@ -404,19 +399,51 @@ export default function TaskDetailModal({
                 </Row>
               )}
 
-              {(currentStreakCount ?? 0) >= 3 && (
-                <Row label="Streak">
-                  <div className="flex items-center gap-1.5">
-                    <span style={{ fontSize: "12px" }}>🔥</span>
-                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-                      {currentStreakCount} &nbsp;
-                      <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontWeight: 400 }}>
-                        / best {longestStreakCount}
-                      </span>
-                    </span>
-                  </div>
+              {task.completedAt && (
+                <Row label="Completed">
+                  <span style={{ color: "var(--color-success)", fontSize: "11px" }}>{fmtFull(task.completedAt)}</span>
                 </Row>
               )}
+
+              {(currentStreakCount ?? 0) >= 3 && (() => {
+                const c = currentStreakCount ?? 0;
+                const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
+                const nextTier = c >= 30 ? null : c >= 14 ? { at: 30, mult: 2.0 } : c >= 7 ? { at: 14, mult: 1.8 } : { at: 7, mult: 1.5 };
+                const bonusPts = Math.round(task.pointValue * multiplier) - task.pointValue;
+                const fmt = (m: number) => Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1);
+                return (
+                  <>
+                    <Row label="Streak">
+                      <div className="flex items-center gap-1.5">
+                        <span style={{ fontSize: "12px" }}>🔥</span>
+                        <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                          {currentStreakCount}
+                          <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontWeight: 400 }}>
+                            {" "}/ {longestStreakCount}
+                          </span>
+                        </span>
+                      </div>
+                    </Row>
+                    <div className="col-span-2 sm:col-span-3">
+                      <Row label="Bonus">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                            {fmt(multiplier)}x
+                          </span>
+                          <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontSize: "11px" }}>
+                            (+{bonusPts} pts/check-in)
+                          </span>
+                          {nextTier && (
+                            <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.05em" }}>
+                              · {nextTier.at - c} more → {fmt(nextTier.mult)}x
+                            </span>
+                          )}
+                        </div>
+                      </Row>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

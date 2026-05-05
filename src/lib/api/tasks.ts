@@ -81,6 +81,7 @@ function toQueryString(params: TaskFilterParams): string {
 
 export interface CheckInResponse {
   pointsAwarded: number;
+  basePoints: number;
   newBalance: number;
   recurringDailyTotal: number;
   streakCount: number;

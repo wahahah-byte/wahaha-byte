@@ -20,6 +20,7 @@ import { canCheckInNow } from "@/lib/dateUtils";
 import { FILTERS } from "@/lib/constants";
 import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
+import { useToast } from "@/context/ToastContext";
 
 function Home() {
   const router = useRouter();
@@ -43,6 +44,7 @@ function Home() {
   const [uncompletedCollapsed, setUncompletedCollapsed] = useState(false);
 
   const { setUnsubmittedPoints } = usePoints();
+  const { setSuccess } = useToast();
   const submission = useTaskSubmission({ tasks, isAuthenticated, setError });
 
   const {
@@ -60,6 +62,7 @@ function Home() {
       selectedIds, setSelectedIds,
       submittedTaskIds,
       setError,
+      setSuccess,
     });
 
   useEffect(() => {
@@ -271,7 +274,7 @@ function Home() {
               key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
               style={{
                 position: hasGroupLabel ? "relative" : undefined,
-                marginTop: hasGroupLabel && idx > 0 ? "14px" : undefined,
+                marginTop: hasGroupLabel ? (idx > 0 ? "14px" : "10px") : undefined,
               }}
             >
               {chunk.sep && isSection && (

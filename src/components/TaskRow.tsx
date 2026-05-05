@@ -541,53 +541,41 @@ export default function TaskRow({
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
                 const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "var(--color-active-highlight-alt)";
                 const streakCount = task.currentStreakCount ?? 0;
+                const showUnlockChip = !overdue && isLocked && !!unlockInfo;
                 return (
                   <>
-                    <span style={{ color: baseColor, fontSize: "9px", lineHeight: 1, flexShrink: 0 }}>↻</span>
-                    <span style={{ color: baseColor, fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>
-                      {ruleLabel}
-                    </span>
-                    {overdue && (
+                    {!showUnlockChip && (
                       <>
-                        <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
                         <span
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: "4px",
-                            color: "rgba(239,68,68,0.9)", fontSize: "8px",
-                            letterSpacing: "0.15em", textTransform: "uppercase",
-                            fontWeight: isPenalized ? 700 : 600, flexShrink: 0,
-                            background: "rgba(239,68,68,0.10)",
-                            border: "1px solid rgba(239,68,68,0.25)",
-                            borderRadius: "2px", padding: "1px 5px",
-                          }}
+                          style={{ color: baseColor, fontSize: overdue ? "10px" : "9px", lineHeight: 1, flexShrink: 0, fontWeight: overdue ? 700 : 400 }}
                           title={
-                            isPenalized
-                              ? `Overdue ${cyclesOverdue} cycle${cyclesOverdue === 1 ? "" : "s"}${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
-                              : `Overdue${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
+                            overdue
+                              ? (isPenalized
+                                  ? `Overdue ${cyclesOverdue} cycle${cyclesOverdue === 1 ? "" : "s"}${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
+                                  : `Overdue${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`)
+                              : undefined
                           }
                         >
-                          <span>⚠</span>
-                          <span>{isPenalized ? `×${cyclesOverdue}` : "OVERDUE"}</span>
-                          {streakCount >= 3 && (
-                            <>
-                              <span style={{ opacity: 0.45, fontWeight: 400 }}>·</span>
-                              <span style={{ letterSpacing: "0.05em", textTransform: "none" }}>🔥{streakCount}→0</span>
-                            </>
-                          )}
+                          {overdue ? "⚠" : "↻"}
+                        </span>
+                        <span style={{ color: baseColor, fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>
+                          {ruleLabel}
                         </span>
                       </>
                     )}
-                    {!overdue && isLocked && unlockInfo && (
+                    {showUnlockChip && (
                       <>
-                        <span style={{ color: "rgba(245,158,11,0.35)", fontSize: "8px", flexShrink: 0 }}>·</span>
-                        <svg width="7" height="8" viewBox="0 0 10 12" fill="none" style={{ flexShrink: 0 }}>
+                        <svg width="7" height="8" viewBox="0 0 10 12" fill="none" style={{ flexShrink: 0 }} aria-label={`Recurring · ${ruleLabel}`}>
                           <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" fill="none"/>
                           <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
                         </svg>
-                        <span style={{ color: "rgba(245,158,11,0.6)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}>
+                        <span
+                          style={{ color: "rgba(245,158,11,0.6)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}
+                          title={`${ruleLabel} · unlocks ${(task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly") ? unlockInfo!.date : unlockInfo!.days === 1 ? "tomorrow" : `in ${unlockInfo!.days} days`}`}
+                        >
                           {(task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
-                            ? unlockInfo.date
-                            : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`}
+                            ? unlockInfo!.date
+                            : unlockInfo!.days === 1 ? "tomorrow" : `in ${unlockInfo!.days} days`}
                         </span>
                       </>
                     )}
@@ -641,6 +629,7 @@ export default function TaskRow({
               <span style={{ color: "rgba(245,158,11,0.9)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.03em" }}>
                 {task.pointValue.toLocaleString()}
               </span>
+              <StreakBonusChip task={task} />
             </div>
           ) : (
             <>
@@ -651,6 +640,7 @@ export default function TaskRow({
               <span className="text-xs font-semibold" style={{ color: "var(--color-warning)" }}>
                 {task.pointValue.toLocaleString()}
               </span>
+              <StreakBonusChip task={task} />
             </>
           )}
         </div>
@@ -846,5 +836,32 @@ export default function TaskRow({
 
       <BankBurstEffect active={isFiling} />
     </div>
+  );
+}
+
+function StreakBonusChip({ task }: { task: TaskDto }) {
+  if (!task.isRecurring) return null;
+  const c = task.currentStreakCount ?? 0;
+  if (c < 3) return null;
+  const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
+  const bonus = Math.round(task.pointValue * multiplier) - task.pointValue;
+  if (bonus <= 0) return null;
+  const fmt = Number.isInteger(multiplier) ? multiplier.toFixed(0) : multiplier.toFixed(1);
+  return (
+    <span
+      title={`Streak bonus: ${task.pointValue} × ${fmt}x = +${bonus} pts`}
+      style={{
+        color: "var(--color-active-highlight-alt)",
+        fontSize: "8px",
+        fontWeight: 700,
+        letterSpacing: "0.02em",
+        lineHeight: 1,
+        marginLeft: "1px",
+        alignSelf: "flex-start",
+        marginTop: "1px",
+      }}
+    >
+      +{bonus}
+    </span>
   );
 }

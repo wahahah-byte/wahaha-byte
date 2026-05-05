@@ -13,6 +13,8 @@ export interface UserProfile {
 export interface TaskSubmissionResult {
   taskId: string;
   awarded: number;
+  basePoints: number;
+  bonusMultiplier: number;
   error?: string | null;
 }
 
