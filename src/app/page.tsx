@@ -144,19 +144,19 @@ function Home() {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
+      <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1 pb-[calc(56px+env(safe-area-inset-bottom,0px))] sm:pb-8"
+          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden"
           style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
         >
           {!isAuthenticated && (
-            <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
+            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
               <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
               <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em" }}>Sign in →</Link>
             </div>
           )}
 
-          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "var(--color-bg)" }}>
+          <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
             <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
 
             <div className="flex items-center mb-2 py-2 sm:py-0" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
@@ -175,14 +175,14 @@ function Home() {
                     key={f.value}
                     onClick={() => applyFilter(f.value)}
                     className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                    style={{ color: activeFilter === f.value ? "var(--color-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
+                    style={{ color: activeFilter === f.value ? "var(--color-active-highlight)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
                   >
                     {f.label}
                     {f.value === "completed" && unsubmitted.length > 0 && (
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--color-warning)" }} />
                     )}
                     {activeFilter === f.value && (
-                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-accent)" }} />
+                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-active-highlight)" }} />
                     )}
                   </button>
                 ))}
@@ -206,6 +206,22 @@ function Home() {
             </div>
           </div>
 
+          {activeFilter === "completed" && !loading && (
+            <UnsubmittedSummary
+              unsubmitted={unsubmitted}
+              allSelected={allUnsubmittedSelected}
+              onToggleSelectAll={() => {
+                if (allUnsubmittedSelected) {
+                  setSelectedIds((prev) => { const n = new Set(prev); unsubmitted.forEach((t) => n.delete(t.taskId)); return n; });
+                } else {
+                  setSelectedIds((prev) => new Set([...prev, ...unsubmitted.map((t) => t.taskId)]));
+                }
+              }}
+            />
+          )}
+
+          <div className="flex-1 overflow-y-auto">
+
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
@@ -228,20 +244,6 @@ function Home() {
             <div className="flex flex-col items-center justify-center py-20 gap-2">
               <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>No pending tasks</p>
             </div>
-          )}
-
-          {activeFilter === "completed" && !loading && (
-            <UnsubmittedSummary
-              unsubmitted={unsubmitted}
-              allSelected={allUnsubmittedSelected}
-              onToggleSelectAll={() => {
-                if (allUnsubmittedSelected) {
-                  setSelectedIds((prev) => { const n = new Set(prev); unsubmitted.forEach((t) => n.delete(t.taskId)); return n; });
-                } else {
-                  setSelectedIds((prev) => new Set([...prev, ...unsubmitted.map((t) => t.taskId)]));
-                }
-              }}
-            />
           )}
 
           {!loading && chunkListItems(listItems).map((chunk, idx) => (
@@ -289,9 +291,10 @@ function Home() {
               )}
             </div>
           ))}
+          </div>
 
           {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 px-1">
+            <div className="flex justify-between items-center mt-2 px-1 shrink-0">
               <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {tasks.filter((t) => t.status !== "completed").length} remaining
               </span>

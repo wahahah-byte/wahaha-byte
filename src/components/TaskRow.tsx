@@ -658,7 +658,7 @@ export default function TaskRow({
               disabled={isAdvancing}
               title="Resume — reschedule to today"
             >
-              <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <polygon points="2,1 9,5 2,9" fill="currentColor" />
               </svg>
             </button>
@@ -669,11 +669,11 @@ export default function TaskRow({
               title={eligibleCheckIn ? "Check In" : "Not yet available"}
             >
               {eligibleCheckIn ? (
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ) : (
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
                   <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
                 </svg>
@@ -687,7 +687,7 @@ export default function TaskRow({
             disabled={isAdvancing}
             title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
           >
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <polygon points="2,1 9,5 2,9" fill="currentColor" />
             </svg>
           </button>
@@ -698,7 +698,7 @@ export default function TaskRow({
             disabled={pausing === task.taskId}
             title="Pause"
           >
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <rect x="1.5" y="1" width="3" height="8" fill="currentColor" />
               <rect x="5.5" y="1" width="3" height="8" fill="currentColor" />
             </svg>
@@ -711,7 +711,7 @@ export default function TaskRow({
             title="Complete"
             style={{ color: "var(--color-success)" }}
           >
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
@@ -722,7 +722,7 @@ export default function TaskRow({
             disabled={isAdvancing}
             title="Undo"
           >
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <polyline points="4,4.5 1.5,2 4,0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
@@ -734,7 +734,7 @@ export default function TaskRow({
           title="Delete"
           style={{ color: "var(--color-danger)" }}
         >
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+          <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
             <path d="M3.8 2V1.3h2.4V2" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
             <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
             <path d="M2.6 3L3.1 8.5h3.8L7.4 3" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />

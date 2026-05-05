@@ -15,6 +15,7 @@
   --color-header: #35363b;
   --color-surface: #1e1f22;
   --color-surface-hover: #26272b;
+  --color-toolbar-bg: #232428;
   --color-surface-2: #2a2b2f;
   --color-surface-deep: #1a1b1f;
   --color-track: #2e2f34;
@@ -69,6 +70,7 @@
   --color-header: #ffffff;
   --color-surface: #ffffff;
   --color-surface-hover: #f4f5f7;
+  --color-toolbar-bg: #ecedf0;
   --color-surface-2: #e7e9ed;
   --color-surface-deep: #dde0e5;
   --color-track: #d8dade;
@@ -121,6 +123,18 @@
 html, body {
   overflow-x: clip;
   max-width: 100%;
+}
+
+/* Constrains the task pages so only the task list scrolls.
+   Mobile: subtract auth header (51px) + mobile nav (56px) + iOS home indicator.
+   Desktop (≥ sm): no mobile nav, just subtract auth header. */
+.task-page-shell {
+  height: calc(100dvh - 51px - 56px - env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 640px) {
+  .task-page-shell {
+    height: calc(100dvh - 51px);
+  }
 }
 body {
   background: var(--background);
@@ -235,12 +249,11 @@ body {
     display: flex;
     position: absolute;
     right: 8px;
-    top: -8px;
+    top: -10px;
     align-items: center;
     gap: 0;
-    padding: 1px 2px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border-soft);
+    padding: 2px 3px;
+    background: var(--color-toolbar-bg);
     border-radius: 4px;
     box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.45);
     z-index: 12;
@@ -261,8 +274,8 @@ body {
   }
 }
 .row-toolbar button {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;

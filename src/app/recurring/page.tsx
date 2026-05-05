@@ -219,17 +219,17 @@ function Recurring() {
 
   return (
     <>
-      <div className="recurring-scope min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-        <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1 pb-[calc(56px+env(safe-area-inset-bottom,0px))] sm:pb-8">
+      <div className="recurring-scope task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
+        <div className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden">
           {!isAuthenticated && (
-            <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
+            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
               <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
               <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em" }}>Sign in →</Link>
             </div>
           )}
 
-          <div style={{ position: "sticky", top: 51, zIndex: 20, background: "var(--color-bg)" }}>
-          <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "6px", height: "38px" }}>
+          <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
+          <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "22px", height: "38px" }}>
             <CategoryCapsTooltip variant="recurring">
               <div
                 tabIndex={0}
@@ -312,14 +312,14 @@ function Recurring() {
                     key={f.value}
                     onClick={() => applyFilter(f.value)}
                     className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                    style={{ color: activeFilter === f.value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
+                    style={{ color: activeFilter === f.value ? "var(--color-active-highlight)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
                   >
                     {f.label}
                     {dotCount > 0 && (
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
                     )}
                     {activeFilter === f.value && (
-                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-secondary-accent)" }} />
+                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-active-highlight)" }} />
                     )}
                   </button>
                 );
@@ -470,6 +470,8 @@ function Recurring() {
           </div>
           </div>
 
+          <div className="flex-1 overflow-y-auto">
+
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-secondary-accent)" }} />
@@ -558,9 +560,10 @@ function Recurring() {
               </div>
             ));
           })()}
+          </div>
 
           {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 px-1">
+            <div className="flex justify-between items-center mt-2 px-1 shrink-0">
               <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {todayCount} ready
               </span>

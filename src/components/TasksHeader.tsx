@@ -9,7 +9,7 @@ type Props = {
 
 export default function TasksHeader({ isAuthenticated, onNewTask }: Props) {
   return (
-    <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "6px", height: "38px" }}>
+    <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "22px", height: "38px" }}>
       <CategoryCapsTooltip variant="regular">
         <div
           tabIndex={0}

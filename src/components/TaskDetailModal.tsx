@@ -152,16 +152,9 @@ export default function TaskDetailModal({
     if (!editTitle.trim()) { setEditError("Title is required."); return; }
     if (mustReschedule) {
       const today = todayMidnight();
-      if (task.isRecurring) {
-        if (!editDueDate || editDueDate < today) {
-          setEditError("Due date cannot be in the past.");
-          return;
-        }
-      } else {
-        if (!editDueDate || editDueDate <= today) {
-          setEditError("Due date must be after today.");
-          return;
-        }
+      if (!editDueDate || editDueDate < today) {
+        setEditError("Due date cannot be in the past.");
+        return;
       }
     }
     if (!onSave) return;
