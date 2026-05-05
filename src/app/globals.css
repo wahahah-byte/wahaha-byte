@@ -47,9 +47,11 @@
   --color-active-highlight: #f3ecce;
   --color-active-highlight-bg: rgba(243, 236, 206, 0.09);
   --color-active-highlight-border: rgba(243, 236, 206, 0.28);
+  --color-on-active-highlight: #1a1408;
   --color-active-highlight-alt: #cfc0eb;
   --color-active-highlight-alt-bg: rgba(207, 192, 235, 0.1);
   --color-active-highlight-alt-border: rgba(207, 192, 235, 0.32);
+  --color-on-active-highlight-alt: #1a1a2e;
 
   --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.55);
   --shadow-header: 0 4px 24px rgba(0, 0, 0, 0.45);
@@ -99,9 +101,11 @@
   --color-active-highlight: #8a7855;
   --color-active-highlight-bg: rgba(138, 120, 85, 0.1);
   --color-active-highlight-border: rgba(138, 120, 85, 0.3);
+  --color-on-active-highlight: #ffffff;
   --color-active-highlight-alt: #6e5ca8;
   --color-active-highlight-alt-bg: rgba(110, 92, 168, 0.1);
   --color-active-highlight-alt-border: rgba(110, 92, 168, 0.32);
+  --color-on-active-highlight-alt: #ffffff;
 
   --shadow-popover: 0 8px 24px rgba(15, 22, 38, 0.12), 0 1px 3px rgba(15, 22, 38, 0.06);
   --shadow-header: 0 1px 0 rgba(0, 0, 0, 0.06), 0 2px 12px rgba(0, 0, 0, 0.04);
@@ -339,6 +343,7 @@ body {
   --color-active-highlight: var(--color-active-highlight-alt);
   --color-active-highlight-bg: var(--color-active-highlight-alt-bg);
   --color-active-highlight-border: var(--color-active-highlight-alt-border);
+  --color-on-active-highlight: var(--color-on-active-highlight-alt);
 }
 
 .pixel-btn {

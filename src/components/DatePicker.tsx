@@ -61,7 +61,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
         style={{
           background: "var(--color-input)",
           color: value ? "var(--color-input-fg)" : "var(--color-fg-subtle)",
-          border: `1px solid ${showCalendar ? "var(--color-accent)" : "var(--color-border)"}`,
+          border: `1px solid ${showCalendar ? "var(--color-active-highlight)" : "var(--color-border)"}`,
           borderRadius: "3px",
         }}
       >
@@ -94,7 +94,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                 className="text-[11px] tracking-widest uppercase cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); setShowYearSelect((v) => !v); }}
                 style={{ color: "var(--color-fg-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-accent)"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-active-highlight)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-fg-muted)"; }}
               >
                 {calYear}
@@ -138,14 +138,15 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                         onClick={() => { setCalYear(yr); setShowYearSelect(false); }}
                         className="text-center py-2 px-2 text-[11px] transition-colors cursor-pointer"
                         style={{
-                          color: isSelected ? "var(--color-on-accent)" : isCurrentYear ? "var(--color-accent)" : "var(--color-fg-muted)",
-                          background: isSelected ? "var(--color-accent)" : "transparent",
+                          color: isSelected || isCurrentYear ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
+                          background: "transparent",
                           fontWeight: isSelected || isCurrentYear ? 600 : 400,
                           borderRadius: "2px",
                           border: "none",
+                          boxShadow: isSelected ? "inset 0 0 0 1px var(--color-active-highlight)" : "none",
                         }}
                         onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.color = "var(--color-fg)"; }}
-                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.color = isCurrentYear ? "var(--color-accent)" : "var(--color-fg-muted)"; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.color = isCurrentYear ? "var(--color-active-highlight)" : "var(--color-fg-muted)"; }}
                       >
                         {yr}
                       </button>
@@ -167,7 +168,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                 disabled={yearPage === today.getFullYear() - 1}
                 className="mt-2 w-full text-[9px] tracking-widest uppercase transition-colors cursor-pointer py-1 disabled:opacity-30 disabled:cursor-default"
                 style={{ color: "var(--color-fg-subtle)", background: "transparent", border: "none" }}
-                onMouseEnter={(e) => { if (yearPage !== today.getFullYear() - 1) e.currentTarget.style.color = "var(--color-accent)"; }}
+                onMouseEnter={(e) => { if (yearPage !== today.getFullYear() - 1) e.currentTarget.style.color = "var(--color-active-highlight)"; }}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
               >
                 Today
@@ -209,14 +210,15 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                   }}
                   className="text-center py-2 sm:py-1 text-xs sm:text-[11px] transition-colors cursor-pointer disabled:pointer-events-none"
                   style={{
-                    color: day === null ? "transparent" : isPast ? "var(--color-fg-subtle)" : isSelected ? "var(--color-on-accent)" : isToday ? "var(--color-accent)" : "var(--color-fg-muted)",
-                    background: isSelected ? "var(--color-accent)" : "transparent",
+                    color: day === null ? "transparent" : isPast ? "var(--color-fg-subtle)" : isSelected || isToday ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
+                    background: "transparent",
                     fontWeight: isSelected || isToday ? 600 : 400,
                     borderRadius: "2px",
                     border: "none",
+                    boxShadow: isSelected ? "inset 0 0 0 1px var(--color-active-highlight)" : "none",
                   }}
                   onMouseEnter={(e) => { if (day && !isSelected && !isPast) e.currentTarget.style.color = "var(--color-fg)"; }}
-                  onMouseLeave={(e) => { if (day && !isSelected && !isPast) e.currentTarget.style.color = isToday ? "var(--color-accent)" : "var(--color-fg-muted)"; }}
+                  onMouseLeave={(e) => { if (day && !isSelected && !isPast) e.currentTarget.style.color = isToday ? "var(--color-active-highlight)" : "var(--color-fg-muted)"; }}
                 >
                   {day ?? ""}
                 </button>
