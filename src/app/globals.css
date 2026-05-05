@@ -130,7 +130,7 @@ body {
 
 .task-row-inner {
   background: var(--color-surface);
-  transition: transform 0.2s ease-out, opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
+  transition: transform 0.32s cubic-bezier(0.32, 1.4, 0.5, 1), opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
 }
 @media (hover: hover) {
   .task-row-wrapper:hover .task-row-inner {

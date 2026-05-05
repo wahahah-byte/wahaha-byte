@@ -6,6 +6,14 @@ import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, i
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import ShatterEffect from "@/components/ShatterEffect";
 
+// iOS-style rubber-band damping: maps any |x| asymptotically to RUBBER_C.
+// Small excess feels nearly linear; large excess approaches RUBBER_C.
+const RUBBER_C = 60;
+function rubberBand(x: number): number {
+  const abs = Math.abs(x);
+  return Math.sign(x) * (abs * RUBBER_C) / (abs + RUBBER_C);
+}
+
 interface TaskRowProps {
   task: TaskDto;
   activeFilter: string;
@@ -145,7 +153,16 @@ export default function TaskRow({
     drag.lastX = t.clientX;
     drag.lastT = now;
 
-    const offset = Math.max(-drag.panelWidth, Math.min(0, drag.startOffset + dx));
+    const raw = drag.startOffset + dx;
+    let offset: number;
+    if (raw < -drag.panelWidth) {
+      const excess = raw + drag.panelWidth; // negative
+      offset = -drag.panelWidth + rubberBand(excess);
+    } else if (raw > 0) {
+      offset = rubberBand(raw);
+    } else {
+      offset = raw;
+    }
     const inner = innerRef.current;
     if (inner) {
       inner.style.transition = "none";
