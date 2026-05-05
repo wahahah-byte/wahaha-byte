@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
 import MobileNav from "@/components/MobileNav";
+import ThemeToggle from "@/components/ThemeToggle";
 import { PointsProvider } from "@/context/PointsContext";
 import { ToastProvider, ToastBanner } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -69,7 +70,10 @@ export default function RootLayout({
             <HeaderNav />
           </div>
 
-          <AuthHeader />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            <AuthHeader />
+          </div>
         </header>
         <ToastBanner />
         {children}

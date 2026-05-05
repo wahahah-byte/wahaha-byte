@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
-import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 
 export default function AuthHeader() {
@@ -17,7 +16,6 @@ export default function AuthHeader() {
     balance, username, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
     setBalance, setUsername, setRecurringSubmittedToday, setDailySubmitted,
   } = usePoints();
-  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     setIsMounted(true);
@@ -145,25 +143,6 @@ export default function AuthHeader() {
                 );
               })()}
               <div className="py-1">
-                <button
-                  onClick={toggleTheme}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors"
-                  style={{ color: "var(--color-fg-muted)", background: "transparent" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; e.currentTarget.style.color = "var(--color-fg)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-fg-muted)"; }}
-                >
-                  <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-                  {theme === "dark" ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="4" />
-                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                    </svg>
-                  )}
-                </button>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
