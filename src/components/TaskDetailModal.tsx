@@ -67,6 +67,11 @@ function fmtLocalDate(dateStr: string | null) {
 function fmtFull(dateStr: string | null) {
   if (!dateStr) return "—";
   let s = dateStr.replace(/(\.\d{3})\d+/, "$1");
+  if (!s.includes("T")) {
+    return parseDateOnly(s).toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+  }
   if (!/Z|[+-]\d{2}:?\d{2}$/.test(s)) s += "Z";
   const d = new Date(s);
   if (isNaN(d.getTime())) return "—";
@@ -391,8 +396,8 @@ export default function TaskDetailModal({
               {task.isRecurring && task.recurrenceRule && (
                 <Row label="Recurrence">
                   <div className="flex items-center gap-1.5">
-                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", lineHeight: 1 }}>↻</span>
-                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
+                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", lineHeight: 1 }}>↻</span>
+                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
                       {task.recurrenceRule.charAt(0).toUpperCase() + task.recurrenceRule.slice(1)}
                     </span>
                   </div>
@@ -403,9 +408,9 @@ export default function TaskDetailModal({
                 <Row label="Streak">
                   <div className="flex items-center gap-1.5">
                     <span style={{ fontSize: "12px" }}>🔥</span>
-                    <span style={{ color: "var(--color-secondary-accent)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
                       {currentStreakCount} &nbsp;
-                      <span style={{ color: "rgba(167,139,250,0.5)", fontWeight: 400 }}>
+                      <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontWeight: 400 }}>
                         / best {longestStreakCount}
                       </span>
                     </span>
@@ -467,12 +472,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onStart}
                   disabled={isActing}
-                  color="var(--color-secondary-accent)"
-                  hoverBg="rgba(167,139,250,0.12)"
+                  color="var(--color-active-highlight)"
+                  hoverBg="var(--color-active-highlight-bg)"
                   label="Start"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-secondary-accent)" }} />
+                      <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-active-highlight)" }} />
                     </svg>
                   }
                 />
@@ -482,12 +487,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onCheckIn}
                   disabled={isActing}
-                  color="var(--color-secondary-accent)"
-                  hoverBg="rgba(167,139,250,0.12)"
+                  color="var(--color-active-highlight-alt)"
+                  hoverBg="var(--color-active-highlight-alt-bg)"
                   label="Check In"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   }
                 />

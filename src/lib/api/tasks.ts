@@ -20,6 +20,7 @@ export interface TaskDto {
   currentStreakCount?: number;
   longestStreakCount?: number;
   lastCheckInDate?: string | null;
+  isArchived?: boolean;
 }
 
 export interface CreateTaskRequest {
@@ -57,6 +58,7 @@ export interface TaskFilterParams {
   category?: string;
   isRecurring?: boolean;
   submitted?: boolean;
+  isArchived?: boolean;
 }
 
 export interface PagedResult<T> {
@@ -125,4 +127,10 @@ export const tasksApi = {
 
   skipCycle: (id: string) =>
     authedPost<SkipCycleResponse>(`/api/tasks/${id}/skip-cycle`, {}),
+
+  archive: (id: string) =>
+    authedPatch<void>(`/api/tasks/${id}/archive`),
+
+  unarchive: (id: string) =>
+    authedPatch<void>(`/api/tasks/${id}/unarchive`),
 };

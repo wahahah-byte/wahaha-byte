@@ -50,20 +50,22 @@ export default function TasksHeader({ isAuthenticated, onNewTask }: Props) {
 
       <div style={{ flex: 1 }} />
 
-      <button
-        onClick={() => !isAuthenticated ? undefined : onNewTask()}
-        disabled={!isAuthenticated}
-        title={!isAuthenticated ? "Sign in to create tasks" : undefined}
-        className="pixel-btn"
-        style={{
-          fontSize: "11px",
-          alignSelf: "center",
-          margin: "0 6px",
-          padding: "5px 14px",
-        }}
-      >
-        + New
-      </button>
+      <div className="hidden sm:flex items-center">
+        <button
+          onClick={() => !isAuthenticated ? undefined : onNewTask()}
+          disabled={!isAuthenticated}
+          title={!isAuthenticated ? "Sign in to create tasks" : undefined}
+          className="pixel-btn"
+          style={{
+            fontSize: "11px",
+            alignSelf: "center",
+            margin: "0 6px",
+            padding: "5px 14px",
+          }}
+        >
+          + New
+        </button>
+      </div>
     </div>
   );
 }

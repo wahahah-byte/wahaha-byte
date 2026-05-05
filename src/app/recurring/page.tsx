@@ -12,7 +12,7 @@ import { canCheckInNow, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
-import FilterMenu from "@/components/FilterMenu";
+import MobileActionBarRecurring from "@/components/MobileActionBarRecurring";
 
 const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 3, dueDate: "2026-04-29", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -243,7 +243,7 @@ function Recurring() {
                 }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                  fill="none" stroke="rgba(167,139,250,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  fill="none" style={{ stroke: "var(--color-fg)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12a9 9 0 1 1-3-6.7" />
                   <polyline points="21 4 21 10 15 10" />
                 </svg>
@@ -262,7 +262,7 @@ function Recurring() {
                 top: 0,
                 width: "160px",
                 height: "100%",
-                background: "repeating-linear-gradient(-60deg, transparent, transparent 4px, rgba(167,139,250,0.07) 4px, rgba(167,139,250,0.07) 8px)",
+                background: "repeating-linear-gradient(-60deg, transparent, transparent 4px, var(--color-border-hairline) 4px, var(--color-border-hairline) 8px)",
                 WebkitMaskImage: "linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)",
                 maskImage: "linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)",
               }} />
@@ -270,43 +270,29 @@ function Recurring() {
 
             <div style={{ flex: 1 }} />
 
-            <button
-              onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
-              title={!isAuthenticated ? "Sign in to create tasks" : undefined}
-              style={{
-                background: "transparent",
-                color: !isAuthenticated ? "rgba(167,139,250,0.35)" : "var(--color-secondary-accent)",
-                fontSize: "11px", letterSpacing: "0.2em", textTransform: "uppercase",
-                fontWeight: 600, padding: "0 20px",
-                cursor: !isAuthenticated ? "default" : "pointer",
-                borderLeft: "1px solid var(--color-border-hairline)",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={(e) => { if (!isAuthenticated) return; e.currentTarget.style.color = "var(--color-fg)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-secondary-accent)"; }}
-            >
-              + New
-            </button>
+            <div className="hidden sm:flex items-center">
+              <button
+                onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
+                disabled={!isAuthenticated}
+                title={!isAuthenticated ? "Sign in to create tasks" : undefined}
+                className="pixel-btn"
+                style={{
+                  fontSize: "11px",
+                  alignSelf: "center",
+                  margin: "0 6px",
+                  padding: "5px 14px",
+                }}
+              >
+                + New
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center mb-2 py-2 sm:py-0" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
-            <div className="sm:hidden">
-              <FilterMenu
-                filters={RECURRING_FILTERS}
-                activeFilter={activeFilter}
-                onChange={applyFilter}
-                getCount={(v) => tasks.filter((t) => tabMatches(t, v)).length}
-                badgeColor={(v) => {
-                  if (v === "today" && todayCount > 0) return "var(--color-secondary-accent)";
-                  if (v === "missed" && missedCount > 0) return "var(--color-danger)";
-                  return null;
-                }}
-              />
-            </div>
-            <div className="hidden sm:flex items-center">
+          <div className="hidden sm:flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
+            <div className="flex items-center">
               {RECURRING_FILTERS.map((f) => {
                 const dotCount = f.value === "today" ? todayCount : f.value === "missed" ? missedCount : 0;
-                const dotColor = f.value === "today" ? "var(--color-secondary-accent)" : "var(--color-danger)";
+                const dotColor = f.value === "today" ? "var(--color-active-highlight-alt)" : "var(--color-danger)";
                 return (
                   <button
                     key={f.value}
@@ -474,7 +460,7 @@ function Recurring() {
 
           {loading && (
             <div className="flex items-center justify-center py-20">
-              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-secondary-accent)" }} />
+              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-active-highlight-alt)" }} />
             </div>
           )}
 
@@ -485,7 +471,7 @@ function Recurring() {
                 <button
                   onClick={() => setShowNewTask(true)}
                   className="text-[10px] tracking-widest uppercase mt-2 cursor-pointer"
-                  style={{ color: "var(--color-secondary-accent)", background: "transparent", border: "1px solid rgba(167,139,250,0.4)", borderRadius: "3px", padding: "6px 14px" }}
+                  style={{ color: "var(--color-active-highlight-alt)", background: "transparent", border: "1px solid var(--color-active-highlight-alt-border)", borderRadius: "3px", padding: "6px 14px" }}
                 >
                   + Create one
                 </button>
@@ -516,12 +502,29 @@ function Recurring() {
             }
             if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
             return !loading && chunks.map((chunk, idx) => (
-              <div key={chunk.sep?.sepKey ?? `__chunk-${idx}`}>
+              <div
+                key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
+                style={{
+                  position: chunk.sep ? "relative" : undefined,
+                  marginTop: chunk.sep && idx > 0 ? "14px" : undefined,
+                }}
+              >
                 {chunk.sep && (
-                  <div className={`flex items-center gap-3 px-1 ${idx === 0 ? "mb-1" : "mt-2 mb-1"}`}>
-                    <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>{chunk.sep.label}</span>
-                    <div className="flex-1 h-px" style={{ background: "var(--color-border-hairline)" }} />
-                  </div>
+                  <span
+                    className="tracking-widest uppercase text-[9px]"
+                    style={{
+                      position: "absolute",
+                      top: "-6px",
+                      left: "10px",
+                      padding: "0 6px",
+                      background: "var(--color-bg)",
+                      color: "var(--color-fg-subtle)",
+                      lineHeight: 1,
+                      zIndex: 1,
+                    }}
+                  >
+                    {chunk.sep.label}
+                  </span>
                 )}
                 {chunk.tasks.length > 0 && (
                   <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
@@ -563,7 +566,7 @@ function Recurring() {
           </div>
 
           {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 px-1 shrink-0">
+            <div className="flex justify-between items-center mt-2 mb-5 sm:mb-4 px-1 shrink-0">
               <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {todayCount} ready
               </span>
@@ -574,6 +577,24 @@ function Recurring() {
           )}
         </div>
       </div>
+
+      <MobileActionBarRecurring
+        filters={RECURRING_FILTERS}
+        activeFilter={activeFilter}
+        onFilterChange={applyFilter}
+        getCount={(v) => tasks.filter((t) => tabMatches(t, v)).length}
+        badgeColor={(v) => {
+          if (v === "today" && todayCount > 0) return "var(--color-active-highlight-alt)";
+          if (v === "missed" && missedCount > 0) return "var(--color-danger)";
+          return null;
+        }}
+        sortMode={sortMode}
+        groupMode={groupMode}
+        onSortChange={setSortMode}
+        onGroupChange={setGroupMode}
+        onNewTask={() => setShowNewTask(true)}
+        isAuthenticated={isAuthenticated}
+      />
 
       {detailTask && (() => {
         const dt = detailTask;

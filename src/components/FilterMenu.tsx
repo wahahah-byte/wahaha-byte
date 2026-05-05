@@ -10,9 +10,10 @@ interface Props {
   onChange: (value: string) => void;
   getCount?: (value: string) => number;
   badgeColor?: (value: string) => string | null;
+  openAbove?: boolean;
 }
 
-export default function FilterMenu({ filters, activeFilter, onChange, getCount, badgeColor }: Props) {
+export default function FilterMenu({ filters, activeFilter, onChange, getCount, badgeColor, openAbove = false }: Props) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const active = filters.find((f) => f.value === activeFilter) ?? filters[0];
@@ -74,11 +75,13 @@ export default function FilterMenu({ filters, activeFilter, onChange, getCount, 
       {open && (
         <>
           <div
-            className="absolute filter-menu-anim"
+            className={`absolute ${openAbove ? "filter-menu-anim-up" : "filter-menu-anim"}`}
             role="menu"
             aria-label="Filter tasks"
             style={{
-              top: "calc(100% + 4px)",
+              ...(openAbove
+                ? { bottom: "calc(100% + 4px)" }
+                : { top: "calc(100% + 4px)" }),
               left: 0,
               zIndex: 20,
               minWidth: 200,

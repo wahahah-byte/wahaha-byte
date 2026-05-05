@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Tasks", activeColor: "var(--color-active-highlight)" },
   { href: "/recurring", label: "Recurring", activeColor: "var(--color-active-highlight-alt)" },
+  { href: "/archive", label: "Archive", activeColor: "var(--color-accent)" },
 ];
 
 export default function HeaderNav() {

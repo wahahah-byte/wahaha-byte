@@ -5,6 +5,7 @@ import { TaskDto } from "@/lib/api/tasks";
 import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import BankBurstEffect from "@/components/BankBurstEffect";
+import { useTheme } from "@/context/ThemeContext";
 
 // iOS-style rubber-band damping: maps any |x| asymptotically to RUBBER_C.
 // Small excess feels nearly linear; large excess approaches RUBBER_C.
@@ -35,14 +36,18 @@ interface TaskRowProps {
   onSkip: (task: TaskDto) => void;
   onToggleSelect: (id: string) => void;
   onOpenDetail: (task: TaskDto) => void;
+  onArchive?: (task: TaskDto) => void;
+  onUnarchive?: (task: TaskDto) => void;
 }
 
 export default function TaskRow({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
-  onSkip, onToggleSelect, onOpenDetail,
+  onSkip, onToggleSelect, onOpenDetail, onArchive, onUnarchive,
 }: TaskRowProps) {
+  const { theme } = useTheme();
+  const isLightTheme = theme === "light";
   const isInProgress = task.status === "in_progress";
   const isCompleted = task.status === "completed";
   const isGreyedOut = activeFilter === "pending" && (
@@ -303,17 +308,17 @@ export default function TaskRow({
               disabled={isAdvancing || !eligible}
               title={eligible ? "Check In" : "Not yet available"}
               style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: eligible ? "pointer" : "not-allowed", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing || !eligible ? 0.3 : 1 }}
-              onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "rgba(167,139,250,0.15)"; }}
+              onMouseEnter={(e) => { if (eligible) e.currentTarget.style.background = "var(--color-active-highlight-alt-bg)"; }}
               onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
             >
               {eligible ? (
                 <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
-                  <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ) : (
                 <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
-                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.2" fill="none" />
-                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" style={{ stroke: "var(--color-secondary-accent)" }} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.2" fill="none" />
+                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.2" strokeLinecap="round" fill="none" />
                 </svg>
               )}
             </button>
@@ -322,8 +327,8 @@ export default function TaskRow({
 
         {task.status === "pending" && !task.isRecurring && !isGreyedOut && (() => {
           const overdueRegular = isOverdue(task.dueDate);
-          const startColor = overdueRegular ? "var(--color-danger)" : "var(--color-secondary-accent)";
-          const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "rgba(167,139,250,0.15)";
+          const startColor = overdueRegular ? "var(--color-danger)" : "var(--color-active-highlight)";
+          const hoverBg = overdueRegular ? "rgba(239,68,68,0.15)" : "var(--color-active-highlight-bg)";
           return (
             <button
               onClick={() => overdueRegular && onRestartOverdue ? onRestartOverdue(task) : onAdvance(task)}
@@ -383,6 +388,38 @@ export default function TaskRow({
             <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
               <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" />
               <polyline points="4,4.5 1.5,2 4,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </button>
+        )}
+
+        {onArchive && isCompleted && !task.isArchived && (
+          <button
+            onClick={() => onArchive(task)}
+            title="Archive"
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
+          >
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+              <rect x="1" y="1.5" width="8" height="2" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" fill="none" />
+              <path d="M2 3.5V8.5H8V3.5" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" fill="none" strokeLinejoin="round" />
+              <line x1="4" y1="5.5" x2="6" y2="5.5" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+
+        {onUnarchive && task.isArchived && (
+          <button
+            onClick={() => onUnarchive(task)}
+            title="Unarchive"
+            style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(91,184,224,0.15)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
+          >
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+              <rect x="1" y="6.5" width="8" height="2" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" fill="none" />
+              <path d="M2 6.5V1.5H8V6.5" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" fill="none" strokeLinejoin="round" />
+              <polyline points="3.5,4 5,2.5 6.5,4" style={{ stroke: "var(--color-accent)" }} strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         )}
@@ -460,25 +497,23 @@ export default function TaskRow({
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
               {task.category && (() => {
                 const cc = CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)";
+                const tagColor = isLightTheme ? `color-mix(in oklab, ${cc}, black 60%)` : cc;
+                const tagBg = isLightTheme ? `color-mix(in srgb, ${cc} 45%, white)` : `${cc}18`;
+                const tagBorder = isLightTheme ? `color-mix(in srgb, ${cc} 70%, white)` : `${cc}40`;
                 return (
                   <span style={{
                     fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase",
-                    color: cc,
-                    background: `${cc}18`,
-                    border: `1px solid ${cc}40`,
+                    color: tagColor,
+                    background: tagBg,
+                    border: `1px solid ${tagBorder}`,
                     borderRadius: "2px",
                     padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0,
+                    fontWeight: isLightTheme ? 600 : 400,
                   }}>
                     {task.category}
                   </span>
                 );
               })()}
-              {isInProgress && (
-                <>
-                  <span style={{ color: "var(--color-active-highlight)", fontSize: "8px", lineHeight: 1, flexShrink: 0 }}>█</span>
-                  <span style={{ color: "var(--color-active-highlight)", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Active</span>
-                </>
-              )}
               {task.status === "pending" && !task.isRecurring && penalizedTaskIds?.has(task.taskId) && (
                 <>
                   <span style={{ color: "rgba(239,68,68,0.35)", fontSize: "8px", flexShrink: 0 }}>·</span>
@@ -504,7 +539,7 @@ export default function TaskRow({
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
                   : task.recurrenceRule === "biweekly" ? "Biweekly"
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
-                const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "var(--color-secondary-accent)";
+                const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "var(--color-active-highlight-alt)";
                 const streakCount = task.currentStreakCount ?? 0;
                 return (
                   <>
@@ -515,30 +550,31 @@ export default function TaskRow({
                     {overdue && (
                       <>
                         <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
-                        <span style={{ color: "rgba(239,68,68,0.85)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>
-                          ⚠ OVERDUE
+                        <span
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: "4px",
+                            color: "rgba(239,68,68,0.9)", fontSize: "8px",
+                            letterSpacing: "0.15em", textTransform: "uppercase",
+                            fontWeight: isPenalized ? 700 : 600, flexShrink: 0,
+                            background: "rgba(239,68,68,0.10)",
+                            border: "1px solid rgba(239,68,68,0.25)",
+                            borderRadius: "2px", padding: "1px 5px",
+                          }}
+                          title={
+                            isPenalized
+                              ? `Overdue ${cyclesOverdue} cycle${cyclesOverdue === 1 ? "" : "s"}${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
+                              : `Overdue${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
+                          }
+                        >
+                          <span>⚠</span>
+                          <span>{isPenalized ? `×${cyclesOverdue}` : "OVERDUE"}</span>
+                          {streakCount >= 3 && (
+                            <>
+                              <span style={{ opacity: 0.45, fontWeight: 400 }}>·</span>
+                              <span style={{ letterSpacing: "0.05em", textTransform: "none" }}>🔥{streakCount}→0</span>
+                            </>
+                          )}
                         </span>
-                        {isPenalized && (
-                          <>
-                            <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
-                            <span style={{
-                              color: "rgba(239,68,68,0.9)", fontSize: "7px", letterSpacing: "0.15em",
-                              textTransform: "uppercase", fontWeight: 700, flexShrink: 0,
-                              background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)",
-                              borderRadius: "2px", padding: "1px 4px",
-                            }}>
-                              PENALIZED ×{cyclesOverdue}
-                            </span>
-                          </>
-                        )}
-                        {streakCount >= 3 && (
-                          <>
-                            <span style={{ color: "rgba(239,68,68,0.4)", fontSize: "8px", flexShrink: 0 }}>·</span>
-                            <span style={{ color: "rgba(239,68,68,0.75)", fontSize: "8px", letterSpacing: "0.1em", flexShrink: 0 }}>
-                              🔥{streakCount}→0
-                            </span>
-                          </>
-                        )}
                       </>
                     )}
                     {!overdue && isLocked && unlockInfo && (
@@ -622,9 +658,47 @@ export default function TaskRow({
 
       {slashingId === task.taskId && (
         <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
-          <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 6px rgba(239,68,68,1)) drop-shadow(0 0 14px rgba(239,68,68,0.6))" }}>
-            <line x1="1" y1="30" x2="99" y2="30" style={{ stroke: "var(--color-danger)" }} strokeWidth="2" strokeLinecap="round" className="slash-line" />
-            <line x1="1" y1="30" x2="99" y2="30" stroke="rgba(255,180,180,0.45)" strokeWidth="5" strokeLinecap="round" className="slash-line" />
+          <svg
+            viewBox="0 0 100 60"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 3px rgba(239,68,68,0.8))" }}
+          >
+            {Array.from({ length: 20 }).map((_, i) => {
+              const fills = ["#ff1f1f", "#dc2626", "#b91c1c", "#ff5252"];
+              const x = 2 + i * 5;
+              const yOffset = i % 4 === 0 ? -1 : i % 5 === 0 ? 1 : 0;
+              return (
+                <rect
+                  key={`s-${i}`}
+                  x={x}
+                  y={27 + yOffset}
+                  width={4}
+                  height={6}
+                  fill={fills[i % fills.length]}
+                  className="slash-pixel"
+                  style={{ animationDelay: `${i * 12}ms` }}
+                />
+              );
+            })}
+            {[
+              { x: 12, y: 22, c: "#ff5252" },
+              { x: 28, y: 36, c: "#b91c1c" },
+              { x: 46, y: 21, c: "#ff1f1f" },
+              { x: 64, y: 37, c: "#dc2626" },
+              { x: 82, y: 23, c: "#ff5252" },
+            ].map((p, i) => (
+              <rect
+                key={`d-${i}`}
+                x={p.x}
+                y={p.y}
+                width={2}
+                height={2}
+                fill={p.c}
+                className="slash-pixel"
+                style={{ animationDelay: `${80 + i * 30}ms` }}
+              />
+            ))}
           </svg>
         </div>
       )}
@@ -642,8 +716,8 @@ export default function TaskRow({
           className="recurring-pts-popup"
           style={{
             position: "absolute", right: "80px", top: "4px", zIndex: 30,
-            color: "var(--color-secondary-accent)", fontSize: "12px", fontWeight: 700,
-            letterSpacing: "0.06em", textShadow: "0 0 8px rgba(167,139,250,0.7)",
+            color: "var(--color-active-highlight-alt)", fontSize: "12px", fontWeight: 700,
+            letterSpacing: "0.06em", textShadow: "0 0 8px var(--color-active-highlight-alt-bg)",
           }}
         >
           +{recurringPopup} pts
@@ -725,6 +799,32 @@ export default function TaskRow({
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <polyline points="4,4.5 1.5,2 4,0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </button>
+        )}
+        {onArchive && isCompleted && !task.isArchived && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onArchive(task); }}
+            title="Archive"
+            style={{ color: "var(--color-accent)" }}
+          >
+            <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+              <rect x="1" y="1.5" width="8" height="2" stroke="currentColor" strokeWidth="1" fill="none" />
+              <path d="M2 3.5V8.5H8V3.5" stroke="currentColor" strokeWidth="1" fill="none" strokeLinejoin="round" />
+              <line x1="4" y1="5.5" x2="6" y2="5.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+        {onUnarchive && task.isArchived && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onUnarchive(task); }}
+            title="Unarchive"
+            style={{ color: "var(--color-accent)" }}
+          >
+            <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+              <rect x="1" y="6.5" width="8" height="2" stroke="currentColor" strokeWidth="1" fill="none" />
+              <path d="M2 6.5V1.5H8V6.5" stroke="currentColor" strokeWidth="1" fill="none" strokeLinejoin="round" />
+              <polyline points="3.5,4 5,2.5 6.5,4" stroke="currentColor" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         )}

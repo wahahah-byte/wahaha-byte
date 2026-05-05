@@ -1,40 +1,76 @@
 "use client";
 
 import { useState } from "react";
-import type { GroupMode, SortMode } from "@/lib/taskList";
+import FilterMenu from "@/components/FilterMenu";
 
-type Props = {
-  sortMode: SortMode;
-  groupMode: GroupMode;
-  onSortChange: (mode: SortMode) => void;
-  onGroupChange: (mode: GroupMode) => void;
-  openAbove?: boolean;
-};
+type Filter = { label: string; shortLabel: string; value: string };
 
-const SORT_OPTIONS: [SortMode, string][] = [
-  ["due", "Due Date"],
+export type RecurringSortMode = "due" | "streak" | "priority" | "title" | "points";
+export type RecurringGroupMode = "none" | "frequency" | "category";
+
+interface Props {
+  filters: readonly Filter[];
+  activeFilter: string;
+  onFilterChange: (value: string) => void;
+  getCount?: (value: string) => number;
+  badgeColor?: (value: string) => string | null;
+  sortMode: RecurringSortMode;
+  groupMode: RecurringGroupMode;
+  onSortChange: (mode: RecurringSortMode) => void;
+  onGroupChange: (mode: RecurringGroupMode) => void;
+  onNewTask: () => void;
+  isAuthenticated: boolean;
+}
+
+const SORT_OPTIONS: [RecurringSortMode, string][] = [
+  ["due", "Next"],
+  ["streak", "Streak"],
   ["priority", "Priority"],
   ["title", "Title"],
   ["points", "Points"],
 ];
 
-const GROUP_OPTIONS: [GroupMode, string][] = [
+const GROUP_OPTIONS: [RecurringGroupMode, string][] = [
   ["none", "None"],
-  ["due", "Due Date"],
+  ["frequency", "Frequency"],
   ["category", "Category"],
 ];
 
-const sortLabel = (m: SortMode) =>
-  m === "due" ? "Sort" : m === "priority" ? "Priority" : m === "title" ? "Title" : "Points";
-const groupLabel = (m: GroupMode) =>
-  m === "due" ? "Due Date" : m === "category" ? "Category" : "Group";
+const sortLabel = (m: RecurringSortMode) =>
+  m === "due" ? "Sort" : m === "streak" ? "Streak" : m === "priority" ? "Priority" : m === "title" ? "Title" : "Points";
+const groupLabel = (m: RecurringGroupMode) =>
+  m === "frequency" ? "Frequency" : m === "category" ? "Category" : "Group";
 
-export default function TaskListControls({ sortMode, groupMode, onSortChange, onGroupChange, openAbove = false }: Props) {
+export default function MobileActionBarRecurring({
+  filters, activeFilter, onFilterChange, getCount, badgeColor,
+  sortMode, groupMode, onSortChange, onGroupChange,
+  onNewTask, isAuthenticated,
+}: Props) {
   const [showSort, setShowSort] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
 
   return (
-    <>
+    <div
+      className="fixed left-0 right-0 sm:hidden flex items-center gap-2 px-3"
+      style={{
+        bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
+        height: "52px",
+        background: "var(--color-header)",
+        borderTop: "1px solid var(--color-border-soft)",
+        boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",
+        zIndex: 35,
+      }}
+    >
+      <FilterMenu
+        filters={filters}
+        activeFilter={activeFilter}
+        onChange={onFilterChange}
+        getCount={getCount}
+        badgeColor={badgeColor}
+        openAbove
+      />
+      <div className="flex-1" />
+
       <div className="relative mb-px mr-1">
         {showSort && <div className="fixed inset-0 z-[15]" onClick={() => setShowSort(false)} />}
         <button
@@ -60,7 +96,7 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           </svg>
         </button>
         {showSort && (
-          <Menu openAbove={openAbove}>
+          <Menu>
             {SORT_OPTIONS.map(([value, label]) => (
               <MenuItem
                 key={value}
@@ -72,6 +108,7 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           </Menu>
         )}
       </div>
+
       <div className="relative mb-px mr-0.5">
         {showGroup && <div className="fixed inset-0 z-[15]" onClick={() => setShowGroup(false)} />}
         <button
@@ -97,7 +134,7 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           </svg>
         </button>
         {showGroup && (
-          <Menu openAbove={openAbove}>
+          <Menu>
             {GROUP_OPTIONS.map(([value, label]) => (
               <MenuItem
                 key={value}
@@ -109,18 +146,26 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           </Menu>
         )}
       </div>
-    </>
+
+      <button
+        onClick={() => !isAuthenticated ? undefined : onNewTask()}
+        disabled={!isAuthenticated}
+        title={!isAuthenticated ? "Sign in to create tasks" : undefined}
+        className="pixel-btn"
+        style={{ fontSize: "11px", padding: "6px 14px" }}
+      >
+        + New
+      </button>
+    </div>
   );
 }
 
-function Menu({ children, openAbove }: { children: React.ReactNode; openAbove?: boolean }) {
+function Menu({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
         position: "absolute",
-        ...(openAbove
-          ? { bottom: "calc(100% + 4px)" }
-          : { top: "calc(100% + 4px)" }),
+        bottom: "calc(100% + 4px)",
         right: 0,
         zIndex: 20,
         background: "var(--color-surface)",

@@ -5,12 +5,13 @@ import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
 import DatePicker from "@/components/DatePicker";
 import { CATEGORIES, maxPointsFor } from "@/lib/constants";
 
-const RECURRENCE_RULES = [
-  { label: "Daily", value: "daily" },
-  { label: "Weekdays", value: "weekdays" },
-  { label: "Weekly", value: "weekly" },
-  { label: "Biweekly", value: "biweekly" },
-  { label: "Monthly", value: "monthly" },
+const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
+  { label: "Once", value: "once", rule: null },
+  { label: "Daily", value: "daily", rule: "daily" },
+  { label: "Wkdys", value: "weekdays", rule: "weekdays" },
+  { label: "Weekly", value: "weekly", rule: "weekly" },
+  { label: "Biweek", value: "biweekly", rule: "biweekly" },
+  { label: "Monthly", value: "monthly", rule: "monthly" },
 ];
 
 const PRIORITIES = [
@@ -87,7 +88,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-full max-w-md flex flex-col"
+        className={`w-full max-w-md flex flex-col${isRecurring ? " recurring-scope" : ""}`}
         style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", borderRadius: "4px", boxShadow: "var(--shadow-popover)" }}
       >
         <div
@@ -137,25 +138,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
             />
           </Field>
 
-          <Field label="Priority">
-            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
-              {PRIORITIES.map((p, i) => (
-                <button
-                  key={p.value}
-                  onClick={() => setPriority(p.value)}
-                  className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
-                  style={{
-                    background: priority === p.value ? `${p.color}18` : "transparent",
-                    color: priority === p.value ? p.color : "var(--color-fg-subtle)",
-                    borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
-                    fontWeight: priority === p.value ? 600 : 400,
-                    borderBottom: priority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+          <Field label={isRecurring ? "First Due" : "Due Date"}>
+            <DatePicker value={dueDate} onChange={setDueDate} />
           </Field>
 
           <div className="flex gap-3">
@@ -198,47 +182,57 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
             </Field>
           </div>
 
-          <Field label={isRecurring ? "First Due" : "Due Date"}>
-            <DatePicker value={dueDate} onChange={setDueDate} />
+          <Field label="Repeat">
+            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
+              {REPEAT_OPTIONS.map((opt, i) => {
+                const active = opt.rule === null ? !isRecurring : isRecurring && recurrenceRule === opt.rule;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      if (opt.rule === null) {
+                        setIsRecurring(false);
+                      } else {
+                        setIsRecurring(true);
+                        setRecurrenceRule(opt.rule);
+                      }
+                    }}
+                    className="flex-1 py-2 text-[9px] tracking-widest uppercase transition-colors cursor-pointer"
+                    style={{
+                      background: active ? "var(--color-active-highlight-bg)" : "transparent",
+                      color: active ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                      borderRight: i < REPEAT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+                      fontWeight: active ? 600 : 400,
+                      borderBottom: active ? "2px solid var(--color-active-highlight)" : "2px solid transparent",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
 
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>Recurring</span>
-            <button
-              onClick={() => setIsRecurring((v) => !v)}
-              className="relative w-10 h-[22px] cursor-pointer flex-shrink-0"
-              style={{
-                background: isRecurring ? "var(--color-active-highlight-bg)" : "var(--color-overlay-hover)",
-                border: `1px solid ${isRecurring ? "var(--color-active-highlight-border)" : "var(--color-border)"}`,
-                borderRadius: "999px",
-              }}
-            >
-              <span
-                className="absolute top-[3px] w-3.5 h-3.5 transition-all"
-                style={{
-                  left: isRecurring ? "calc(100% - 18px)" : "3px",
-                  background: isRecurring ? "var(--color-active-highlight)" : "var(--color-border-faint)",
-                  borderRadius: "50%",
-                }}
-              />
-            </button>
-          </div>
-
-          {isRecurring && (
-            <div className="relative">
-              <select
-                value={recurrenceRule}
-                onChange={(e) => setRecurrenceRule(e.target.value)}
-                className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-              >
-                {RECURRENCE_RULES.map((r) => (
-                  <option key={r.value} value={r.value} style={{ background: "var(--color-input)" }}>{r.label}</option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
+          <Field label="Priority">
+            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
+              {PRIORITIES.map((p, i) => (
+                <button
+                  key={p.value}
+                  onClick={() => setPriority(p.value)}
+                  className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
+                  style={{
+                    background: priority === p.value ? `${p.color}18` : "transparent",
+                    color: priority === p.value ? p.color : "var(--color-fg-subtle)",
+                    borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
+                    fontWeight: priority === p.value ? 600 : 400,
+                    borderBottom: priority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
-          )}
+          </Field>
 
           {error && (
             <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>

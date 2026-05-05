@@ -292,5 +292,16 @@ export function useTaskActions({
     ));
   }
 
-  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip };
+  async function handleArchive(task: TaskDto) {
+    const snapshot = task;
+    setTasks((prev) => prev.filter((t) => t.taskId !== task.taskId));
+    if (!isAuthenticated) return;
+    const { error } = await tasksApi.archive(task.taskId);
+    if (error) {
+      setTasks((prev) => [snapshot, ...prev]);
+      setError(error);
+    }
+  }
+
+  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive };
 }

@@ -48,6 +48,7 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     pageSize: 50,
     pageNumber: 1,
     isRecurring: false,
+    isArchived: false,
     status: initialStatus,
   });
 
@@ -64,7 +65,7 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     const hasToken = !!localStorage.getItem("auth_token");
     setIsAuthenticated(hasToken);
     if (!hasToken) {
-      setTasks(processPenalties(MOCK_TASKS.filter((t) => !t.isRecurring)));
+      setTasks(processPenalties(MOCK_TASKS.filter((t) => !t.isRecurring && !t.isArchived)));
       setLoading(false);
     }
   }, []);

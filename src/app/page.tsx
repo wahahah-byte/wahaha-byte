@@ -12,7 +12,7 @@ import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
 import TasksHeader from "@/components/TasksHeader";
 import UnsubmittedSummary from "@/components/UnsubmittedSummary";
-import FilterMenu from "@/components/FilterMenu";
+import MobileActionBar from "@/components/MobileActionBar";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
@@ -40,6 +40,7 @@ function Home() {
   const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [sortMode, setSortMode] = useState<SortMode>("due");
+  const [uncompletedCollapsed, setUncompletedCollapsed] = useState(false);
 
   const { setUnsubmittedPoints } = usePoints();
   const submission = useTaskSubmission({ tasks, isAuthenticated, setError });
@@ -52,7 +53,7 @@ function Home() {
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
   } = submission;
 
-  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip } =
+  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive } =
     useTaskActions({
       tasks, setTasks, isAuthenticated, activeFilter,
       stagedTaskIds, setStagedTaskIds,
@@ -136,6 +137,15 @@ function Home() {
   const submitBarVisible = activeFilter === "completed" && selectedIds.size > 0;
 
   const listItems = buildListItems({ tasks, activeFilter, groupMode, sortMode, submittedTaskIds });
+  const allChunks = chunkListItems(listItems);
+  const completedSepIdx = allChunks.findIndex((c) => c.sep?.sepKey === "__sep-completed");
+  const hasCompletedChunk = completedSepIdx >= 0;
+  const showCollapseToggle = activeFilter === "all" && hasCompletedChunk;
+  const uncompletedChunks = hasCompletedChunk ? allChunks.slice(0, completedSepIdx) : allChunks;
+  const uncompletedCount = uncompletedChunks.reduce((s, c) => s + c.tasks.length, 0);
+  const visibleChunks = showCollapseToggle && uncompletedCollapsed
+    ? allChunks.slice(completedSepIdx)
+    : allChunks;
 
   const unsubmitted = tasks.filter((t) =>
     t.status === "completed" && !submittedTaskIds.has(t.taskId) && !t.pointsAwarded && t.submitted === false
@@ -159,17 +169,8 @@ function Home() {
           <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
             <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
 
-            <div className="flex items-center mb-2 py-2 sm:py-0" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
-              <div className="sm:hidden">
-                <FilterMenu
-                  filters={FILTERS}
-                  activeFilter={activeFilter}
-                  onChange={applyFilter}
-                  getCount={(v) => v === "all" ? tasks.length : tasks.filter((t) => t.status === v).length}
-                  badgeColor={(v) => (v === "completed" && unsubmitted.length > 0) ? "var(--color-warning)" : null}
-                />
-              </div>
-              <div className="hidden sm:flex items-center">
+            <div className="hidden sm:flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
+              <div className="flex items-center">
                 {FILTERS.map((f) => (
                   <button
                     key={f.value}
@@ -197,12 +198,12 @@ function Home() {
             </div>
 
             <div
-              className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
-              style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
+              className="grid text-[9px] tracking-widest uppercase px-4 py-2 select-none"
+              style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-subtle)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
             >
               <span>Name</span>
-              <span className="text-center">Due</span>
-              <span className="text-center">Points</span>
+              <span />
+              <span />
             </div>
           </div>
 
@@ -246,13 +247,60 @@ function Home() {
             </div>
           )}
 
-          {!loading && chunkListItems(listItems).map((chunk, idx) => (
-            <div key={chunk.sep?.sepKey ?? `__chunk-${idx}`}>
-              {chunk.sep && (
-                <div className={`flex items-center gap-3 px-1 ${idx === 0 ? "mb-1" : "mt-2 mb-1"}`}>
-                  <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>{chunk.sep.label}</span>
-                  <div className="flex-1 h-px" style={{ background: "var(--color-border-hairline)" }} />
+          {!loading && showCollapseToggle && (
+            <button
+              type="button"
+              onClick={() => setUncompletedCollapsed((v) => !v)}
+              className="flex items-center gap-3 px-4 mt-2 mb-5 w-full cursor-pointer"
+              style={{ background: "transparent", border: "none" }}
+              aria-expanded={!uncompletedCollapsed}
+            >
+              <span className="text-[11px] font-semibold tracking-widest uppercase flex items-center gap-1.5" style={{ color: "var(--color-fg-muted)" }}>
+                Active ({uncompletedCount})
+                <span style={{ display: "inline-block", transform: uncompletedCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+              </span>
+              <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
+            </button>
+          )}
+
+          {!loading && visibleChunks.map((chunk, idx) => {
+            const isSection = chunk.sep?.sepKey === "__sep-completed";
+            const hasGroupLabel = !!chunk.sep && !isSection;
+            return (
+            <div
+              key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
+              style={{
+                position: hasGroupLabel ? "relative" : undefined,
+                marginTop: hasGroupLabel && idx > 0 ? "14px" : undefined,
+              }}
+            >
+              {chunk.sep && isSection && (
+                <div className={`flex items-center gap-3 px-4 ${idx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
+                  <span
+                    className="tracking-widest uppercase text-[11px] font-semibold"
+                    style={{ color: "var(--color-fg-muted)" }}
+                  >
+                    {chunk.sep.label}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
                 </div>
+              )}
+              {hasGroupLabel && (
+                <span
+                  className="tracking-widest uppercase text-[9px]"
+                  style={{
+                    position: "absolute",
+                    top: "-6px",
+                    left: "10px",
+                    padding: "0 6px",
+                    background: "var(--color-bg)",
+                    color: "var(--color-fg-subtle)",
+                    lineHeight: 1,
+                    zIndex: 1,
+                  }}
+                >
+                  {chunk.sep!.label}
+                </span>
               )}
               {chunk.tasks.length > 0 && (
                 <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
@@ -282,6 +330,7 @@ function Home() {
                       onToggleSelect={toggleSelect}
                       onOpenDetail={setDetailTask}
                       onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
+                      onArchive={handleArchive}
                     />
                   ))}
                   <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
@@ -290,11 +339,12 @@ function Home() {
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
           </div>
 
           {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 px-1 shrink-0">
+            <div className="flex justify-between items-center mt-2 mb-5 sm:mb-4 px-1 shrink-0">
               <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
                 {tasks.filter((t) => t.status !== "completed").length} remaining
               </span>
@@ -305,6 +355,20 @@ function Home() {
           )}
         </div>
       </div>
+
+      <MobileActionBar
+        filters={FILTERS}
+        activeFilter={activeFilter}
+        onFilterChange={applyFilter}
+        getCount={(v) => v === "all" ? tasks.length : tasks.filter((t) => t.status === v).length}
+        badgeColor={(v) => (v === "completed" && unsubmitted.length > 0) ? "var(--color-warning)" : null}
+        sortMode={sortMode}
+        groupMode={groupMode}
+        onSortChange={setSortMode}
+        onGroupChange={setGroupMode}
+        onNewTask={() => setShowNewTask(true)}
+        isAuthenticated={isAuthenticated}
+      />
 
       <SubmitBar
         visible={submitBarVisible}

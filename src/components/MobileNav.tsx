@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const ITEMS = [
   { href: "/", label: "Tasks", match: (p: string) => p === "/" },
   { href: "/recurring", label: "Recurring", match: (p: string) => p === "/recurring" },
+  { href: "/archive", label: "Archive", match: (p: string) => p === "/archive" },
 ] as const;
 
 export default function MobileNav() {
@@ -41,7 +42,7 @@ export default function MobileNav() {
                 style={{ height: 2, background: "var(--color-active-highlight)" }}
               />
             )}
-            {item.label === "Tasks" ? <TasksIcon /> : <RecurringIcon />}
+            {item.label === "Tasks" ? <TasksIcon /> : item.label === "Recurring" ? <RecurringIcon /> : <ArchiveIcon />}
             <span style={{ fontSize: "9px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: isActive ? 600 : 500 }}>
               {item.label}
             </span>
@@ -70,6 +71,16 @@ function RecurringIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <polyline points="21 4 21 10 15 10" />
+    </svg>
+  );
+}
+
+function ArchiveIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <line x1="10" y1="12" x2="14" y2="12" />
     </svg>
   );
 }

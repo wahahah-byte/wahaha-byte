@@ -111,7 +111,7 @@ export default function AuthHeader() {
                       <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--color-track)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${regPct}%`, background: regCapped ? "var(--color-success)" : regPct >= 75 ? "var(--color-warning)" : "var(--color-accent)" }}
+                          style={{ width: `${regPct}%`, background: regCapped ? "var(--color-success)" : regPct >= 75 ? "var(--color-warning)" : "var(--color-active-highlight)" }}
                         />
                       </div>
                       {regCapped && (
@@ -132,7 +132,7 @@ export default function AuthHeader() {
                       <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--color-track)" }}>
                         <div
                           className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${recPct}%`, background: recCapped ? "var(--color-success)" : recPct >= 75 ? "var(--color-warning)" : "var(--color-secondary-accent)" }}
+                          style={{ width: `${recPct}%`, background: recCapped ? "var(--color-success)" : recPct >= 75 ? "var(--color-warning)" : "var(--color-active-highlight-alt)" }}
                         />
                       </div>
                       {recCapped && (

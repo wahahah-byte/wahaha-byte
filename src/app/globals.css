@@ -125,11 +125,19 @@ html, body {
   max-width: 100%;
 }
 
+/* Lock the document on task pages so only the inner task list scrolls.
+   Auth pages (login/register) don't render .task-page-shell, so they stay scrollable. */
+html:has(.task-page-shell),
+body:has(.task-page-shell) {
+  overflow: hidden;
+  height: 100dvh;
+}
+
 /* Constrains the task pages so only the task list scrolls.
-   Mobile: subtract auth header (51px) + mobile nav (56px) + iOS home indicator.
-   Desktop (≥ sm): no mobile nav, just subtract auth header. */
+   Mobile: subtract auth header (51px) + mobile action bar (52px) + mobile nav (56px) + iOS home indicator.
+   Desktop (≥ sm): no mobile bars, just subtract auth header. */
 .task-page-shell {
-  height: calc(100dvh - 51px - 56px - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - 51px - 52px - 56px - env(safe-area-inset-bottom, 0px));
 }
 @media (min-width: 640px) {
   .task-page-shell {
@@ -392,16 +400,39 @@ body {
   animation: filter-menu-in 0.15s cubic-bezier(0.2, 0, 0, 1) forwards;
   transform-origin: top left;
 }
-
-@keyframes sword-slash {
-  0%   { stroke-dashoffset: 105; opacity: 1; }
-  30%  { stroke-dashoffset: 0;   opacity: 1; }
-  65%  { stroke-dashoffset: 0;   opacity: 0.85; }
-  100% { stroke-dashoffset: 0;   opacity: 0; }
+@keyframes filter-menu-in-up {
+  from { opacity: 0; transform: translateY(4px) scaleY(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scaleY(1); }
 }
-.slash-line {
-  stroke-dasharray: 105;
-  animation: sword-slash 0.55s cubic-bezier(0.1, 0, 0.35, 1) forwards;
+.filter-menu-anim-up {
+  animation: filter-menu-in-up 0.15s cubic-bezier(0.2, 0, 0, 1) forwards;
+  transform-origin: bottom left;
+}
+
+@keyframes datepicker-sheet-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes datepicker-slide-from-right {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes datepicker-slide-from-left {
+  from { transform: translateX(-40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+.datepicker-slide-from-right { animation: datepicker-slide-from-right 0.2s cubic-bezier(0.2, 0, 0, 1); }
+.datepicker-slide-from-left  { animation: datepicker-slide-from-left  0.2s cubic-bezier(0.2, 0, 0, 1); }
+
+@keyframes pixel-slash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.slash-pixel {
+  opacity: 0;
+  animation: pixel-slash 0.36s steps(4, end) forwards;
 }
 
 
