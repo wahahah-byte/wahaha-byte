@@ -4,10 +4,10 @@
    anything still using inline hex stays dark-only until ported. */
 :root,
 [data-theme="dark"] {
-  --background: #0a0a0a;
+  --background: #1e1f22;
   --foreground: #ededed;
 
-  --color-bg: #0a0a0a;
+  --color-bg: #1e1f22;
   --color-fg: rgba(255, 255, 255, 0.92);
   --color-fg-muted: rgba(255, 255, 255, 0.55);
   --color-fg-subtle: rgba(255, 255, 255, 0.35);
@@ -130,7 +130,7 @@ body {
 
 .task-row-inner {
   background: var(--color-surface);
-  transition: transform 0.32s cubic-bezier(0.32, 1.4, 0.5, 1), opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
+  transition: transform 0.26s cubic-bezier(0.32, 1.1, 0.5, 1), opacity 0.15s ease-out, border-top-right-radius 0.3s ease-out, border-bottom-right-radius 0.3s ease-out;
 }
 @media (hover: hover) {
   .task-row-wrapper:hover .task-row-inner {
@@ -142,7 +142,7 @@ body {
 }
 .task-row-wrapper.task-row-phantom {
   position: relative;
-  height: 30px !important;
+  height: 18px !important;
   pointer-events: none;
   overflow: hidden;
 }
