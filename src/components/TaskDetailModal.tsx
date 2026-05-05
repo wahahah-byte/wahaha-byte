@@ -13,7 +13,7 @@ const PRIORITIES = [
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "var(--color-fg-muted)" },
-  in_progress: { label: "In Progress", color: "var(--color-accent)" },
+  in_progress: { label: "In Progress", color: "var(--color-active-highlight)" },
   completed:   { label: "Completed",   color: "var(--color-success)" },
 };
 
@@ -215,7 +215,7 @@ export default function TaskDetailModal({
             {isEditing && (
               <span
                 className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
-                style={{ color: "var(--color-accent)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "2px" }}
+                style={{ color: "var(--color-active-highlight)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "2px" }}
               >
                 Editing
               </span>
@@ -263,7 +263,7 @@ export default function TaskDetailModal({
                   border: "1px solid var(--color-border)",
                   borderRadius: "3px",
                 }}
-                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "var(--color-active-highlight)"; }}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </EditField>
@@ -276,7 +276,7 @@ export default function TaskDetailModal({
                 rows={2}
                 className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
                 style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </EditField>
@@ -371,10 +371,11 @@ export default function TaskDetailModal({
 
               <Row label="Points">
                 <div className="flex items-center gap-1">
-                  <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
-                    <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-accent)" }} opacity="0.9" />
+                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+                    <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                    <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
                   </svg>
-                  <span style={{ color: "var(--color-accent)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em" }}>
+                  <span style={{ color: "var(--color-warning)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em" }}>
                     {task.pointValue.toLocaleString()}
                   </span>
                 </div>
@@ -442,10 +443,8 @@ export default function TaskDetailModal({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                style={{ color: "var(--color-accent)", background: "rgba(91,184,224,0.08)", border: "1px solid rgba(91,184,224,0.3)", borderRadius: "3px" }}
-                onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(91,184,224,0.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(91,184,224,0.08)"; }}
+                className="pixel-btn"
+                style={{ fontSize: "10px", padding: "6px 12px" }}
               >
                 {isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
               </button>
@@ -459,8 +458,11 @@ export default function TaskDetailModal({
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                    <line x1="1" y1="1" x2="9" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="9" y1="1" x2="1" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
+                    <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
+                    <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <line x1="4.2" y1="4.5" x2="4.2" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
+                    <line x1="5.8" y1="4.5" x2="5.8" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
                   </svg>
                   Delete
                 </button>
@@ -472,12 +474,12 @@ export default function TaskDetailModal({
                 <ActionBtn
                   onClick={onStart}
                   disabled={isActing}
-                  color="var(--color-accent)"
-                  hoverBg="rgba(91,184,224,0.12)"
+                  color="var(--color-secondary-accent)"
+                  hoverBg="rgba(167,139,250,0.12)"
                   label="Start"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-accent)" }} />
+                      <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-secondary-accent)" }} />
                     </svg>
                   }
                 />
@@ -581,8 +583,11 @@ export default function TaskDetailModal({
                   label="Delete"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <line x1="1" y1="1" x2="9" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
-                      <line x1="9" y1="1" x2="1" y2="9" style={{ stroke: "var(--color-danger)" }} strokeWidth="1.5" strokeLinecap="round" />
+                      <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
+                      <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
+                      <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <line x1="4.2" y1="4.5" x2="4.2" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
+                      <line x1="5.8" y1="4.5" x2="5.8" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
                     </svg>
                   }
                 />
@@ -600,7 +605,7 @@ export default function TaskDetailModal({
             {task.taskId.slice(0, 8).toUpperCase()}
           </span>
           <span style={{ color: "var(--color-border-faint)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            {task.submitted ? "Filed" : "Unfiled"}
+            {task.submitted ? "Banked" : "Unbanked"}
           </span>
         </div>
       </div>

@@ -38,8 +38,9 @@ export default function SubmitBar({
             Pending Submission
           </span>
           <div className="flex items-center gap-1.5">
-            <svg width="8" height="10" viewBox="0 0 10 12" fill="none">
-              <polygon points="5,0 10,4 5,12 0,4" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
+            <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+              <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.9" />
+              <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.45" />
             </svg>
             <span style={{ color: "var(--color-warning)", fontSize: "13px", fontWeight: 600 }}>
               {selectedCount} task{selectedCount !== 1 ? "s" : ""} · {selectedPts.toLocaleString()} pts selected

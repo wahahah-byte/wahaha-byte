@@ -40,9 +40,9 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           onClick={() => { setShowGroup(false); setShowSort((v) => !v); }}
           className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
           style={{
-            color: sortMode !== "due" ? "var(--color-accent)" : "var(--color-fg-subtle)",
-            background: sortMode !== "due" ? "rgba(91,184,224,0.08)" : "transparent",
-            border: `1px solid ${sortMode !== "due" ? "rgba(91,184,224,0.3)" : "var(--color-border-hairline)"}`,
+            color: sortMode !== "due" ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+            background: sortMode !== "due" ? "var(--color-active-highlight-bg)" : "transparent",
+            border: `1px solid ${sortMode !== "due" ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
             borderRadius: "2px",
             position: "relative",
             zIndex: 16,
@@ -77,9 +77,9 @@ export default function TaskListControls({ sortMode, groupMode, onSortChange, on
           onClick={() => { setShowSort(false); setShowGroup((v) => !v); }}
           className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
           style={{
-            color: groupMode !== "none" ? "var(--color-accent)" : "var(--color-fg-subtle)",
-            background: groupMode !== "none" ? "rgba(91,184,224,0.08)" : "transparent",
-            border: `1px solid ${groupMode !== "none" ? "rgba(91,184,224,0.3)" : "var(--color-border-hairline)"}`,
+            color: groupMode !== "none" ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+            background: groupMode !== "none" ? "var(--color-active-highlight-bg)" : "transparent",
+            border: `1px solid ${groupMode !== "none" ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
             borderRadius: "2px",
             position: "relative",
             zIndex: 16,
@@ -142,7 +142,7 @@ function MenuItem({ active, onClick, label }: { active: boolean; onClick: () => 
         padding: "8px 12px",
         background: "transparent",
         border: "none",
-        color: active ? "var(--color-accent)" : "var(--color-fg-muted)",
+        color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
         fontSize: "9px",
         letterSpacing: "0.15em",
         textTransform: "uppercase",
@@ -151,7 +151,7 @@ function MenuItem({ active, onClick, label }: { active: boolean; onClick: () => 
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: active ? "var(--color-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
+      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: active ? "var(--color-active-highlight)" : "var(--color-border-faint)", display: "inline-block" }} />
       {label}
     </button>
   );

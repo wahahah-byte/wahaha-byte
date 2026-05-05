@@ -52,7 +52,7 @@ export default function RootLayout({
           className="flex items-center justify-between px-6 py-3"
           style={{
             background: "var(--color-header)",
-            borderTop: "2px solid var(--color-accent)",
+            borderTop: "2px solid var(--color-active-highlight)",
             borderBottom: "1px solid var(--color-border-soft)",
             boxShadow: "var(--shadow-header)",
             position: "sticky",

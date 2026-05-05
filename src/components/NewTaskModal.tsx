@@ -116,7 +116,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               placeholder="What needs to be done?"
               className="w-full px-3 py-2 text-sm outline-none placeholder-white/20"
               style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
             />
             <span className="text-[9px] leading-tight mt-1 block" style={{ color: "var(--color-fg-subtle)" }}>
@@ -132,7 +132,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               rows={2}
               className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
               style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
             />
           </Field>
@@ -181,7 +181,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   value={pointValue}
                   onChange={(e) => setPointValue(Number(e.target.value))}
                   className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "var(--color-input)", color: "var(--color-accent)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
+                  style={{ background: "var(--color-input)", color: "var(--color-active-highlight)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
                 >
                   {(isRecurring
                     ? [1, 2, 3, 4, 5]
@@ -190,13 +190,11 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                     <option key={v} value={v} style={{ background: "var(--color-input)" }}>{v}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "rgba(91,184,224,0.5)" }}>▾</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-active-highlight)", opacity: 0.6 }}>▾</span>
               </div>
-              {isRecurring ? (
-                <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(167,139,250,0.55)" }}>Max 5 pts</span>
-              ) : (
-                <span className="text-[9px] leading-tight mt-1 block" style={{ color: "rgba(91,184,224,0.55)" }}>Max {maxPointsFor(category)} pts</span>
-              )}
+              <span className="text-[9px] leading-tight mt-1 block" style={{ color: "var(--color-active-highlight)", opacity: 0.65 }}>
+                Max {isRecurring ? 5 : maxPointsFor(category)} pts
+              </span>
             </Field>
           </div>
 
@@ -210,8 +208,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               onClick={() => setIsRecurring((v) => !v)}
               className="relative w-10 h-[22px] cursor-pointer flex-shrink-0"
               style={{
-                background: isRecurring ? "rgba(91,184,224,0.15)" : "var(--color-overlay-hover)",
-                border: `1px solid ${isRecurring ? "var(--color-accent-border)" : "var(--color-border)"}`,
+                background: isRecurring ? "var(--color-active-highlight-bg)" : "var(--color-overlay-hover)",
+                border: `1px solid ${isRecurring ? "var(--color-active-highlight-border)" : "var(--color-border)"}`,
                 borderRadius: "999px",
               }}
             >
@@ -219,7 +217,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                 className="absolute top-[3px] w-3.5 h-3.5 transition-all"
                 style={{
                   left: isRecurring ? "calc(100% - 18px)" : "3px",
-                  background: isRecurring ? "var(--color-accent)" : "var(--color-border-faint)",
+                  background: isRecurring ? "var(--color-active-highlight)" : "var(--color-border-faint)",
                   borderRadius: "50%",
                 }}
               />
@@ -265,10 +263,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 py-2.5 text-xs tracking-widest uppercase font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}
-            onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-accent-bg)")}
+            className="pixel-btn flex-1 justify-center"
+            style={{ fontSize: "12px", padding: "10px 12px" }}
           >
             {submitting ? "Creating…" : "Create Task"}
           </button>

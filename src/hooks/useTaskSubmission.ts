@@ -46,7 +46,7 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
       const ids = [...selectedIds];
       setIsSubmitting(true);
       setFilingIds(new Set(ids));
-      const delay = Math.max(520, (ids.length - 1) * 35 + 520);
+      const delay = Math.max(900, (ids.length - 1) * 35 + 900);
       setTimeout(() => {
         setSubmittedTaskIds((prev) => new Set([...prev, ...ids]));
         setRecentlyFiledIds(new Set(ids));
@@ -91,7 +91,7 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
     }
 
     setFilingIds(new Set(succeededIds));
-    const delay = Math.max(520, (succeededIds.length - 1) * 35 + 520);
+    const delay = Math.max(900, (succeededIds.length - 1) * 35 + 900);
     setTimeout(() => {
       setSubmittedTaskIds((prev) => new Set([...prev, ...succeededIds]));
       setRecentlyFiledIds(new Set(succeededIds));

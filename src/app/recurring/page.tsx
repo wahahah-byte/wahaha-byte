@@ -219,7 +219,7 @@ function Recurring() {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
+      <div className="recurring-scope min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1 pb-[calc(56px+env(safe-area-inset-bottom,0px))] sm:pb-8">
           {!isAuthenticated && (
             <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
@@ -295,7 +295,6 @@ function Recurring() {
                 filters={RECURRING_FILTERS}
                 activeFilter={activeFilter}
                 onChange={applyFilter}
-                variant="secondary"
                 getCount={(v) => tasks.filter((t) => tabMatches(t, v)).length}
                 badgeColor={(v) => {
                   if (v === "today" && todayCount > 0) return "var(--color-secondary-accent)";
@@ -335,9 +334,9 @@ function Recurring() {
                 onClick={() => { setShowGroupMenu(false); setShowSortMenu((v) => !v); }}
                 className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
                 style={{
-                  color: sortMode !== "due" ? "var(--color-secondary-accent)" : "var(--color-fg-subtle)",
-                  background: sortMode !== "due" ? "rgba(167,139,250,0.08)" : "transparent",
-                  border: `1px solid ${sortMode !== "due" ? "rgba(167,139,250,0.3)" : "var(--color-border-hairline)"}`,
+                  color: sortMode !== "due" ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                  background: sortMode !== "due" ? "var(--color-active-highlight-bg)" : "transparent",
+                  border: `1px solid ${sortMode !== "due" ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
                   borderRadius: "2px",
                   position: "relative",
                   zIndex: 16,
@@ -377,7 +376,7 @@ function Recurring() {
                         padding: "8px 12px",
                         background: "transparent",
                         border: "none",
-                        color: sortMode === value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)",
+                        color: sortMode === value ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
                         fontSize: "9px",
                         letterSpacing: "0.15em",
                         textTransform: "uppercase",
@@ -386,7 +385,7 @@ function Recurring() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: sortMode === value ? "var(--color-secondary-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: sortMode === value ? "var(--color-active-highlight)" : "var(--color-border-faint)", display: "inline-block" }} />
                       {label}
                     </button>
                   ))}
@@ -401,9 +400,9 @@ function Recurring() {
                 onClick={() => { setShowSortMenu(false); setShowGroupMenu((v) => !v); }}
                 className="text-[9px] tracking-widest uppercase cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5"
                 style={{
-                  color: groupMode !== "none" ? "var(--color-secondary-accent)" : "var(--color-fg-subtle)",
-                  background: groupMode !== "none" ? "rgba(167,139,250,0.08)" : "transparent",
-                  border: `1px solid ${groupMode !== "none" ? "rgba(167,139,250,0.3)" : "var(--color-border-hairline)"}`,
+                  color: groupMode !== "none" ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                  background: groupMode !== "none" ? "var(--color-active-highlight-bg)" : "transparent",
+                  border: `1px solid ${groupMode !== "none" ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
                   borderRadius: "2px",
                   position: "relative",
                   zIndex: 16,
@@ -443,7 +442,7 @@ function Recurring() {
                         padding: "8px 12px",
                         background: "transparent",
                         border: "none",
-                        color: groupMode === value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)",
+                        color: groupMode === value ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
                         fontSize: "9px",
                         letterSpacing: "0.15em",
                         textTransform: "uppercase",
@@ -452,7 +451,7 @@ function Recurring() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-overlay-hover)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: groupMode === value ? "var(--color-secondary-accent)" : "var(--color-border-faint)", display: "inline-block" }} />
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: groupMode === value ? "var(--color-active-highlight)" : "var(--color-border-faint)", display: "inline-block" }} />
                       {label}
                     </button>
                   ))}
