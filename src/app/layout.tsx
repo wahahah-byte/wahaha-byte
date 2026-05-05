@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
+import MobileNav from "@/components/MobileNav";
 import { PointsProvider } from "@/context/PointsContext";
 import { ToastProvider, ToastBanner } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -72,6 +73,7 @@ export default function RootLayout({
         </header>
         <ToastBanner />
         {children}
+        <MobileNav />
         </ToastProvider>
         </PointsProvider>
         </ThemeProvider>

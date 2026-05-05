@@ -34,6 +34,8 @@
   --color-accent-bg-hover: #1e4d63;
   --color-accent-border: #1e5068;
   --color-on-accent: #0d1f28;
+  --color-secondary-accent-bg: #2a2240;
+  --color-secondary-accent-border: #4a3580;
   --color-row-greyed: #16171a;
   --color-row-greyed-hover: #1a1b1f;
 
@@ -78,6 +80,8 @@
   --color-accent-bg-hover: #cee5f1;
   --color-accent-border: #8cc6e0;
   --color-on-accent: #ffffff;
+  --color-secondary-accent-bg: #ece6fd;
+  --color-secondary-accent-border: #b8a8ed;
   --color-row-greyed: #e4e6ea;
   --color-row-greyed-hover: #dadce1;
 
@@ -286,6 +290,15 @@ body {
   animation: submit-btn-pulse 0.18s ease-out forwards;
 }
 
+@keyframes filter-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scaleY(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scaleY(1); }
+}
+.filter-menu-anim {
+  animation: filter-menu-in 0.15s cubic-bezier(0.2, 0, 0, 1) forwards;
+  transform-origin: top left;
+}
+
 @keyframes sword-slash {
   0%   { stroke-dashoffset: 105; opacity: 1; }
   30%  { stroke-dashoffset: 0;   opacity: 1; }
@@ -296,6 +309,7 @@ body {
   stroke-dasharray: 105;
   animation: sword-slash 0.55s cubic-bezier(0.1, 0, 0.35, 1) forwards;
 }
+
 
 @keyframes row-delete {
   0%   { opacity: 1;   max-height: 64px; }

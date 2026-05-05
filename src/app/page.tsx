@@ -12,6 +12,7 @@ import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
 import TasksHeader from "@/components/TasksHeader";
 import UnsubmittedSummary from "@/components/UnsubmittedSummary";
+import FilterMenu from "@/components/FilterMenu";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
@@ -145,7 +146,7 @@ function Home() {
     <>
       <div className="min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1"
+          className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1 pb-[calc(56px+env(safe-area-inset-bottom,0px))] sm:pb-8"
           style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
         >
           {!isAuthenticated && (
@@ -158,23 +159,34 @@ function Home() {
           <div style={{ position: "sticky", top: 51, zIndex: 20, background: "var(--color-bg)" }}>
             <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
 
-            <div className="flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
-              {FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  onClick={() => applyFilter(f.value)}
-                  className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                  style={{ color: activeFilter === f.value ? "var(--color-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
-                >
-                  {f.label}
-                  {f.value === "completed" && unsubmitted.length > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--color-warning)" }} />
-                  )}
-                  {activeFilter === f.value && (
-                    <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-accent)" }} />
-                  )}
-                </button>
-              ))}
+            <div className="flex items-center mb-2 py-2 sm:py-0" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
+              <div className="sm:hidden">
+                <FilterMenu
+                  filters={FILTERS}
+                  activeFilter={activeFilter}
+                  onChange={applyFilter}
+                  getCount={(v) => v === "all" ? tasks.length : tasks.filter((t) => t.status === v).length}
+                  badgeColor={(v) => (v === "completed" && unsubmitted.length > 0) ? "var(--color-warning)" : null}
+                />
+              </div>
+              <div className="hidden sm:flex items-center">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => applyFilter(f.value)}
+                    className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
+                    style={{ color: activeFilter === f.value ? "var(--color-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
+                  >
+                    {f.label}
+                    {f.value === "completed" && unsubmitted.length > 0 && (
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--color-warning)" }} />
+                    )}
+                    {activeFilter === f.value && (
+                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-accent)" }} />
+                    )}
+                  </button>
+                ))}
+              </div>
               <div className="flex-1" />
               <TaskListControls
                 sortMode={sortMode}

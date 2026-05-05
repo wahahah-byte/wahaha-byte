@@ -12,6 +12,7 @@ import { canCheckInNow, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
+import FilterMenu from "@/components/FilterMenu";
 
 const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 3, dueDate: "2026-04-29", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -219,7 +220,7 @@ function Recurring() {
   return (
     <>
       <div className="min-h-screen flex flex-col bg-scanlines" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-        <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1">
+        <div className="max-w-3xl w-full mx-auto px-4 py-8 flex flex-col flex-1 pb-[calc(56px+env(safe-area-inset-bottom,0px))] sm:pb-8">
           {!isAuthenticated && (
             <div className="flex items-center justify-between mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
               <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
@@ -288,27 +289,43 @@ function Recurring() {
             </button>
           </div>
 
-          <div className="flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
-            {RECURRING_FILTERS.map((f) => {
-              const dotCount = f.value === "today" ? todayCount : f.value === "missed" ? missedCount : 0;
-              const dotColor = f.value === "today" ? "var(--color-secondary-accent)" : "var(--color-danger)";
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => applyFilter(f.value)}
-                  className="px-2 sm:px-4 py-3 text-[11px] sm:text-xs tracking-wide sm:tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
-                  style={{ color: activeFilter === f.value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
-                >
-                  {f.label}
-                  {dotCount > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
-                  )}
-                  {activeFilter === f.value && (
-                    <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-secondary-accent)" }} />
-                  )}
-                </button>
-              );
-            })}
+          <div className="flex items-center mb-2 py-2 sm:py-0" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
+            <div className="sm:hidden">
+              <FilterMenu
+                filters={RECURRING_FILTERS}
+                activeFilter={activeFilter}
+                onChange={applyFilter}
+                variant="secondary"
+                getCount={(v) => tasks.filter((t) => tabMatches(t, v)).length}
+                badgeColor={(v) => {
+                  if (v === "today" && todayCount > 0) return "var(--color-secondary-accent)";
+                  if (v === "missed" && missedCount > 0) return "var(--color-danger)";
+                  return null;
+                }}
+              />
+            </div>
+            <div className="hidden sm:flex items-center">
+              {RECURRING_FILTERS.map((f) => {
+                const dotCount = f.value === "today" ? todayCount : f.value === "missed" ? missedCount : 0;
+                const dotColor = f.value === "today" ? "var(--color-secondary-accent)" : "var(--color-danger)";
+                return (
+                  <button
+                    key={f.value}
+                    onClick={() => applyFilter(f.value)}
+                    className="px-4 py-3 text-xs tracking-wider uppercase cursor-pointer transition-colors relative flex items-center gap-1.5 whitespace-nowrap"
+                    style={{ color: activeFilter === f.value ? "var(--color-secondary-accent)" : "var(--color-fg-muted)", background: "transparent", border: "none" }}
+                  >
+                    {f.label}
+                    {dotCount > 0 && (
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+                    )}
+                    {activeFilter === f.value && (
+                      <span className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "var(--color-secondary-accent)" }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex-1" />
             <div className="relative mb-px mr-1">
               {showSortMenu && (

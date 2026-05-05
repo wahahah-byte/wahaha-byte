@@ -13,7 +13,7 @@ export default function HeaderNav() {
   if (pathname === "/login" || pathname === "/register") return null;
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="hidden sm:flex items-center gap-1">
       {LINKS.map((l) => {
         const active = pathname === l.href;
         return (

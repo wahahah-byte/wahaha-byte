@@ -23,17 +23,17 @@ export const PRIORITY_DOT: Record<string, string> = {
 };
 
 export const FILTERS = [
-  { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "In Progress", value: "in_progress" },
-  { label: "Completed", value: "completed" },
+  { label: "All", shortLabel: "All", value: "all" },
+  { label: "Pending", shortLabel: "Pending", value: "pending" },
+  { label: "In Progress", shortLabel: "Active", value: "in_progress" },
+  { label: "Completed", shortLabel: "Done", value: "completed" },
 ];
 
 export const RECURRING_FILTERS = [
-  { label: "All", value: "all" },
-  { label: "Today", value: "today" },
-  { label: "Upcoming", value: "upcoming" },
-  { label: "Missed", value: "missed" },
+  { label: "All", shortLabel: "All", value: "all" },
+  { label: "Today", shortLabel: "Today", value: "today" },
+  { label: "Upcoming", shortLabel: "Upcoming", value: "upcoming" },
+  { label: "Missed", shortLabel: "Missed", value: "missed" },
 ];
 
 export const REGULAR_CAP = 200;
