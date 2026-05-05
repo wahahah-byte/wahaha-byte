@@ -84,6 +84,22 @@ export default function TaskRow({
     return () => ro.disconnect();
   }, []);
 
+  // Native non-passive touchmove listener: once the drag commits to horizontal,
+  // preventDefault tells the browser "JS owns this gesture" so it won't fire
+  // touchcancel and switch to vertical scroll mid-swipe.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const onTouchMoveNative = (e: TouchEvent) => {
+      const drag = dragRef.current;
+      if (drag && drag.axis === "horizontal") {
+        e.preventDefault();
+      }
+    };
+    wrapper.addEventListener("touchmove", onTouchMoveNative, { passive: false });
+    return () => wrapper.removeEventListener("touchmove", onTouchMoveNative);
+  }, []);
+
   function handleTouchStart(e: React.TouchEvent) {
     if (e.touches.length > 1) {
       dragRef.current = null;
