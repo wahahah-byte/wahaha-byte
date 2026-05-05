@@ -523,7 +523,7 @@ function Recurring() {
                   </div>
                 )}
                 {chunk.tasks.length > 0 && (
-                  <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", overflow: "hidden" }}>
+                  <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
                     <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
                       <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
                     </div>

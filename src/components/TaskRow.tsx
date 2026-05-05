@@ -60,13 +60,9 @@ export default function TaskRow({
   const hasError = errorIds?.has(task.taskId) ?? false;
 
   const [revealed, setRevealed] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const menuPopoverRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -254,50 +250,17 @@ export default function TaskRow({
     onOpenDetail(task);
   }
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onOutside(e: MouseEvent) {
-      if (
-        menuPopoverRef.current && !menuPopoverRef.current.contains(e.target as Node) &&
-        menuTriggerRef.current && !menuTriggerRef.current.contains(e.target as Node)
-      ) {
-        setMenuOpen(false);
-      }
-    }
-    function onEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
-    }
-    function onScroll() {
-      setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onOutside);
-    document.addEventListener("keydown", onEscape);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onOutside);
-      document.removeEventListener("keydown", onEscape);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [menuOpen]);
-
-  function openMenu(e: React.MouseEvent<HTMLButtonElement>) {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-    setMenuOpen(true);
-  }
-
-  const closeMenu = () => setMenuOpen(false);
   const eligibleCheckIn = task.isRecurring && canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
   const overdueRegular = !task.isRecurring && task.status === "pending" && isOverdue(task.dueDate);
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
     <div
       ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
-      style={{ position: "relative", height: "60px", touchAction: "pan-y", overflow: "hidden" }}
+      style={{ position: "relative", height: "60px", touchAction: "pan-y", overflow: "visible" }}
       data-revealed={revealed ? "true" : undefined}
-      data-menu-open={menuOpen ? "true" : undefined}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -677,73 +640,94 @@ export default function TaskRow({
         </div>
       )}
 
-      <button
-        ref={menuTriggerRef}
-        type="button"
-        className="row-menu-trigger"
-        aria-label="More actions"
-        onClick={openMenu}
-      >
-        ⋯
-      </button>
-
-      {menuOpen && menuPos && (
-        <div
-          ref={menuPopoverRef}
-          className="row-menu-popover"
-          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {task.status === "pending" && task.isRecurring && !isInProgress && (
-            overdueRecurring ? (
-              <button
-                onClick={() => { onRestartOverdue ? onRestartOverdue(task) : onSkip(task); closeMenu(); }}
-                disabled={isAdvancing}
-                style={{ "--menu-color": "var(--color-danger)" } as React.CSSProperties}
-              >RESUME</button>
-            ) : (
-              <button
-                onClick={eligibleCheckIn ? () => { onCheckIn(task); closeMenu(); } : undefined}
-                disabled={isAdvancing || !eligibleCheckIn}
-                style={{ "--menu-color": "var(--color-secondary-accent)" } as React.CSSProperties}
-              >{eligibleCheckIn ? "CHECK IN" : "LOCKED"}</button>
-            )
-          )}
-          {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
+      <div className="row-toolbar" onClick={stop}>
+        {task.status === "pending" && task.isRecurring && !isInProgress && (
+          overdueRecurring ? (
             <button
-              onClick={() => { (overdueRegular && onRestartOverdue) ? onRestartOverdue(task) : onAdvance(task); closeMenu(); }}
+              onClick={(e) => { e.stopPropagation(); onRestartOverdue ? onRestartOverdue(task) : onSkip(task); }}
               disabled={isAdvancing}
-              style={{ "--menu-color": overdueRegular ? "var(--color-danger)" : "var(--color-accent)" } as React.CSSProperties}
-            >{overdueRegular ? "OVERDUE" : "START"}</button>
-          )}
-          {isInProgress && (
+              title="Resume — reschedule to today"
+            >
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                <polygon points="2,1 9,5 2,9" fill="currentColor" />
+              </svg>
+            </button>
+          ) : (
             <button
-              onClick={() => { onPause(task); closeMenu(); }}
-              disabled={pausing === task.taskId}
-              style={{ "--menu-color": "var(--color-warning)" } as React.CSSProperties}
-            >PAUSE</button>
-          )}
-          {isInProgress && !isGreyedOut && (
-            <button
-              onClick={() => { onAdvance(task); closeMenu(); }}
-              disabled={isAdvancing}
-              style={{ "--menu-color": "var(--color-accent)" } as React.CSSProperties}
-            >DONE</button>
-          )}
-          {canUndo && !isGreyedOut && (
-            <button
-              onClick={() => { onAdvance(task); closeMenu(); }}
-              disabled={isAdvancing}
-              style={{ "--menu-color": "var(--color-warning)" } as React.CSSProperties}
-            >UNDO</button>
-          )}
+              onClick={eligibleCheckIn ? (e) => { e.stopPropagation(); onCheckIn(task); } : undefined}
+              disabled={isAdvancing || !eligibleCheckIn}
+              title={eligibleCheckIn ? "Check In" : "Not yet available"}
+            >
+              {eligibleCheckIn ? (
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                  <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                </svg>
+              )}
+            </button>
+          )
+        )}
+        {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
           <button
-            onClick={() => { onDelete(task.taskId); closeMenu(); }}
-            disabled={slashingId === task.taskId}
-            style={{ "--menu-color": "var(--color-danger)" } as React.CSSProperties}
-          >DELETE</button>
-        </div>
-      )}
+            onClick={(e) => { e.stopPropagation(); (overdueRegular && onRestartOverdue) ? onRestartOverdue(task) : onAdvance(task); }}
+            disabled={isAdvancing}
+            title={overdueRegular ? "Overdue — reschedule to start" : "Start"}
+          >
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <polygon points="2,1 9,5 2,9" fill="currentColor" />
+            </svg>
+          </button>
+        )}
+        {isInProgress && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPause(task); }}
+            disabled={pausing === task.taskId}
+            title="Pause"
+          >
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <rect x="1.5" y="1" width="3" height="8" fill="currentColor" />
+              <rect x="5.5" y="1" width="3" height="8" fill="currentColor" />
+            </svg>
+          </button>
+        )}
+        {isInProgress && !isGreyedOut && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdvance(task); }}
+            disabled={isAdvancing}
+            title="Complete"
+          >
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
+        {canUndo && !isGreyedOut && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdvance(task); }}
+            disabled={isAdvancing}
+            title="Undo"
+          >
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <polyline points="4,4.5 1.5,2 4,0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(task.taskId); }}
+          disabled={slashingId === task.taskId}
+          title="Delete"
+        >
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+            <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
 
       <ShatterEffect active={isFiling} />
     </div>
