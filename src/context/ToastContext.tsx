@@ -56,7 +56,7 @@ export function ToastBanner() {
       style={{
         position: "relative",
         height: 0,
-        zIndex: 5,
+        zIndex: 95,
         pointerEvents: "none",
       }}
     >

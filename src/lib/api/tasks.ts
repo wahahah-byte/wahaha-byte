@@ -96,7 +96,6 @@ export interface SkipCycleResponse {
 
 export const tasksApi = {
   getAll: (filters: TaskFilterParams = {}) => {
-    console.log(authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`));
     return authedGet<PagedResult<TaskDto>>(`/api/tasks${toQueryString(filters)}`)
   },
 
