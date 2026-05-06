@@ -18,11 +18,23 @@ export function usePullToRefresh<T extends HTMLElement>(
   const startXRef = useRef<number | null>(null);
   const lockedRef = useRef(false);
   const abortedRef = useRef(false);
+  // Mirror of pullY for synchronous reads inside onTouchEnd; the React state
+  // copy lags because state updates are batched and the effect doesn't re-bind
+  // on every change (it would race with rapid touch events).
+  const pullYRef = useRef(0);
+
+  // Snapshot the element each render so the effect re-runs when it goes from
+  // null → element (e.g. when a parent gates rendering on a "mounted" flag).
+  const el = containerRef.current;
 
   useEffect(() => {
-    if (!enabled) return;
-    const el = containerRef.current;
-    if (!el) return;
+    if (!enabled || !el) return;
+
+    const setPull = (y: number, p: Phase) => {
+      pullYRef.current = y;
+      setPullY(y);
+      setPhase(p);
+    };
 
     function onTouchStart(e: TouchEvent) {
       if (!el || el.scrollTop > 0) {
@@ -43,8 +55,7 @@ export function usePullToRefresh<T extends HTMLElement>(
       if (!el || el.scrollTop > 0) {
         startYRef.current = null;
         startXRef.current = null;
-        setPullY(0);
-        setPhase("idle");
+        setPull(0, "idle");
         return;
       }
       const dy = e.touches[0].clientY - start;
@@ -59,8 +70,7 @@ export function usePullToRefresh<T extends HTMLElement>(
       }
       if (dy <= 0) {
         if (lockedRef.current) {
-          setPullY(0);
-          setPhase("idle");
+          setPull(0, "idle");
         }
         return;
       }
@@ -73,35 +83,31 @@ export function usePullToRefresh<T extends HTMLElement>(
           ? dy
           : TRIGGER_DISTANCE + (dy - TRIGGER_DISTANCE) * 0.35;
       const clamped = Math.min(damped, MAX_PULL);
-      setPullY(clamped);
-      setPhase(clamped >= TRIGGER_DISTANCE ? "ready" : "pulling");
+      setPull(clamped, clamped >= TRIGGER_DISTANCE ? "ready" : "pulling");
       if (e.cancelable) e.preventDefault();
     }
 
     async function onTouchEnd() {
       const start = startYRef.current;
+      const wasLocked = lockedRef.current;
+      const wasAborted = abortedRef.current;
       startYRef.current = null;
       startXRef.current = null;
-      if (!lockedRef.current || start == null || abortedRef.current) {
-        abortedRef.current = false;
-        setPullY(0);
-        setPhase("idle");
-        return;
-      }
       lockedRef.current = false;
       abortedRef.current = false;
-      if (pullY >= TRIGGER_DISTANCE) {
-        setPhase("refreshing");
-        setPullY(56);
+      if (!wasLocked || start == null || wasAborted) {
+        setPull(0, "idle");
+        return;
+      }
+      if (pullYRef.current >= TRIGGER_DISTANCE) {
+        setPull(56, "refreshing");
         try {
           await onRefresh();
         } finally {
-          setPullY(0);
-          setPhase("idle");
+          setPull(0, "idle");
         }
       } else {
-        setPullY(0);
-        setPhase("idle");
+        setPull(0, "idle");
       }
     }
 
@@ -116,7 +122,7 @@ export function usePullToRefresh<T extends HTMLElement>(
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [containerRef, onRefresh, enabled, pullY]);
+  }, [el, onRefresh, enabled]);
 
   return { pullY, phase, triggerDistance: TRIGGER_DISTANCE };
 }

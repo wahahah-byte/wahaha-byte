@@ -24,7 +24,7 @@ type Props = {
   trayElementRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-const TRAY_HEIGHT = 36;
+const TRAY_HEIGHT = 28;
 const DISMISS_DRAG_PX = 50;
 const AXIS_DEADZONE_PX = 8;
 
@@ -152,16 +152,6 @@ export default function FilterTray({
 
   return createPortal(
     <>
-      {/* Backdrop — taps outside the tray dismiss it. Sits below the action bar (which is z-35). */}
-      <div
-        className="fixed inset-0 sm:hidden"
-        style={{
-          zIndex: 33,
-          background: "transparent",
-          pointerEvents: open ? "auto" : "none",
-        }}
-        onClick={onClose}
-      />
       <div
         ref={trayElementRef}
         className="fixed left-0 right-0 sm:hidden overflow-hidden"
@@ -196,13 +186,13 @@ export default function FilterTray({
             aria-hidden
             style={{
               position: "absolute",
-              top: 4,
-              bottom: 4,
+              top: 3,
+              bottom: 3,
               left: 8,
               width: `calc((100% - 16px) / ${filters.length})`,
               background: "var(--color-active-highlight-bg)",
               border: "1px solid var(--color-active-highlight-border)",
-              borderRadius: 4,
+              borderRadius: 3,
               transform: `translateX(${activeIdx * 100}%)`,
               transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
               pointerEvents: "none",

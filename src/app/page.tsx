@@ -341,7 +341,7 @@ function Home() {
               <span>Name</span>
               <span />
               <span />
-              {activeFilter === "completed" && unsubmitted.length > 0 && (
+              {activeFilter === "completed" && unsubmitted.length > 0 ? (
                 <button
                   onClick={() => {
                     if (allUnsubmittedSelected) {
@@ -362,7 +362,16 @@ function Home() {
                 >
                   {allUnsubmittedSelected ? "Deselect All" : "Select All"}
                 </button>
-              )}
+              ) : !loading && tasks.length > 0 ? (
+                <span
+                  className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-4 items-center gap-2"
+                  style={{ color: "var(--color-fg-muted)" }}
+                >
+                  <span>{tasks.filter((t) => t.status !== "completed").length} active</span>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <span>{tasks.length} total</span>
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -408,16 +417,6 @@ function Home() {
             )}
           </div>
 
-          {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 mb-5 sm:mb-4 px-1 shrink-0">
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
-                {tasks.filter((t) => t.status !== "completed").length} remaining
-              </span>
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
-                {tasks.length} total
-              </span>
-            </div>
-          )}
         </div>
       </div>
 

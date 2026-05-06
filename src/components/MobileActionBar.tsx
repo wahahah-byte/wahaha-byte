@@ -45,10 +45,6 @@ export default function MobileActionBar({
   const trayElementRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLButtonElement>(null);
 
-  const active = filters.find((f) => f.value === activeFilter) ?? filters[0];
-  const activeBadge = badgeColor?.(active.value) ?? null;
-  const filterIsDefault = filters[0]?.value === active.value;
-
   useEffect(() => {
     if (!cycleHint) return;
     const t = window.setTimeout(() => setCycleHint(null), 900);
@@ -92,16 +88,16 @@ export default function MobileActionBar({
       const tray = trayElementRef.current;
       const handle = handleRef.current;
       if (!tray || !handle) return;
-      const trayHeight = tray.offsetHeight;            // 56
-      const trayHeightTotal = trayHeight + 8;          // 64 — matches "calc(100% + 8px)" closed offset
+      const trayHeight = tray.offsetHeight;            // 28
+      const trayHeightTotal = trayHeight + 8;          // 36 — matches "calc(100% + 8px)" closed offset
       const baseY = d.startedOpen ? 0 : trayHeightTotal;
       const targetY = Math.max(0, Math.min(trayHeightTotal, baseY + dy));
       // Tray follows finger.
       tray.style.transition = "none";
       tray.style.transform = `translateY(${targetY}px)`;
-      // Handle rides on the tray's top edge: closed → 88px (44+44), open → 124px (44+44+36).
+      // Handle rides on the tray's top edge: closed → 88px (44+44), open → 116px (44+44+28).
       const progress = 1 - targetY / trayHeightTotal;  // 0 closed, 1 open
-      const handleBottom = 88 + (124 - 88) * progress;
+      const handleBottom = 88 + (116 - 88) * progress;
       handle.style.transition = "none";
       handle.style.bottom = `calc(${handleBottom}px + env(safe-area-inset-bottom, 0px))`;
     }
@@ -126,7 +122,7 @@ export default function MobileActionBar({
 
     if (willOpen) {
       tray.style.transform = "translateY(0)";
-      handle.style.bottom = "calc(44px + 44px + 36px + env(safe-area-inset-bottom, 0px))";
+      handle.style.bottom = "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))";
       if (!trayOpen) setTrayOpen(true);
     } else {
       tray.style.transform = "translateY(calc(100% + 8px))";
@@ -152,10 +148,10 @@ export default function MobileActionBar({
           position: "fixed",
           left: "50%",
           bottom: trayOpen
-            ? "calc(44px + 44px + 36px + env(safe-area-inset-bottom, 0px))"
+            ? "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))"
             : "calc(44px + 44px + env(safe-area-inset-bottom, 0px))",
           transform: "translateX(-50%)",
-          padding: "6px 36px 4px",
+          padding: "5px 28px 5px",
           background: "transparent",
           border: "none",
           cursor: "pointer",
@@ -165,12 +161,38 @@ export default function MobileActionBar({
           transition: "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)",
         }}
       >
+        {cycleHint && (
+          <div
+            aria-live="polite"
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 4px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--color-surface)",
+              color: "var(--color-active-highlight)",
+              border: "1px solid var(--color-active-highlight-border)",
+              borderRadius: 3,
+              padding: "4px 10px",
+              fontSize: "10px",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+              animation: "filter-cycle-hint 0.9s ease-out forwards",
+            }}
+          >
+            {cycleHint}
+          </div>
+        )}
         <span
           aria-hidden
           style={{
             display: "block",
-            width: 36, height: 4,
-            borderRadius: 2,
+            width: 22, height: 3,
+            borderRadius: 1.5,
             background: trayOpen ? "var(--color-active-highlight)" : "var(--color-border)",
             transition: "background 0.18s",
           }}
@@ -188,75 +210,6 @@ export default function MobileActionBar({
           zIndex: 35,
         }}
       >
-
-        {/* Active-filter chip — funnel icon. Tap → tray, swipe-up → tray. */}
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setTrayOpen(true)}
-            onTouchStart={onPullStart}
-            onTouchMove={onPullMove}
-            onTouchEnd={onPullEnd}
-            onTouchCancel={onPullEnd}
-            aria-haspopup="menu"
-            aria-expanded={trayOpen}
-            aria-label={`Filter: ${active.label}`}
-            className="flex items-center justify-center cursor-pointer"
-            style={{
-              position: "relative",
-              width: 36, height: 30,
-              background: filterIsDefault ? "transparent" : "var(--color-active-highlight-bg)",
-              border: `1px solid ${filterIsDefault ? "var(--color-border-hairline)" : "var(--color-active-highlight-border)"}`,
-              borderRadius: 2,
-              color: filterIsDefault ? "var(--color-fg-subtle)" : "var(--color-active-highlight)",
-              padding: 0,
-              touchAction: "pan-y",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <path d="M1.5 2.5h11l-4 5v4l-3-1.2v-2.8l-4-5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
-            </svg>
-            {!filterIsDefault && (
-              <span
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  top: 4, right: 5,
-                  width: 5, height: 5,
-                  borderRadius: "50%",
-                  background: activeBadge ?? "var(--color-active-highlight)",
-                  border: "1px solid var(--color-header)",
-                }}
-              />
-            )}
-          </button>
-          {cycleHint && (
-            <div
-              aria-live="polite"
-              style={{
-                position: "absolute",
-                bottom: "calc(100% + 8px)",
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: "var(--color-surface)",
-                color: "var(--color-active-highlight)",
-                border: "1px solid var(--color-active-highlight-border)",
-                borderRadius: 3,
-                padding: "4px 10px",
-                fontSize: "10px",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                pointerEvents: "none",
-                animation: "filter-cycle-hint 0.9s ease-out forwards",
-              }}
-            >
-              {cycleHint}
-            </div>
-          )}
-        </div>
 
         <div className="flex-1 flex items-center">
           {onQuickCreate ? (

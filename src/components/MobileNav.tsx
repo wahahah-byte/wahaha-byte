@@ -30,8 +30,12 @@ export default function MobileNav() {
           <Link
             key={item.href}
             href={item.href}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors"
-            style={{ color: isActive ? "var(--color-active-highlight)" : "var(--color-fg-muted)" }}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            style={{
+              color: isActive ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
+              height: 44,
+              lineHeight: 1,
+            }}
           >
             {item.label === "Tasks" ? <TasksIcon /> : item.label === "Recurring" ? <RecurringIcon /> : <ArchiveIcon />}
             <span style={{ fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: isActive ? 600 : 500 }}>
