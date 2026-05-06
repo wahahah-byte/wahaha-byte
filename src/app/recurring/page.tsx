@@ -65,7 +65,7 @@ function Recurring() {
 
   const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip } =
     useTaskActions({
-      tasks, setTasks, isAuthenticated, activeFilter,
+      tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
       selectedIds, setSelectedIds,
       submittedTaskIds,

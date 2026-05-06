@@ -574,7 +574,7 @@ function TaskRowImpl({
             <p
               className="text-sm truncate flex items-center gap-1.5"
               style={{
-                color: isCompleted && !canUndo ? "var(--color-fg-muted)" : "var(--color-fg)",
+                color: (isCompleted && !canUndo) || isGreyedOut ? "var(--color-fg-muted)" : "var(--color-fg)",
                 textDecoration: isCompleted ? "line-through" : "none",
               }}
             >

@@ -22,7 +22,6 @@ interface UseTaskActionsOptions {
   tasks: TaskDto[];
   setTasks: React.Dispatch<React.SetStateAction<TaskDto[]>>;
   isAuthenticated: boolean;
-  activeFilter: string;
   stagedTaskIds: string[];
   setStagedTaskIds: React.Dispatch<React.SetStateAction<string[]>>;
   selectedIds: Set<string>;
@@ -33,7 +32,7 @@ interface UseTaskActionsOptions {
 }
 
 export function useTaskActions({
-  tasks, setTasks, isAuthenticated, activeFilter,
+  tasks, setTasks, isAuthenticated,
   stagedTaskIds, setStagedTaskIds,
   selectedIds, setSelectedIds,
   submittedTaskIds, setError, setSuccess,
@@ -118,14 +117,10 @@ export function useTaskActions({
           submitted: false,
         });
         setAdvancing(null);
-        setTasks((prev) =>
-          activeFilter === "in_progress"
-            ? prev.filter((t) => t.taskId !== task.taskId)
-            : prev.map((t) => t.taskId === task.taskId
-              ? { ...t, status: "pending", dueDate: nextDue, completedAt: null, submitted: false }
-              : t
-            )
-        );
+        setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+          ? { ...t, status: "pending", dueDate: nextDue, completedAt: null, submitted: false }
+          : t
+        ));
       } else {
         setAdvancing(null);
         if (task.pointValue) {
@@ -155,11 +150,7 @@ export function useTaskActions({
         updateStaged(-(task.pointValue ?? 0));
       }
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(task.taskId); return n; });
-      setTasks((prev) =>
-        activeFilter === "all"
-          ? prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t)
-          : prev.filter((t) => t.taskId !== task.taskId)
-      );
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "in_progress", completedAt: null } : t));
     } else {
       setAdvancing(null);
     }
@@ -244,11 +235,7 @@ export function useTaskActions({
     });
     setPausing(null);
     if (error) { setError(error); return; }
-    setTasks((prev) =>
-      activeFilter === "in_progress"
-        ? prev.filter((t) => t.taskId !== task.taskId)
-        : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t)
-    );
+    setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t));
   });
 
   const handleDelete = useEvent(async function handleDelete(id: string) {

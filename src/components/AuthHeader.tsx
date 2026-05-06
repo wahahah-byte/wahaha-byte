@@ -37,7 +37,7 @@ export default function AuthHeader() {
   return (
     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
       {username && (
-        <span style={{ color: "rgba(255,255,255,0.55)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+        <span style={{ color: "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
           {username}
         </span>
       )}
