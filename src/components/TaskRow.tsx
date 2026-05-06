@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { TaskDto } from "@/lib/api/tasks";
+import { TaskDto, Subtask } from "@/lib/api/tasks";
+import { subtasksApi } from "@/lib/api/subtasks";
+import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
 import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import BankBurstEffect from "@/components/BankBurstEffect";
@@ -38,14 +40,35 @@ interface TaskRowProps {
   onOpenDetail: (task: TaskDto) => void;
   onArchive?: (task: TaskDto) => void;
   onUnarchive?: (task: TaskDto) => void;
+  onSubtasksChange?: (subtasks: Subtask[]) => void;
 }
 
 export default function TaskRow({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
-  onSkip, onToggleSelect, onOpenDetail, onArchive, onUnarchive,
+  onSkip, onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange,
 }: TaskRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
+
+  async function handleToggleSubtask(s: Subtask) {
+    const list = task.subtasks ?? [];
+    const next = list.map((x) => x.subtaskId === s.subtaskId ? { ...x, completed: !x.completed } : x);
+    onSubtasksChange?.(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.update(s.subtaskId, { completed: !s.completed });
+    if (error) onSubtasksChange?.(list);
+  }
+
+  async function handleDeleteSubtask(s: Subtask) {
+    const list = task.subtasks ?? [];
+    const next = list.filter((x) => x.subtaskId !== s.subtaskId);
+    onSubtasksChange?.(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.delete(s.subtaskId);
+    if (error) onSubtasksChange?.(list);
+  }
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   const isInProgress = task.status === "in_progress";
@@ -261,6 +284,7 @@ export default function TaskRow({
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
+    <>
     <div
       ref={wrapperRef}
       className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
@@ -481,18 +505,98 @@ export default function TaskRow({
                 </svg>
               )}
             </button>
+          ) : task.subtasks && task.subtasks.length > 0 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              title={expanded ? "Hide subtasks" : "Show subtasks"}
+              aria-label={expanded ? "Hide subtasks" : "Show subtasks"}
+              aria-expanded={expanded}
+              className="flex-shrink-0"
+              style={{
+                position: "relative",
+                width: 22, height: 22,
+                marginLeft: -3, marginRight: -3,
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  position: "relative",
+                  width: 14, height: 14,
+                  display: "block",
+                  transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+                  transformOrigin: "50% 50%",
+                  transition: "transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    left: "50%", top: "50%",
+                    width: 6, height: 6,
+                    marginLeft: -3, marginTop: -3,
+                    borderRadius: "50%",
+                    background: dot,
+                  }}
+                />
+                <svg
+                  width="5" height="7" viewBox="0 0 5 7" fill="none"
+                  style={{
+                    position: "absolute",
+                    left: "50%", top: "50%",
+                    marginLeft: 5,
+                    marginTop: -3.5,
+                    color: dot,
+                  }}
+                >
+                  <polyline points="1,1 3.5,3.5 1,6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              </span>
+            </button>
           ) : (
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dot }} />
           )}
           <div className="min-w-0">
             <p
-              className="text-sm truncate"
+              className="text-sm truncate flex items-center gap-1.5"
               style={{
                 color: isCompleted && !canUndo ? "var(--color-fg-muted)" : "var(--color-fg)",
                 textDecoration: isCompleted ? "line-through" : "none",
               }}
             >
-              {task.title}
+              <span className="truncate">{task.title}</span>
+              {task.subtasks && task.subtasks.length > 0 && (() => {
+                const done = task.subtasks.filter((s) => s.completed).length;
+                const total = task.subtasks.length;
+                const allDone = done === total;
+                return (
+                  <span
+                    title={`${done} of ${total} subtasks done`}
+                    style={{
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: "9px",
+                      letterSpacing: "0.08em",
+                      color: allDone ? "var(--color-success)" : "var(--color-fg-subtle)",
+                      border: `1px solid ${allDone ? "rgba(74,222,128,0.35)" : "var(--color-border-faint)"}`,
+                      borderRadius: "2px",
+                      padding: "1px 5px",
+                      lineHeight: 1,
+                      textDecoration: "none",
+                      background: "transparent",
+                    }}
+                  >
+                    ☐ {done}/{total}
+                  </span>
+                );
+              })()}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
               {task.category && (() => {
@@ -836,6 +940,44 @@ export default function TaskRow({
 
       <BankBurstEffect active={isFiling} />
     </div>
+
+    {expanded && task.subtasks && task.subtasks.length > 0 && (
+      <div
+        className="subtask-thread"
+        onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+        title="Click to collapse"
+        style={{
+          background: "var(--color-bg)",
+          borderLeft: isInProgress
+            ? "2px solid var(--color-active-highlight)"
+            : canUndo
+              ? "2px solid rgba(245,158,11,0.7)"
+              : overdueRecurring
+                ? "2px solid rgba(239,68,68,0.55)"
+                : undefined,
+          paddingTop: 6,
+          paddingBottom: 14,
+          paddingLeft: 16,
+          paddingRight: 16,
+          animation: "subtask-thread-in 0.18s cubic-bezier(0.2, 0, 0, 1)",
+          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        {task.subtasks.map((s, i) => (
+          <ThreadSubtaskRow
+            key={s.subtaskId}
+            subtask={s}
+            isLast={i === task.subtasks!.length - 1}
+            onToggle={() => handleToggleSubtask(s)}
+            onDelete={() => handleDeleteSubtask(s)}
+          />
+        ))}
+      </div>
+    )}
+    </>
   );
 }
 

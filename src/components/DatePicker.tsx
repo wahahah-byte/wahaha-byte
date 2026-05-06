@@ -95,7 +95,10 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
       const damped = Math.sign(dx) * Math.min(Math.abs(dx), 140);
       setDragX(damped);
     } else if (s.locked === "v") {
-      setSheetDragY(dy > 0 ? dy : dy / 4);
+      // Only react to downward drag (commit-to-close gesture). Upward drag is
+      // a no-op so the sheet doesn't visibly lift and then snap back, which
+      // also dodges an entrance-animation replay on snap-to-rest.
+      if (dy > 0) setSheetDragY(dy);
     }
   }
   function onSwipeEnd() {
@@ -339,8 +342,8 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
               borderTopRightRadius: "12px",
               boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.4)",
               zIndex: 61,
-              animation: sheetDragY === 0 ? "datepicker-sheet-in 0.18s cubic-bezier(0.2, 0, 0, 1)" : undefined,
-              transform: sheetDragY !== 0 ? `translateY(${sheetDragY}px)` : undefined,
+              animation: "datepicker-sheet-in 0.18s cubic-bezier(0.2, 0, 0, 1)",
+              transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
               transition: sheetDragY === 0 ? "transform 0.22s cubic-bezier(0.2, 0, 0, 1)" : "none",
               touchAction: "none",
               willChange: sheetDragY !== 0 ? "transform" : undefined,

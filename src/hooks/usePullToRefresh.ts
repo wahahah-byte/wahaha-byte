@@ -15,7 +15,9 @@ export function usePullToRefresh<T extends HTMLElement>(
   const [pullY, setPullY] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const startYRef = useRef<number | null>(null);
+  const startXRef = useRef<number | null>(null);
   const lockedRef = useRef(false);
+  const abortedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -25,22 +27,36 @@ export function usePullToRefresh<T extends HTMLElement>(
     function onTouchStart(e: TouchEvent) {
       if (!el || el.scrollTop > 0) {
         startYRef.current = null;
+        startXRef.current = null;
         return;
       }
       startYRef.current = e.touches[0].clientY;
+      startXRef.current = e.touches[0].clientX;
       lockedRef.current = false;
+      abortedRef.current = false;
     }
 
     function onTouchMove(e: TouchEvent) {
       const start = startYRef.current;
-      if (start == null) return;
+      const startX = startXRef.current;
+      if (start == null || startX == null || abortedRef.current) return;
       if (!el || el.scrollTop > 0) {
         startYRef.current = null;
+        startXRef.current = null;
         setPullY(0);
         setPhase("idle");
         return;
       }
       const dy = e.touches[0].clientY - start;
+      const dx = e.touches[0].clientX - startX;
+      // Axis lock: if the user has moved more horizontally than vertically
+      // by the time they cross the deadzone, treat this as a horizontal
+      // gesture (e.g. swipe-to-delete on a row) and abort pull-to-refresh
+      // for the rest of the touch.
+      if (!lockedRef.current && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+        abortedRef.current = true;
+        return;
+      }
       if (dy <= 0) {
         if (lockedRef.current) {
           setPullY(0);
@@ -65,12 +81,15 @@ export function usePullToRefresh<T extends HTMLElement>(
     async function onTouchEnd() {
       const start = startYRef.current;
       startYRef.current = null;
-      if (!lockedRef.current || start == null) {
+      startXRef.current = null;
+      if (!lockedRef.current || start == null || abortedRef.current) {
+        abortedRef.current = false;
         setPullY(0);
         setPhase("idle");
         return;
       }
       lockedRef.current = false;
+      abortedRef.current = false;
       if (pullY >= TRIGGER_DISTANCE) {
         setPhase("refreshing");
         setPullY(56);

@@ -1,5 +1,14 @@
 import { authedGet, authedPost, authedPut, authedPatch, authedDelete } from "./client";
 
+export interface Subtask {
+  subtaskId: number;
+  taskId: string;
+  title: string;
+  completed: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface TaskDto {
   taskId: string;
   userId: string;
@@ -21,6 +30,7 @@ export interface TaskDto {
   longestStreakCount?: number;
   lastCheckInDate?: string | null;
   isArchived?: boolean;
+  subtasks?: Subtask[];
 }
 
 export interface CreateTaskRequest {

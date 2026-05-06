@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { TaskDto } from "@/lib/api/tasks";
+import { useEffect, useState } from "react";
+import { TaskDto, Subtask } from "@/lib/api/tasks";
+import { subtasksApi } from "@/lib/api/subtasks";
 import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
+import SubtaskRow from "@/components/SubtaskRow";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "#22c55e" },
@@ -38,6 +40,7 @@ interface Props {
   onUndo?: () => void;
   onDelete?: () => void;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
+  onSubtasksChange?: (subtasks: Subtask[]) => void;
   isActing?: boolean;
   canUndo?: boolean;
   initialEditMode?: boolean;
@@ -109,10 +112,76 @@ function ActionBtn({
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
-  onSave, isActing, canUndo, initialEditMode, mustReschedule,
+  onSave, onSubtasksChange, isActing, canUndo, initialEditMode, mustReschedule,
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
+
+  const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
+  const [subtasks, setSubtasksState] = useState<Subtask[]>(task.subtasks ?? []);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  useEffect(() => { setSubtasksState(task.subtasks ?? []); }, [task.taskId, task.subtasks]);
+
+  // Single setter that updates local state + tells the parent. Always called with
+  // a concrete next-array so neither React's render phase nor the parent's setter
+  // sees a stale closure or runs inside a child's reconciler.
+  function commitSubtasks(next: Subtask[]) {
+    setSubtasksState(next);
+    onSubtasksChange?.(next);
+  }
+
+  function nextLocalId(): number {
+    const min = subtasks.reduce((m, s) => Math.min(m, s.subtaskId), 0);
+    return Math.min(min, 0) - 1;
+  }
+
+  async function handleToggleSubtask(s: Subtask) {
+    const snapshot = subtasks;
+    const next = snapshot.map((x) => x.subtaskId === s.subtaskId ? { ...x, completed: !x.completed } : x);
+    commitSubtasks(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.update(s.subtaskId, { completed: !s.completed });
+    if (error) commitSubtasks(snapshot);
+  }
+
+  async function handleDeleteSubtask(s: Subtask) {
+    const snapshot = subtasks;
+    const next = snapshot.filter((x) => x.subtaskId !== s.subtaskId);
+    commitSubtasks(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.delete(s.subtaskId);
+    if (error) commitSubtasks(snapshot);
+  }
+
+  async function handleAddSubtask() {
+    const title = newSubtaskTitle.trim();
+    if (!title || addingSubtask) return;
+    setAddingSubtask(true);
+    const snapshot = subtasks;
+    const sortOrder = (snapshot[snapshot.length - 1]?.sortOrder ?? -1) + 1;
+    const optimistic: Subtask = {
+      subtaskId: nextLocalId(),
+      taskId: task.taskId,
+      title,
+      completed: false,
+      sortOrder,
+      createdAt: new Date().toISOString(),
+    };
+    const optimisticList = [...snapshot, optimistic];
+    commitSubtasks(optimisticList);
+    setNewSubtaskTitle("");
+    if (!isAuthenticated) { setAddingSubtask(false); return; }
+    const { data, error } = await subtasksApi.create(task.taskId, title);
+    setAddingSubtask(false);
+    if (error) {
+      commitSubtasks(snapshot);
+      return;
+    }
+    commitSubtasks(optimisticList.map((x) => x.subtaskId === optimistic.subtaskId ? data! : x));
+  }
+
+  const subtaskDoneCount = subtasks.filter((s) => s.completed).length;
 
   function todayMidnight() {
     const d = new Date();
@@ -286,26 +355,11 @@ export default function TaskDetailModal({
               />
             </EditField>
 
-            <EditField label="Priority">
-              <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
-                {PRIORITIES.map((p, i) => (
-                  <button
-                    key={p.value}
-                    onClick={() => setEditPriority(p.value)}
-                    className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
-                    style={{
-                      background: editPriority === p.value ? `${p.color}18` : "transparent",
-                      color: editPriority === p.value ? p.color : "var(--color-fg-subtle)",
-                      borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
-                      fontWeight: editPriority === p.value ? 600 : 400,
-                      borderBottom: editPriority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
-                    }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </EditField>
+            {(!task.isRecurring || mustReschedule) && (
+              <EditField label="Due Date">
+                <DatePicker value={editDueDate} onChange={setEditDueDate} />
+              </EditField>
+            )}
 
             <EditField label="Category">
               <div className="relative">
@@ -329,11 +383,26 @@ export default function TaskDetailModal({
               </div>
             </EditField>
 
-            {(!task.isRecurring || mustReschedule) && (
-              <EditField label="Due Date">
-                <DatePicker value={editDueDate} onChange={setEditDueDate} />
-              </EditField>
-            )}
+            <EditField label="Priority">
+              <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
+                {PRIORITIES.map((p, i) => (
+                  <button
+                    key={p.value}
+                    onClick={() => setEditPriority(p.value)}
+                    className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
+                    style={{
+                      background: editPriority === p.value ? `${p.color}18` : "transparent",
+                      color: editPriority === p.value ? p.color : "var(--color-fg-subtle)",
+                      borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
+                      fontWeight: editPriority === p.value ? 600 : 400,
+                      borderBottom: editPriority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </EditField>
 
             {editError && (
               <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
@@ -348,6 +417,42 @@ export default function TaskDetailModal({
                 {task.description}
               </p>
             )}
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                  Subtasks
+                </span>
+                {subtasks.length > 0 && (
+                  <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
+                    {subtaskDoneCount}/{subtasks.length} done
+                  </span>
+                )}
+              </div>
+              {subtasks.map((s) => (
+                <SubtaskRow
+                  key={s.subtaskId}
+                  subtask={s}
+                  onToggle={() => handleToggleSubtask(s)}
+                  onDelete={() => handleDeleteSubtask(s)}
+                />
+              ))}
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center" style={{ color: "var(--color-fg-subtle)", fontSize: "12px", lineHeight: 1 }}>+</span>
+                <input
+                  type="text"
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                  }}
+                  placeholder="Add subtask…"
+                  disabled={addingSubtask}
+                  className="flex-1 text-xs outline-none bg-transparent"
+                  style={{ color: "var(--color-fg)", border: "none", padding: "2px 0" }}
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5">
               <Row label="Priority">

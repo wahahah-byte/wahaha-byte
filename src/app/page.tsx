@@ -168,9 +168,9 @@ function Home() {
           style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
         >
           {!isAuthenticated && (
-            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "rgba(91,184,224,0.07)", border: "1px solid rgba(91,184,224,0.18)", borderRadius: "3px" }}>
-              <span style={{ color: "rgba(91,184,224,0.75)" }}>Demo · changes are not saved</span>
-              <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em" }}>Sign in →</Link>
+            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-accent-bg)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}>
+              <span style={{ color: "var(--color-accent)", opacity: 0.85 }}>Demo · changes are not saved</span>
+              <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
             </div>
           )}
 
@@ -340,6 +340,7 @@ function Home() {
                       onOpenDetail={setDetailTask}
                       onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
                       onArchive={handleArchive}
+                      onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === item.taskId ? { ...tt, subtasks } : tt))}
                     />
                   ))}
                   <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
@@ -413,6 +414,7 @@ function Home() {
             onUndo={dtCanUndo ? () => { closeDetail(); handleAdvance(dt); } : undefined}
             onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
             onSave={handleSaveTask}
+            onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}
             initialEditMode={isRestart}
             mustReschedule={isRestart}
           />
