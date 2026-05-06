@@ -28,6 +28,8 @@ const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r8", userId: "demo", title: "5-min stretch", description: null, category: "Fitness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-29T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 6, longestStreakCount: 9 },
 ];
 
+const EMPTY_SET = new Set<string>();
+
 function tabMatches(task: TaskDto, tab: string): boolean {
   if (tab === "all") return true;
   if (tab === "today") return canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
@@ -102,6 +104,7 @@ function Recurring() {
   }, [refetch, isAuthenticated]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pagerRef = useRef<HTMLDivElement>(null);
   const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
 
   function applyFilter(value: string) {
@@ -112,6 +115,19 @@ function Recurring() {
     const qs = params.toString();
     router.replace(qs ? `/recurring?${qs}` : "/recurring", { scroll: false });
   }
+
+  // Stable callbacks so TaskRow's React.memo can skip re-renders when only
+  // activeFilter changes (e.g. swiping the filter strip).
+  const handleSubtasksChange = useCallback((taskId: string, subtasks: import("@/lib/api/tasks").Subtask[]) => {
+    setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt));
+  }, []);
+
+  const handleRestartOverdue = useCallback((t: TaskDto) => {
+    setOverdueRestartTaskId(t.taskId);
+    setDetailTask(t);
+  }, []);
+
+  const noopToggle = useCallback(() => {}, []);
 
   async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
     if (!detailTask) return null;
@@ -154,8 +170,6 @@ function Recurring() {
     );
   }
 
-  const filteredTasks = tasks.filter((t) => tabMatches(t, activeFilter));
-
   type Sep = { __sep: true; label: string; sepKey: string };
   const sep = (label: string, sepKey: string): Sep => ({ __sep: true, label, sepKey });
 
@@ -184,10 +198,11 @@ function Recurring() {
     }
   };
 
-  const listItems: (TaskDto | Sep)[] = (() => {
+  function buildListItemsForFilter(filterValue: string): (TaskDto | Sep)[] {
+    const filtered = tasks.filter((t) => tabMatches(t, filterValue));
     if (groupMode === "frequency") {
       const buckets = new Map<string, TaskDto[]>();
-      for (const t of filteredTasks) {
+      for (const t of filtered) {
         const key = t.recurrenceRule ?? "__none";
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key)!.push(t);
@@ -209,7 +224,7 @@ function Recurring() {
     }
     if (groupMode === "category") {
       const buckets = new Map<string, TaskDto[]>();
-      for (const t of filteredTasks) {
+      for (const t of filtered) {
         const key = t.category || "__none";
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key)!.push(t);
@@ -226,8 +241,101 @@ function Recurring() {
       }
       return items;
     }
-    return [...filteredTasks].sort(sortRecurring);
-  })();
+    return [...filtered].sort(sortRecurring);
+  }
+
+  function renderFilterPage(filterValue: string) {
+    const filtered = tasks.filter((t) => tabMatches(t, filterValue));
+    if (tasks.length > 0 && filtered.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-2">
+          <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
+            {filterValue === "today" ? "Nothing due today" :
+             filterValue === "upcoming" ? "Nothing upcoming" :
+             filterValue === "missed" ? "Nothing missed" : "No tasks"}
+          </p>
+        </div>
+      );
+    }
+    const pageItems = buildListItemsForFilter(filterValue);
+    const chunks: { sep: Sep | null; tasks: TaskDto[] }[] = [];
+    let current: { sep: Sep | null; tasks: TaskDto[] } = { sep: null, tasks: [] };
+    for (const item of pageItems) {
+      if ("__sep" in item) {
+        if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+        current = { sep: item, tasks: [] };
+      } else {
+        current.tasks.push(item);
+      }
+    }
+    if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+    return (
+      <div>
+        {chunks.map((chunk, idx) => (
+          <div
+            key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
+            style={{
+              position: chunk.sep ? "relative" : undefined,
+              marginTop: chunk.sep ? (idx > 0 ? "14px" : "10px") : undefined,
+            }}
+          >
+            {chunk.sep && (
+              <span
+                className="tracking-widest uppercase text-[9px]"
+                style={{
+                  position: "absolute",
+                  top: "-6px",
+                  left: "10px",
+                  padding: "0 6px",
+                  background: "var(--color-bg)",
+                  color: "var(--color-fg-subtle)",
+                  lineHeight: 1,
+                  zIndex: 1,
+                }}
+              >
+                {chunk.sep.label}
+              </span>
+            )}
+            {chunk.tasks.length > 0 && (
+              <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
+                <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                  <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                </div>
+                {chunk.tasks.map((item) => (
+                  <TaskRow
+                    key={item.taskId}
+                    task={item}
+                    activeFilter="all"
+                    advancing={advancing}
+                    pausing={pausing}
+                    slashingId={slashingId}
+                    filingIds={EMPTY_SET}
+                    recentlyFiledIds={EMPTY_SET}
+                    selectedIds={EMPTY_SET}
+                    submittedTaskIds={submittedTaskIds}
+                    recurringPopup={recurringPopups.get(item.taskId)}
+                    penalizedTaskIds={EMPTY_SET}
+                    onAdvance={handleAdvance}
+                    onCheckIn={handleCheckIn}
+                    onPause={handlePause}
+                    onDelete={handleDelete}
+                    onSkip={handleSkip}
+                    onToggleSelect={noopToggle}
+                    onOpenDetail={setDetailTask}
+                    onRestartOverdue={handleRestartOverdue}
+                    onSubtasksChange={handleSubtasksChange}
+                  />
+                ))}
+                <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                  <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate)).length;
   const missedCount = tasks.filter((t) => isOverdue(t.dueDate)).length;
@@ -474,112 +582,56 @@ function Recurring() {
           <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
             <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
 
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-active-highlight-alt)" }} />
-            </div>
-          )}
+            {loading && (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-active-highlight-alt)" }} />
+              </div>
+            )}
 
-          {!loading && tasks.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No recurring tasks</p>
-              {isAuthenticated && (
-                <button
-                  onClick={() => setShowNewTask(true)}
-                  className="text-[10px] tracking-widest uppercase mt-2 cursor-pointer"
-                  style={{ color: "var(--color-active-highlight-alt)", background: "transparent", border: "1px solid var(--color-active-highlight-alt-border)", borderRadius: "3px", padding: "6px 14px" }}
-                >
-                  + Create one
-                </button>
-              )}
-            </div>
-          )}
-
-          {!loading && tasks.length > 0 && filteredTasks.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
-                {activeFilter === "today" ? "Nothing due today" :
-                 activeFilter === "upcoming" ? "Nothing upcoming" :
-                 activeFilter === "missed" ? "Nothing missed" : "No tasks"}
-              </p>
-            </div>
-          )}
-
-          {(() => {
-            const chunks: { sep: Sep | null; tasks: TaskDto[] }[] = [];
-            let current: { sep: Sep | null; tasks: TaskDto[] } = { sep: null, tasks: [] };
-            for (const item of listItems) {
-              if ("__sep" in item) {
-                if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
-                current = { sep: item, tasks: [] };
-              } else {
-                current.tasks.push(item);
-              }
-            }
-            if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
-            return !loading && chunks.map((chunk, idx) => (
-              <div
-                key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
-                style={{
-                  position: chunk.sep ? "relative" : undefined,
-                  marginTop: chunk.sep ? (idx > 0 ? "14px" : "10px") : undefined,
-                }}
-              >
-                {chunk.sep && (
-                  <span
-                    className="tracking-widest uppercase text-[9px]"
-                    style={{
-                      position: "absolute",
-                      top: "-6px",
-                      left: "10px",
-                      padding: "0 6px",
-                      background: "var(--color-bg)",
-                      color: "var(--color-fg-subtle)",
-                      lineHeight: 1,
-                      zIndex: 1,
-                    }}
+            {!loading && tasks.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 gap-2">
+                <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No recurring tasks</p>
+                {isAuthenticated && (
+                  <button
+                    onClick={() => setShowNewTask(true)}
+                    className="text-[10px] tracking-widest uppercase mt-2 cursor-pointer"
+                    style={{ color: "var(--color-active-highlight-alt)", background: "transparent", border: "1px solid var(--color-active-highlight-alt-border)", borderRadius: "3px", padding: "6px 14px" }}
                   >
-                    {chunk.sep.label}
-                  </span>
-                )}
-                {chunk.tasks.length > 0 && (
-                  <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
-                    <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
-                      <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
-                    </div>
-                    {chunk.tasks.map((item) => (
-                      <TaskRow
-                        key={item.taskId}
-                        task={item}
-                        activeFilter="all"
-                        advancing={advancing}
-                        pausing={pausing}
-                        slashingId={slashingId}
-                        filingIds={new Set()}
-                        recentlyFiledIds={new Set()}
-                        selectedIds={new Set()}
-                        submittedTaskIds={submittedTaskIds}
-                        recurringPopup={recurringPopups.get(item.taskId)}
-                        penalizedTaskIds={new Set()}
-                        onAdvance={handleAdvance}
-                        onCheckIn={handleCheckIn}
-                        onPause={handlePause}
-                        onDelete={handleDelete}
-                        onSkip={handleSkip}
-                        onToggleSelect={() => {}}
-                        onOpenDetail={setDetailTask}
-                        onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
-                        onSubtasksChange={(taskId, subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt))}
-                      />
-                    ))}
-                    <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
-                      <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
-                    </div>
-                  </div>
+                    + Create one
+                  </button>
                 )}
               </div>
-            ));
-          })()}
+            )}
+
+            {!loading && tasks.length > 0 && (
+              <div style={{ overflow: "hidden", width: "100%" }}>
+                <div
+                  ref={pagerRef}
+                  style={{
+                    display: "flex",
+                    width: `${RECURRING_FILTERS.length * 100}%`,
+                    transform: `translateX(${-RECURRING_FILTERS.findIndex((f) => f.value === activeFilter) * (100 / RECURRING_FILTERS.length)}%)`,
+                    transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
+                    willChange: "transform",
+                  }}
+                >
+                  {RECURRING_FILTERS.map((f) => (
+                    <div
+                      key={f.value}
+                      style={{
+                        flex: `0 0 ${100 / RECURRING_FILTERS.length}%`,
+                        minWidth: 0,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {renderFilterPage(f.value)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {!loading && tasks.length > 0 && (
@@ -611,6 +663,7 @@ function Recurring() {
         onGroupChange={setGroupMode}
         onNewTask={() => setShowNewTask(true)}
         isAuthenticated={isAuthenticated}
+        pagerRef={pagerRef}
       />
 
       {detailTask && (() => {

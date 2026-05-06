@@ -39,11 +39,12 @@ export default function FilterTray({
   const stripRef = useRef<HTMLDivElement | null>(null);
   const pillRefs = useRef<(HTMLDivElement | null)[]>([]);
   const settleTimerRef = useRef<number | null>(null);
-  const suppressNextSettleRef = useRef(false);
   const [dragY, setDragY] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "v" | "h" | null } | null>(null);
 
   // Center the active pill when the tray opens, or when activeFilter changes externally.
+  // No "suppress" flag is needed — the settle handler's `target.value !== activeFilter`
+  // check is enough to prevent an auto-center loop (the centered pill IS the active one).
   useEffect(() => {
     if (!open) return;
     const idx = filters.findIndex((f) => f.value === activeFilter);
@@ -53,8 +54,6 @@ export default function FilterTray({
     if (!strip || !pill) return;
     requestAnimationFrame(() => {
       const target = pill.offsetLeft - (strip.clientWidth - pill.clientWidth) / 2;
-      // Suppress the next scroll-settle so the auto-center doesn't loop into onChange.
-      suppressNextSettleRef.current = true;
       strip.scrollLeft = target;
     });
   }, [open, activeFilter, filters]);
@@ -87,7 +86,11 @@ export default function FilterTray({
 
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
     settleTimerRef.current = window.setTimeout(() => {
-      if (suppressNextSettleRef.current) { suppressNextSettleRef.current = false; return; }
+      // Restore CSS transition first, unconditionally — so subsequent React-driven
+      // activeFilter updates (chip tap, cycle gesture) animate the pager smoothly.
+      const pager = pagerRef?.current;
+      if (pager) pager.style.transition = "";
+
       const s = stripRef.current;
       if (!s) return;
       const centerX = s.scrollLeft + s.clientWidth / 2;
@@ -103,10 +106,6 @@ export default function FilterTray({
         const target = filters[bestIdx];
         if (target && target.value !== activeFilter) onChange(target.value);
       }
-      // Restore CSS transition so subsequent activeFilter changes (e.g. cycle gesture
-      // or chip tap) animate smoothly.
-      const pager = pagerRef?.current;
-      if (pager) pager.style.transition = "";
     }, SCROLL_SETTLE_MS);
   }, [filters, activeFilter, onChange, pagerRef]);
 

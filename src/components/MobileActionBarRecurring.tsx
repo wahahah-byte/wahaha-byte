@@ -20,6 +20,8 @@ interface Props {
   onGroupChange: (mode: RecurringGroupMode) => void;
   onNewTask: () => void;
   isAuthenticated: boolean;
+  /** When provided, the FilterTray will mirror its scroll position to this element's transform. */
+  pagerRef?: React.RefObject<HTMLElement | null>;
 }
 
 const SORT_OPTIONS: [RecurringSortMode, string][] = [
@@ -42,7 +44,7 @@ const SWIPE_CYCLE_THRESHOLD = 36;
 export default function MobileActionBarRecurring({
   filters, activeFilter, onFilterChange, getCount, badgeColor,
   sortMode, groupMode, onSortChange, onGroupChange,
-  onNewTask, isAuthenticated,
+  onNewTask, isAuthenticated, pagerRef,
 }: Props) {
   const [showSort, setShowSort] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
@@ -91,6 +93,45 @@ export default function MobileActionBarRecurring({
 
   return (
     <>
+      {/* Standalone fixed handle — sits above the action bar by default, rides up to
+          sit above the filter tray when the tray is open. */}
+      <button
+        onClick={() => setTrayOpen((v) => !v)}
+        onTouchStart={onPullStart}
+        onTouchMove={onPullMove}
+        onTouchEnd={onPullEnd}
+        onTouchCancel={onPullEnd}
+        aria-label={trayOpen ? "Close filter" : "Open filter"}
+        className="sm:hidden"
+        style={{
+          position: "fixed",
+          left: "50%",
+          bottom: trayOpen
+            ? "calc(56px + 56px + 56px + env(safe-area-inset-bottom, 0px))"
+            : "calc(56px + 56px + env(safe-area-inset-bottom, 0px))",
+          transform: "translateX(-50%)",
+          padding: "6px 36px 4px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          touchAction: "none",
+          WebkitTapHighlightColor: "transparent",
+          zIndex: 36,
+          transition: "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            display: "block",
+            width: 36, height: 4,
+            borderRadius: 2,
+            background: trayOpen ? "var(--color-active-highlight)" : "var(--color-border)",
+            transition: "background 0.18s",
+          }}
+        />
+      </button>
+
       <div
         className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2"
         style={{
@@ -102,37 +143,6 @@ export default function MobileActionBarRecurring({
           zIndex: 35,
         }}
       >
-        {/* Grab handle */}
-        <button
-          onClick={() => setTrayOpen(true)}
-          onTouchStart={onPullStart}
-          onTouchMove={onPullMove}
-          onTouchEnd={onPullEnd}
-          onTouchCancel={onPullEnd}
-          aria-label="Open filter"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: "6px 32px 4px",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            touchAction: "none",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              display: "block",
-              width: 32, height: 3,
-              borderRadius: 2,
-              background: "var(--color-border)",
-            }}
-          />
-        </button>
 
         {/* Active-filter chip — funnel icon */}
         <div className="relative flex-shrink-0" style={{ marginTop: 4 }}>
@@ -300,6 +310,7 @@ export default function MobileActionBarRecurring({
         onClose={() => setTrayOpen(false)}
         getCount={getCount}
         badgeColor={badgeColor}
+        pagerRef={pagerRef}
       />
     </>
   );

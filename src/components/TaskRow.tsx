@@ -298,7 +298,15 @@ function TaskRowImpl({
       <div
         ref={actionsRef}
         className="task-actions"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          // After any action button inside the revealed panel fires, close the
+          // panel — the button's own onClick already ran by the time this bubble
+          // handler fires, so the action goes through and the row settles back.
+          if ((e.target as HTMLElement).closest("button")) {
+            setRevealed(false);
+          }
+        }}
         style={{
           position: "absolute", top: 0, bottom: 0, right: 0,
           flexDirection: "row",

@@ -11,7 +11,6 @@ import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
 import TasksHeader from "@/components/TasksHeader";
-import UnsubmittedSummary from "@/components/UnsubmittedSummary";
 import MobileActionBar from "@/components/MobileActionBar";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -153,12 +152,12 @@ function Home() {
     );
   }
 
-  const submitBarVisible = activeFilter === "completed" && selectedIds.size > 0;
-
   const unsubmitted = tasks.filter((t) =>
     t.status === "completed" && !submittedTaskIds.has(t.taskId) && !t.pointsAwarded && t.submitted === false
   );
   const allUnsubmittedSelected = unsubmitted.length > 0 && unsubmitted.every((t) => selectedIds.has(t.taskId));
+
+  const submitBarVisible = activeFilter === "completed" && selectedIds.size > 0;
 
   // Renders one filter "page" inside the horizontal pager. Each page computes
   // its own listItems / chunks for its own filter so all four views are
@@ -336,28 +335,36 @@ function Home() {
             </div>
 
             <div
-              className="grid text-[9px] tracking-widest uppercase px-4 py-2 select-none"
+              className="grid text-[9px] tracking-widest uppercase pl-[26px] pr-4 py-2 select-none"
               style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-subtle)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
             >
               <span>Name</span>
               <span />
               <span />
+              {activeFilter === "completed" && unsubmitted.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (allUnsubmittedSelected) {
+                      setSelectedIds((prev) => { const n = new Set(prev); unsubmitted.forEach((t) => n.delete(t.taskId)); return n; });
+                    } else {
+                      setSelectedIds((prev) => new Set([...prev, ...unsubmitted.map((t) => t.taskId)]));
+                    }
+                  }}
+                  className="absolute top-1/2 -translate-y-1/2 right-4 text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                  style={{
+                    color: allUnsubmittedSelected ? "rgba(245,158,11,0.85)" : "var(--color-fg-subtle)",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = allUnsubmittedSelected ? "var(--color-warning)" : "var(--color-fg-muted)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = allUnsubmittedSelected ? "rgba(245,158,11,0.85)" : "var(--color-fg-subtle)")}
+                >
+                  {allUnsubmittedSelected ? "Deselect All" : "Select All"}
+                </button>
+              )}
             </div>
           </div>
-
-          {activeFilter === "completed" && !loading && (
-            <UnsubmittedSummary
-              unsubmitted={unsubmitted}
-              allSelected={allUnsubmittedSelected}
-              onToggleSelectAll={() => {
-                if (allUnsubmittedSelected) {
-                  setSelectedIds((prev) => { const n = new Set(prev); unsubmitted.forEach((t) => n.delete(t.taskId)); return n; });
-                } else {
-                  setSelectedIds((prev) => new Set([...prev, ...unsubmitted.map((t) => t.taskId)]));
-                }
-              }}
-            />
-          )}
 
           <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
             <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
