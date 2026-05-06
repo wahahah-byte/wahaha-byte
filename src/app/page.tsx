@@ -293,8 +293,7 @@ function Home() {
     <>
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad"
-          style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
+          className={`max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad${submitBarVisible ? " sm:pb-24" : ""}`}
         >
           {!isAuthenticated && (
             <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-accent-bg)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}>
@@ -477,6 +476,7 @@ function Home() {
         }}
         isAuthenticated={isAuthenticated}
         pagerRef={pagerRef}
+        submitMode={submitBarVisible}
       />
 
       <SubmitBar

@@ -8,9 +8,9 @@ import DatePicker from "@/components/DatePicker";
 import SubtaskRow from "@/components/SubtaskRow";
 
 const PRIORITIES = [
-  { label: "Low",    value: "low",    color: "#22c55e" },
-  { label: "Medium", value: "medium", color: "var(--color-warning)" },
-  { label: "High",   value: "high",   color: "var(--color-danger)" },
+  { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
+  { label: "Medium", value: "medium", color: "var(--color-warning)", bg: "var(--color-warning-bg)" },
+  { label: "High",   value: "high",   color: "var(--color-danger)",  bg: "var(--color-danger-bg)" },
 ];
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -99,7 +99,7 @@ function ActionBtn({
       onClick={onClick}
       disabled={disabled}
       className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-      style={{ color, background: "transparent", border: `1px solid ${color}44`, borderRadius: "3px" }}
+      style={{ color, background: "transparent", border: `1px solid color-mix(in srgb, ${color} 28%, transparent)`, borderRadius: "3px" }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = hoverBg; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
@@ -255,7 +255,7 @@ export default function TaskDetailModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
-      style={{ background: "rgba(0,0,0,0.72)" }}
+      style={{ background: "var(--color-modal-overlay)" }}
       onClick={isEditing ? undefined : onClose}
     >
       <div
@@ -312,7 +312,7 @@ export default function TaskDetailModal({
             {mustReschedule && (
               <div
                 className="px-3 py-2 text-xs leading-relaxed flex items-start gap-2"
-                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "3px", color: "rgba(239,68,68,0.9)" }}
+                style={{ background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px", color: "var(--color-danger)" }}
               >
                 <span style={{ fontSize: "11px", lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
                 <span style={{ fontSize: "11px", lineHeight: 1.4 }}>
@@ -348,7 +348,7 @@ export default function TaskDetailModal({
                 onChange={(e) => setEditDescription(e.target.value)}
                 placeholder="Optional details…"
                 rows={2}
-                className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
+                className="w-full px-3 py-2 text-sm outline-none resize-none"
                 style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
                 onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
@@ -391,7 +391,7 @@ export default function TaskDetailModal({
                     onClick={() => setEditPriority(p.value)}
                     className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
                     style={{
-                      background: editPriority === p.value ? `${p.color}18` : "transparent",
+                      background: editPriority === p.value ? p.bg : "transparent",
                       color: editPriority === p.value ? p.color : "var(--color-fg-subtle)",
                       borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
                       fontWeight: editPriority === p.value ? 600 : 400,
@@ -405,7 +405,7 @@ export default function TaskDetailModal({
             </EditField>
 
             {editError && (
-              <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
+              <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}>
                 {editError}
               </p>
             )}
@@ -583,8 +583,8 @@ export default function TaskDetailModal({
                   onClick={onDelete}
                   disabled={isSaving}
                   className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
-                  style={{ color: "var(--color-danger)", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "3px" }}
-                  onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                  style={{ color: "var(--color-danger)", background: "transparent", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}
+                  onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-danger-bg)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
@@ -631,12 +631,12 @@ export default function TaskDetailModal({
               )}
 
               {checkInBlocked && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ border: "1px solid rgba(245,158,11,0.25)", borderRadius: "3px", background: "rgba(245,158,11,0.04)" }}>
+                <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ border: "1px solid var(--color-warning-border)", borderRadius: "3px", background: "var(--color-warning-bg)" }}>
                   <svg width="8" height="9" viewBox="0 0 10 12" fill="none">
-                    <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="rgba(245,158,11,0.6)" strokeWidth="1.2" fill="none"/>
-                    <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.6)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+                    <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="var(--color-warning)" strokeWidth="1.2" fill="none"/>
+                    <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="var(--color-warning)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
                   </svg>
-                  <span style={{ color: "rgba(245,158,11,0.65)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                  <span style={{ color: "var(--color-warning)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
                     {fmtShort(task.dueDate)}
                   </span>
                 </div>
@@ -647,7 +647,7 @@ export default function TaskDetailModal({
                   onClick={onPause}
                   disabled={isActing}
                   color="var(--color-warning)"
-                  hoverBg="rgba(245,158,11,0.12)"
+                  hoverBg="var(--color-warning-bg)"
                   label="Pause"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
@@ -663,7 +663,7 @@ export default function TaskDetailModal({
                   onClick={onComplete}
                   disabled={isActing}
                   color="var(--color-success)"
-                  hoverBg="rgba(74,222,128,0.12)"
+                  hoverBg="var(--color-success-bg)"
                   label="Complete"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
@@ -678,7 +678,7 @@ export default function TaskDetailModal({
                   onClick={onUndo}
                   disabled={isActing}
                   color="var(--color-warning)"
-                  hoverBg="rgba(245,158,11,0.12)"
+                  hoverBg="var(--color-warning-bg)"
                   label="Undo"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
@@ -709,7 +709,7 @@ export default function TaskDetailModal({
                   onClick={onDelete}
                   disabled={isActing}
                   color="var(--color-danger)"
-                  hoverBg="rgba(239,68,68,0.12)"
+                  hoverBg="var(--color-danger-bg)"
                   label="Delete"
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">

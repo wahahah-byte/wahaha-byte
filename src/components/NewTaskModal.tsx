@@ -15,9 +15,9 @@ const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = 
 ];
 
 const PRIORITIES = [
-  { label: "Low", value: "low", color: "#22c55e" },
-  { label: "Medium", value: "medium", color: "#f59e0b" },
-  { label: "High", value: "high", color: "var(--color-danger)" },
+  { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
+  { label: "Medium", value: "medium", color: "var(--color-warning)", bg: "var(--color-warning-bg)" },
+  { label: "High",   value: "high",   color: "var(--color-danger)",  bg: "var(--color-danger-bg)" },
 ];
 
 interface Props {
@@ -84,7 +84,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
-      style={{ background: "rgba(0,0,0,0.72)" }}
+      style={{ background: "var(--color-modal-overlay)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -115,7 +115,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               placeholder="What needs to be done?"
-              className="w-full px-3 py-2 text-sm outline-none placeholder-white/20"
+              className="w-full px-3 py-2 text-sm outline-none"
               style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
               onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
@@ -221,7 +221,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                   onClick={() => setPriority(p.value)}
                   className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
                   style={{
-                    background: priority === p.value ? `${p.color}18` : "transparent",
+                    background: priority === p.value ? p.bg : "transparent",
                     color: priority === p.value ? p.color : "var(--color-fg-subtle)",
                     borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
                     fontWeight: priority === p.value ? 600 : 400,
@@ -235,7 +235,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           </Field>
 
           {error && (
-            <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "3px" }}>
+            <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}>
               {error}
             </p>
           )}

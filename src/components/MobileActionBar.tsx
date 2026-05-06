@@ -30,6 +30,9 @@ interface Props {
   isAuthenticated: boolean;
   /** When provided, the FilterTray will mirror its scroll position to this element's transform. */
   pagerRef?: React.RefObject<HTMLElement | null>;
+  /** When true, hides the action-bar row (quick-add + controls) — used while the
+   *  mobile SubmitBar takes over that slot. Handle and FilterTray stay rendered. */
+  submitMode?: boolean;
 }
 
 const SWIPE_CYCLE_THRESHOLD = 36;
@@ -37,7 +40,7 @@ const SWIPE_CYCLE_THRESHOLD = 36;
 export default function MobileActionBar({
   filters, activeFilter, onFilterChange, getCount, badgeColor,
   sortMode, groupMode, onSortChange, onGroupChange,
-  onNewTask, onQuickCreate, isAuthenticated, pagerRef,
+  onNewTask, onQuickCreate, isAuthenticated, pagerRef, submitMode,
 }: Props) {
   const [trayOpen, setTrayOpen] = useState(true);
   const [cycleHint, setCycleHint] = useState<string | null>(null);
@@ -199,57 +202,58 @@ export default function MobileActionBar({
         />
       </button>
 
-      <div
-        className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
-        style={{
-          bottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
-          height: "44px",
-          background: "var(--color-header)",
-          borderTop: "1px solid var(--color-border-soft)",
-          boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",
-          zIndex: 35,
-        }}
-      >
+      {!submitMode && (
+        <div
+          className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
+          style={{
+            bottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
+            height: "44px",
+            background: "var(--color-header)",
+            borderTop: "1px solid var(--color-border-soft)",
+            boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",
+            zIndex: 35,
+          }}
+        >
+          <div className="flex-1 flex items-center">
+            {onQuickCreate ? (
+              <QuickAddInput disabled={!isAuthenticated} onSubmit={onQuickCreate} />
+            ) : (
+              <div className="flex-1" />
+            )}
+          </div>
 
-        <div className="flex-1 flex items-center">
-          {onQuickCreate ? (
-            <QuickAddInput disabled={!isAuthenticated} onSubmit={onQuickCreate} />
-          ) : (
-            <div className="flex-1" />
-          )}
+          <div className="flex items-center">
+            <TaskListControls
+              sortMode={sortMode}
+              groupMode={groupMode}
+              onSortChange={onSortChange}
+              onGroupChange={onGroupChange}
+              openAbove
+            />
+            <button
+              onClick={() => !isAuthenticated ? undefined : onNewTask()}
+              disabled={!isAuthenticated}
+              title={!isAuthenticated ? "Sign in to create tasks" : "Open full task form"}
+              aria-label="Open full new task form"
+              className="flex-shrink-0 flex items-center justify-center"
+              style={{
+                width: 36, height: 30,
+                padding: 0,
+                fontSize: "20px",
+                lineHeight: 1,
+                background: "transparent",
+                border: "none",
+                color: "var(--color-fg)",
+                cursor: !isAuthenticated ? "not-allowed" : "pointer",
+                opacity: !isAuthenticated ? 0.3 : 1,
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              +
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center">
-          <TaskListControls
-            sortMode={sortMode}
-            groupMode={groupMode}
-            onSortChange={onSortChange}
-            onGroupChange={onGroupChange}
-            openAbove
-          />
-          <button
-            onClick={() => !isAuthenticated ? undefined : onNewTask()}
-            disabled={!isAuthenticated}
-            title={!isAuthenticated ? "Sign in to create tasks" : "Open full task form"}
-            aria-label="Open full new task form"
-            className="flex-shrink-0 flex items-center justify-center"
-            style={{
-              width: 36, height: 30,
-              padding: 0,
-              fontSize: "20px",
-              lineHeight: 1,
-              background: "transparent",
-              border: "none",
-              color: "var(--color-fg)",
-              cursor: !isAuthenticated ? "not-allowed" : "pointer",
-              opacity: !isAuthenticated ? 0.3 : 1,
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            +
-          </button>
-        </div>
-      </div>
+      )}
 
       <FilterTray
         open={trayOpen}
