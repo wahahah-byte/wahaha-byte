@@ -285,7 +285,7 @@ function Recurring() {
                 style={{
                   position: "absolute",
                   top: "-6px",
-                  left: "10px",
+                  left: "4px",
                   padding: "0 6px",
                   background: "var(--color-bg)",
                   color: "var(--color-fg-subtle)",
@@ -343,7 +343,7 @@ function Recurring() {
   return (
     <>
       <div className="recurring-scope task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-        <div className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden">
+        <div className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad">
           {!isAuthenticated && (
             <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-accent-bg)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}>
               <span style={{ color: "var(--color-accent)", opacity: 0.85 }}>Demo · changes are not saved</span>
@@ -397,16 +397,24 @@ function Recurring() {
               <button
                 onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
                 disabled={!isAuthenticated}
-                title={!isAuthenticated ? "Sign in to create tasks" : undefined}
-                className="pixel-btn"
+                title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
+                aria-label="New task"
                 style={{
-                  fontSize: "11px",
+                  fontSize: "20px",
+                  lineHeight: 1,
                   alignSelf: "center",
                   margin: "0 6px",
-                  padding: "5px 14px",
+                  padding: "4px 10px",
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--color-fg)",
+                  cursor: !isAuthenticated ? "not-allowed" : "pointer",
+                  opacity: !isAuthenticated ? 0.3 : 1,
                 }}
+                onMouseEnter={(e) => { if (isAuthenticated) e.currentTarget.style.color = "var(--color-active-highlight-alt)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
               >
-                + New
+                +
               </button>
             </div>
           </div>
@@ -570,7 +578,7 @@ function Recurring() {
           </div>
 
           <div
-            className="grid text-[10px] tracking-widest uppercase px-4 py-2 select-none"
+            className="grid text-[10px] tracking-widest uppercase pl-[14px] pr-4 py-2 select-none"
             style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
           >
             <span>Name</span>

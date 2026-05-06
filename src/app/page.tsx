@@ -202,7 +202,7 @@ function Home() {
           <button
             type="button"
             onClick={() => setUncompletedCollapsed((v) => !v)}
-            className="flex items-center gap-3 px-4 mt-2 mb-5 w-full cursor-pointer"
+            className="flex items-center gap-3 pl-1 mt-2 mb-5 w-full cursor-pointer"
             style={{ background: "transparent", border: "none" }}
             aria-expanded={!uncompletedCollapsed}
           >
@@ -226,7 +226,7 @@ function Home() {
               }}
             >
               {chunk.sep && isSection && (
-                <div className={`flex items-center gap-3 px-4 ${idx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
+                <div className={`flex items-center gap-3 pl-1 ${idx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
                   <span className="tracking-widest uppercase text-[11px] font-semibold" style={{ color: "var(--color-fg-muted)" }}>
                     {chunk.sep.label}
                   </span>
@@ -237,7 +237,7 @@ function Home() {
                 <span
                   className="tracking-widest uppercase text-[9px]"
                   style={{
-                    position: "absolute", top: "-6px", left: "10px",
+                    position: "absolute", top: "-6px", left: "4px",
                     padding: "0 6px", background: "var(--color-bg)",
                     color: "var(--color-fg-subtle)", lineHeight: 1, zIndex: 1,
                   }}
@@ -293,7 +293,7 @@ function Home() {
     <>
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden"
+          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad"
           style={{ paddingBottom: submitBarVisible ? "96px" : undefined }}
         >
           {!isAuthenticated && (
@@ -335,7 +335,7 @@ function Home() {
             </div>
 
             <div
-              className="grid text-[9px] tracking-widest uppercase pl-[26px] pr-4 py-2 select-none"
+              className="grid text-[9px] tracking-widest uppercase pl-[14px] pr-4 py-2 select-none"
               style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-subtle)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
             >
               <span>Name</span>

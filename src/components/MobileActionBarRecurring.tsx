@@ -38,7 +38,6 @@ const GROUP_OPTIONS: [RecurringGroupMode, string][] = [
   ["category", "Category"],
 ];
 
-const PULL_OPEN_THRESHOLD = 14;
 const SWIPE_CYCLE_THRESHOLD = 36;
 
 export default function MobileActionBarRecurring({
@@ -48,9 +47,11 @@ export default function MobileActionBarRecurring({
 }: Props) {
   const [showSort, setShowSort] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(true);
   const [cycleHint, setCycleHint] = useState<string | null>(null);
-  const pullRef = useRef<{ startX: number; startY: number; locked: "v" | "h" | null } | null>(null);
+  const pullRef = useRef<{ startX: number; startY: number; startedOpen: boolean; locked: "v" | "h" | null } | null>(null);
+  const trayElementRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLButtonElement>(null);
 
   const active = filters.find((f) => f.value === activeFilter) ?? filters[0];
   const activeBadge = badgeColor?.(active.value) ?? null;
@@ -73,29 +74,77 @@ export default function MobileActionBarRecurring({
 
   function onPullStart(e: React.TouchEvent) {
     const t = e.touches[0];
-    pullRef.current = { startX: t.clientX, startY: t.clientY, locked: null };
+    pullRef.current = { startX: t.clientX, startY: t.clientY, startedOpen: trayOpen, locked: null };
   }
   function onPullMove(e: React.TouchEvent) {
     const d = pullRef.current;
-    if (!d || d.locked) return;
+    if (!d || d.locked === "h") return;
     const t = e.touches[0];
     const dx = t.clientX - d.startX;
     const dy = t.clientY - d.startY;
-    if (Math.abs(dx) >= SWIPE_CYCLE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-      d.locked = "h";
-      cycleFilter(dx < 0 ? 1 : -1);
-    } else if (dy < -PULL_OPEN_THRESHOLD && Math.abs(dy) >= Math.abs(dx)) {
+
+    if (d.locked === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (Math.abs(dx) >= SWIPE_CYCLE_THRESHOLD) {
+          d.locked = "h";
+          cycleFilter(dx < 0 ? 1 : -1);
+        }
+        return;
+      }
       d.locked = "v";
-      setTrayOpen(true);
+    }
+
+    if (d.locked === "v") {
+      const tray = trayElementRef.current;
+      const handle = handleRef.current;
+      if (!tray || !handle) return;
+      const trayHeight = tray.offsetHeight;
+      const trayHeightTotal = trayHeight + 8;
+      const baseY = d.startedOpen ? 0 : trayHeightTotal;
+      const targetY = Math.max(0, Math.min(trayHeightTotal, baseY + dy));
+      tray.style.transition = "none";
+      tray.style.transform = `translateY(${targetY}px)`;
+      const progress = 1 - targetY / trayHeightTotal;
+      const handleBottom = 88 + (124 - 88) * progress;
+      handle.style.transition = "none";
+      handle.style.bottom = `calc(${handleBottom}px + env(safe-area-inset-bottom, 0px))`;
     }
   }
-  function onPullEnd() { pullRef.current = null; }
+  function onPullEnd() {
+    const d = pullRef.current;
+    pullRef.current = null;
+    if (!d || d.locked !== "v") return;
+
+    const tray = trayElementRef.current;
+    const handle = handleRef.current;
+    if (!tray || !handle) return;
+
+    const match = tray.style.transform.match(/translateY\((-?[\d.]+)px\)/);
+    const currentY = match ? parseFloat(match[1]) : 0;
+    const trayHeightTotal = tray.offsetHeight + 8;
+    const willOpen = currentY < trayHeightTotal / 2;
+
+    tray.style.transition = "transform 0.22s cubic-bezier(0.2, 0, 0, 1)";
+    handle.style.transition = "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)";
+
+    if (willOpen) {
+      tray.style.transform = "translateY(0)";
+      handle.style.bottom = "calc(44px + 44px + 36px + env(safe-area-inset-bottom, 0px))";
+      if (!trayOpen) setTrayOpen(true);
+    } else {
+      tray.style.transform = "translateY(calc(100% + 8px))";
+      handle.style.bottom = "calc(44px + 44px + env(safe-area-inset-bottom, 0px))";
+      if (trayOpen) setTrayOpen(false);
+    }
+  }
 
   return (
     <>
       {/* Standalone fixed handle — sits above the action bar by default, rides up to
           sit above the filter tray when the tray is open. */}
       <button
+        ref={handleRef}
         onClick={() => setTrayOpen((v) => !v)}
         onTouchStart={onPullStart}
         onTouchMove={onPullMove}
@@ -107,8 +156,8 @@ export default function MobileActionBarRecurring({
           position: "fixed",
           left: "50%",
           bottom: trayOpen
-            ? "calc(56px + 56px + 56px + env(safe-area-inset-bottom, 0px))"
-            : "calc(56px + 56px + env(safe-area-inset-bottom, 0px))",
+            ? "calc(44px + 44px + 36px + env(safe-area-inset-bottom, 0px))"
+            : "calc(44px + 44px + env(safe-area-inset-bottom, 0px))",
           transform: "translateX(-50%)",
           padding: "6px 36px 4px",
           background: "transparent",
@@ -133,10 +182,10 @@ export default function MobileActionBarRecurring({
       </button>
 
       <div
-        className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2"
+        className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
         style={{
-          bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
-          height: "56px",
+          bottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
+          height: "40px",
           background: "var(--color-header)",
           borderTop: "1px solid var(--color-border-soft)",
           boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",
@@ -293,9 +342,21 @@ export default function MobileActionBarRecurring({
           <button
             onClick={() => !isAuthenticated ? undefined : onNewTask()}
             disabled={!isAuthenticated}
-            title={!isAuthenticated ? "Sign in to create tasks" : undefined}
-            className="pixel-btn flex-shrink-0 flex items-center justify-center"
-            style={{ width: 36, height: 30, padding: 0, fontSize: "16px", lineHeight: 1 }}
+            title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
+            aria-label="New task"
+            className="flex-shrink-0 flex items-center justify-center"
+            style={{
+              width: 36, height: 30,
+              padding: 0,
+              fontSize: "20px",
+              lineHeight: 1,
+              background: "transparent",
+              border: "none",
+              color: "var(--color-fg)",
+              cursor: !isAuthenticated ? "not-allowed" : "pointer",
+              opacity: !isAuthenticated ? 0.3 : 1,
+              WebkitTapHighlightColor: "transparent",
+            }}
           >
             +
           </button>
@@ -311,6 +372,7 @@ export default function MobileActionBarRecurring({
         getCount={getCount}
         badgeColor={badgeColor}
         pagerRef={pagerRef}
+        trayElementRef={trayElementRef}
       />
     </>
   );

@@ -30,11 +30,11 @@ export default function MobileNav() {
           <Link
             key={item.href}
             href={item.href}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors"
             style={{ color: isActive ? "var(--color-active-highlight)" : "var(--color-fg-muted)" }}
           >
             {item.label === "Tasks" ? <TasksIcon /> : item.label === "Recurring" ? <RecurringIcon /> : <ArchiveIcon />}
-            <span style={{ fontSize: "9px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: isActive ? 600 : 500 }}>
+            <span style={{ fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: isActive ? 600 : 500 }}>
               {item.label}
             </span>
           </Link>
@@ -46,7 +46,7 @@ export default function MobileNav() {
 
 function TasksIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <line x1="9" y1="6" x2="20" y2="6" />
       <line x1="9" y1="12" x2="20" y2="12" />
       <line x1="9" y1="18" x2="20" y2="18" />
@@ -59,7 +59,7 @@ function TasksIcon() {
 
 function RecurringIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12a9 9 0 1 1-3-6.7" />
       <polyline points="21 4 21 10 15 10" />
     </svg>
@@ -68,7 +68,7 @@ function RecurringIcon() {
 
 function ArchiveIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <line x1="10" y1="12" x2="14" y2="12" />

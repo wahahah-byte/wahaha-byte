@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Filter = { label: string; shortLabel: string; value: string };
@@ -13,114 +13,46 @@ type Props = {
   onClose: () => void;
   getCount?: (value: string) => number;
   badgeColor?: (value: string) => string | null;
-  /** Distance from screen bottom to the tray. Defaults match MobileActionBar (56px) + MobileNav (56px). */
+  /** Distance from screen bottom to the tray. Defaults match MobileActionBar (44px) + MobileNav (44px). */
   bottomOffsetPx?: number;
-  /**
-   * Optional ref to a horizontally-translatable pager element. The tray will mirror
-   * its scroll position to this element's `transform`, so the page-content pager
-   * follows the user's thumb 1:1 with the pill strip.
-   *
-   * Convention: the pager's inner element should have width = `${filters.length * 100}%`
-   * and each child page width = `${100 / filters.length}%`. The tray writes
-   * `transform: translateX(-{progress * (100/filters.length)}%)`.
-   */
+  /** Optional ref to the page-content pager. Horizontal swipes on the tray drive
+   *  this element's transform 1:1 with the thumb (carousel-style page slide). */
   pagerRef?: React.RefObject<HTMLElement | null>;
+  /** Optional ref to the tray's own root element. Lets the action-bar handle
+   *  drive the tray's vertical translate directly during a drag-to-open or
+   *  drag-to-close gesture. */
+  trayElementRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-const TRAY_HEIGHT = 56;
-const PILL_FLEX_BASIS = "60%";
-const SCROLL_SETTLE_MS = 120;
+const TRAY_HEIGHT = 36;
 const DISMISS_DRAG_PX = 50;
+const AXIS_DEADZONE_PX = 8;
 
 export default function FilterTray({
   open, filters, activeFilter, onChange, onClose, getCount, badgeColor,
-  bottomOffsetPx = 112, pagerRef,
+  bottomOffsetPx = 88, pagerRef, trayElementRef,
 }: Props) {
-  const stripRef = useRef<HTMLDivElement | null>(null);
-  const pillRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const settleTimerRef = useRef<number | null>(null);
   const [dragY, setDragY] = useState(0);
-  const swipeRef = useRef<{ startX: number; startY: number; locked: "v" | "h" | null } | null>(null);
+  const swipeRef = useRef<{ startX: number; startY: number; startIdx: number; locked: "v" | "h" | null } | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  const activeIdx = Math.max(0, filters.findIndex((f) => f.value === activeFilter));
 
-  // Center the active pill when the tray opens, or when activeFilter changes externally.
-  // No "suppress" flag is needed — the settle handler's `target.value !== activeFilter`
-  // check is enough to prevent an auto-center loop (the centered pill IS the active one).
   useEffect(() => {
     if (!open) return;
-    const idx = filters.findIndex((f) => f.value === activeFilter);
-    if (idx < 0) return;
-    const strip = stripRef.current;
-    const pill = pillRefs.current[idx];
-    if (!strip || !pill) return;
-    requestAnimationFrame(() => {
-      const target = pill.offsetLeft - (strip.clientWidth - pill.clientWidth) / 2;
-      strip.scrollLeft = target;
-    });
-  }, [open, activeFilter, filters]);
-
-  const handleScroll = useCallback(() => {
-    const strip = stripRef.current;
-    if (strip) {
-      // Mirror scroll position into the page-content pager via direct DOM write
-      // (no React state, fires at scroll-event rate ~60fps).
-      const pager = pagerRef?.current;
-      if (pager && filters.length > 1) {
-        const firstPill = pillRefs.current[0];
-        const lastPill = pillRefs.current[filters.length - 1];
-        if (firstPill && lastPill) {
-          const firstCenter = firstPill.offsetLeft + firstPill.clientWidth / 2;
-          const lastCenter = lastPill.offsetLeft + lastPill.clientWidth / 2;
-          const stripCenter = strip.scrollLeft + strip.clientWidth / 2;
-          const span = lastCenter - firstCenter;
-          const rawProgress = span > 0 ? (stripCenter - firstCenter) / span : 0;
-          const progress = Math.max(0, Math.min(1, rawProgress)) * (filters.length - 1);
-          const pct = -(progress * (100 / filters.length));
-          // Direct DOM writes are intentional — state updates at 60fps would
-          // tank scroll perf. The ref transports a DOM element we drive imperatively.
-          // eslint-disable-next-line react-hooks/immutability
-          pager.style.transition = "none";
-          pager.style.transform = `translateX(${pct}%)`;
-        }
-      }
-    }
-
-    if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = window.setTimeout(() => {
-      // Restore CSS transition first, unconditionally — so subsequent React-driven
-      // activeFilter updates (chip tap, cycle gesture) animate the pager smoothly.
-      const pager = pagerRef?.current;
-      if (pager) pager.style.transition = "";
-
-      const s = stripRef.current;
-      if (!s) return;
-      const centerX = s.scrollLeft + s.clientWidth / 2;
-      let bestIdx = -1;
-      let bestDist = Infinity;
-      pillRefs.current.forEach((pill, i) => {
-        if (!pill) return;
-        const pillCenter = pill.offsetLeft + pill.clientWidth / 2;
-        const dist = Math.abs(pillCenter - centerX);
-        if (dist < bestDist) { bestDist = dist; bestIdx = i; }
-      });
-      if (bestIdx >= 0) {
-        const target = filters[bestIdx];
-        if (target && target.value !== activeFilter) onChange(target.value);
-      }
-    }, SCROLL_SETTLE_MS);
-  }, [filters, activeFilter, onChange, pagerRef]);
-
-  function selectPill(idx: number) {
-    const strip = stripRef.current;
-    const pill = pillRefs.current[idx];
-    if (!strip || !pill) return;
-    const target = pill.offsetLeft - (strip.clientWidth - pill.clientWidth) / 2;
-    strip.scrollTo({ left: target, behavior: "smooth" });
-    // The scroll-settle detector will commit onChange.
-  }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
-    swipeRef.current = { startX: t.clientX, startY: t.clientY, locked: null };
+    const startIdx = filters.findIndex((f) => f.value === activeFilter);
+    swipeRef.current = {
+      startX: t.clientX,
+      startY: t.clientY,
+      startIdx: startIdx < 0 ? 0 : startIdx,
+      locked: null,
+    };
   }
   function onTouchMove(e: React.TouchEvent) {
     const s = swipeRef.current;
@@ -128,22 +60,92 @@ export default function FilterTray({
     const t = e.touches[0];
     const dx = t.clientX - s.startX;
     const dy = t.clientY - s.startY;
-    // Axis lock: whichever axis crosses the deadzone first wins. Horizontal
-    // wins → leave the dismiss handler dormant so the native pill scroll runs
-    // unobstructed even if the finger drifts vertically.
+    // Axis lock at the deadzone so a tap doesn't trigger a drag and a horizontal
+    // page swipe doesn't accidentally pull the tray down.
     if (s.locked === null) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dx) < AXIS_DEADZONE_PX && Math.abs(dy) < AXIS_DEADZONE_PX) return;
       s.locked = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
     }
-    if (s.locked === "v" && dy > 0) setDragY(dy);
+    if (s.locked === "v" && dy > 0) {
+      setDragY(dy);
+      return;
+    }
+    if (s.locked === "h" && filters.length > 1) {
+      // Drag-the-thumb model: the highlight tracks the finger 1:1 across pill
+      // widths. dx of one pill width = +1 filter index. The pager slides in
+      // the same direction the highlight does (toward the destination filter).
+      const viewportW = window.innerWidth || 1;
+      const pillWidth = (viewportW - 16) / filters.length; // strip is full-width minus px-2 padding
+      const deltaIdx = dx / pillWidth;
+      const continuous = Math.max(0, Math.min(filters.length - 1, s.startIdx + deltaIdx));
+      const slotPct = 100 / filters.length;
+
+      const pager = pagerRef?.current;
+      if (pager) {
+        // eslint-disable-next-line react-hooks/immutability
+        pager.style.transition = "none";
+        pager.style.transform = `translateX(${-continuous * slotPct}%)`;
+      }
+
+      // Slide the active-pill highlight in lockstep with the page so the user
+      // sees the selection moving toward the next filter as they swipe.
+      const highlight = highlightRef.current;
+      if (highlight) {
+        highlight.style.transition = "none";
+        highlight.style.transform = `translateX(${continuous * 100}%)`;
+      }
+    }
   }
   function onTouchEnd() {
     const s = swipeRef.current;
     swipeRef.current = null;
     if (!s) return;
-    const final = dragY;
-    setDragY(0);
-    if (s.locked === "v" && final > DISMISS_DRAG_PX) onClose();
+    if (s.locked === "v") {
+      const final = dragY;
+      setDragY(0);
+      if (final > DISMISS_DRAG_PX) onClose();
+      return;
+    }
+    if (s.locked === "h") {
+      const pager = pagerRef?.current;
+      const highlight = highlightRef.current;
+      const slotPct = 100 / filters.length;
+
+      // Read the current pager position (or fall back to highlight) to figure
+      // out which pill we landed nearest to.
+      let continuousIdx = s.startIdx;
+      if (pager) {
+        const match = pager.style.transform.match(/translateX\((-?[\d.]+)%\)/);
+        const currentPct = match ? parseFloat(match[1]) : 0;
+        continuousIdx = -currentPct / slotPct;
+      } else if (highlight) {
+        const match = highlight.style.transform.match(/translateX\((-?[\d.]+)%\)/);
+        const currentPct = match ? parseFloat(match[1]) : 0;
+        continuousIdx = currentPct / 100;
+      }
+      const snappedIdx = Math.max(0, Math.min(filters.length - 1, Math.round(continuousIdx)));
+
+      // Restore transitions so the snap glides on both pager and highlight.
+      // For the pager, React will overwrite the transform in its next render
+      // via the JSX inline style — same target value, no jump.
+      if (pager) {
+        // eslint-disable-next-line react-hooks/immutability
+        pager.style.transition = "";
+      }
+      if (highlight) {
+        highlight.style.transition = "transform 0.22s cubic-bezier(0.2, 0, 0, 1)";
+        highlight.style.transform = `translateX(${snappedIdx * 100}%)`;
+      }
+
+      const target = filters[snappedIdx];
+      if (target && target.value !== activeFilter) {
+        onChange(target.value);
+      } else if (pager) {
+        // Same filter — no React update will fire, so write the snap transform
+        // directly so the page settles back to its rest position.
+        pager.style.transform = `translateX(${-snappedIdx * slotPct}%)`;
+      }
+    }
   }
 
   if (typeof document === "undefined") return null;
@@ -161,6 +163,7 @@ export default function FilterTray({
         onClick={onClose}
       />
       <div
+        ref={trayElementRef}
         className="fixed left-0 right-0 sm:hidden overflow-hidden"
         style={{
           bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom, 0px))`,
@@ -182,63 +185,73 @@ export default function FilterTray({
         onTouchCancel={onTouchEnd}
         aria-hidden={!open}
       >
-        <div
-          ref={stripRef}
-          onScroll={handleScroll}
-          className="h-full flex items-center filter-tray-strip"
-          style={{
-            overflowX: "auto",
-            overflowY: "hidden",
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-            paddingLeft: "20%",
-            paddingRight: "20%",
-            gap: 8,
-          }}
-        >
-          {filters.map((f, i) => {
+        <div className="h-full flex items-stretch px-2 relative">
+          {/* Moving highlight that slides between pill positions. Direct DOM
+              writes during a swipe drive its transform 1:1 with the pager;
+              React-driven activeFilter changes (taps, cycle gesture) animate
+              via CSS transition. Sized to one pill slot (1/N of the strip
+              content area), so translateX(N * 100%) lands on the Nth pill. */}
+          <div
+            ref={highlightRef}
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: 4,
+              bottom: 4,
+              left: 8,
+              width: `calc((100% - 16px) / ${filters.length})`,
+              background: "var(--color-active-highlight-bg)",
+              border: "1px solid var(--color-active-highlight-border)",
+              borderRadius: 4,
+              transform: `translateX(${activeIdx * 100}%)`,
+              transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
+              pointerEvents: "none",
+              willChange: "transform",
+            }}
+          />
+          {filters.map((f) => {
             const isActive = f.value === activeFilter;
             const count = getCount?.(f.value);
             const dot = badgeColor?.(f.value) ?? null;
             return (
-              <div
+              <button
                 key={f.value}
-                ref={(el) => { pillRefs.current[i] = el; }}
-                onClick={() => selectPill(i)}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isActive}
+                onClick={() => { onChange(f.value); }}
+                role="menuitemradio"
+                aria-checked={isActive}
+                className="flex items-center justify-center cursor-pointer"
                 style={{
-                  flex: `0 0 ${PILL_FLEX_BASIS}`,
-                  scrollSnapAlign: "center",
-                  height: 36,
+                  flex: "1 1 0",
+                  minWidth: 0,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 6,
-                  background: isActive ? "var(--color-active-highlight-bg)" : "transparent",
-                  border: `1px solid ${isActive ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
-                  borderRadius: 4,
+                  gap: 5,
+                  background: "transparent",
+                  border: "none",
                   color: isActive ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
-                  fontSize: "11px",
-                  letterSpacing: "0.16em",
+                  fontSize: "10px",
+                  letterSpacing: "0.14em",
                   textTransform: "uppercase",
                   fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  transition: "background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s",
-                  transform: isActive ? "scale(1)" : "scale(0.96)",
+                  padding: "0 6px",
+                  position: "relative",
+                  zIndex: 1,
                   WebkitTapHighlightColor: "transparent",
-                  userSelect: "none",
+                  transition: "color 0.18s",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
                 {dot && (
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: dot }} />
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: dot, flexShrink: 0 }} />
                 )}
-                <span>{f.label}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{f.shortLabel}</span>
                 {count !== undefined && (
-                  <span style={{ opacity: 0.6, fontWeight: 500 }}>{count}</span>
+                  <span style={{ opacity: 0.6, fontWeight: 500, flexShrink: 0 }}>{count}</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>

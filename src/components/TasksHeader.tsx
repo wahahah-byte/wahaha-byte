@@ -54,16 +54,24 @@ export default function TasksHeader({ isAuthenticated, onNewTask }: Props) {
         <button
           onClick={() => !isAuthenticated ? undefined : onNewTask()}
           disabled={!isAuthenticated}
-          title={!isAuthenticated ? "Sign in to create tasks" : undefined}
-          className="pixel-btn"
+          title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
+          aria-label="New task"
           style={{
-            fontSize: "11px",
+            fontSize: "20px",
+            lineHeight: 1,
             alignSelf: "center",
             margin: "0 6px",
-            padding: "5px 14px",
+            padding: "4px 10px",
+            background: "transparent",
+            border: "none",
+            color: "var(--color-fg)",
+            cursor: !isAuthenticated ? "not-allowed" : "pointer",
+            opacity: !isAuthenticated ? 0.3 : 1,
           }}
+          onMouseEnter={(e) => { if (isAuthenticated) e.currentTarget.style.color = "var(--color-active-highlight)"; }}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
         >
-          + New
+          +
         </button>
       </div>
     </div>
