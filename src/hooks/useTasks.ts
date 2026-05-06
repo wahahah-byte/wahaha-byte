@@ -1,6 +1,5 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
-import { FILTERS } from "@/lib/constants";
 import { MOCK_TASKS } from "@/lib/mockTasks";
 import { processPenalties } from "@/lib/penalties";
 import { useToast } from "@/context/ToastContext";
@@ -40,25 +39,24 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     [tasks]
   );
 
-  const initialStatus =
-    initialFilterFromUrl && FILTERS.some((f) => f.value === initialFilterFromUrl) && !isStatusFilterPassthrough(initialFilterFromUrl)
-      ? initialFilterFromUrl
-      : undefined;
+  // Always fetch the unfiltered set so the mobile filter pager can render every
+  // filter view from the same `tasks` array. The status filter is now applied
+  // client-side via buildListItems(activeFilter).
+  void initialFilterFromUrl;
+  void isStatusFilterPassthrough;
 
   const [filters, setFilters] = useState<TaskFilterParams>({
     pageSize: 50,
     pageNumber: 1,
     isRecurring: false,
     isArchived: false,
-    status: initialStatus,
+    status: undefined,
   });
 
-  const setFilterStatus = (value: string) => {
-    setFilters((f) => ({
-      ...f,
-      status: isStatusFilterPassthrough(value) ? undefined : value,
-      pageNumber: 1,
-    }));
+  const setFilterStatus = (_value: string) => {
+    // No-op: status filtering is now client-side. Kept for API compatibility.
+    void _value;
+    void setFilters;
   };
 
   useEffect(() => {

@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { tasksApi, TaskDto } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
 import { getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
+
+// useEvent-style helper: returns a stable callback that always invokes the
+// latest handler implementation. Lets us hand stable refs to memoized children
+// without having to enumerate every closure dep.
+function useEvent<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
+  const ref = useRef(handler);
+  useLayoutEffect(() => {
+    ref.current = handler;
+  });
+  return useCallback((...args: A) => ref.current(...args), []);
+}
 
 interface UseTaskActionsOptions {
   tasks: TaskDto[];
@@ -34,7 +45,7 @@ export function useTaskActions({
   const [slashingId, setSlashingId] = useState<string | null>(null);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
 
-  async function handleAdvance(task: TaskDto) {
+  const handleAdvance = useEvent(async function handleAdvance(task: TaskDto) {
     if (advancing === task.taskId) return;
     const canUndo = task.status === "completed" && !submittedTaskIds.has(task.taskId) && !task.pointsAwarded;
     setAdvancing(task.taskId);
@@ -152,9 +163,9 @@ export function useTaskActions({
     } else {
       setAdvancing(null);
     }
-  }
+  });
 
-  async function handleCheckIn(task: TaskDto) {
+  const handleCheckIn = useEvent(async function handleCheckIn(task: TaskDto) {
     if (advancing === task.taskId) return;
     setAdvancing(task.taskId);
     const todayIso = (() => {
@@ -214,9 +225,9 @@ export function useTaskActions({
           currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount }
       : t
     ));
-  }
+  });
 
-  async function handlePause(task: TaskDto) {
+  const handlePause = useEvent(async function handlePause(task: TaskDto) {
     setPausing(task.taskId);
     if (!isAuthenticated) {
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t));
@@ -238,9 +249,9 @@ export function useTaskActions({
         ? prev.filter((t) => t.taskId !== task.taskId)
         : prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t)
     );
-  }
+  });
 
-  async function handleDelete(id: string) {
+  const handleDelete = useEvent(async function handleDelete(id: string) {
     const snapshot = tasks.find((t) => t.taskId === id);
     if (!isAuthenticated) {
       if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
@@ -265,9 +276,9 @@ export function useTaskActions({
       if (snapshot) setTasks((prev) => [snapshot, ...prev]);
       setError(error);
     }
-  }
+  });
 
-  async function handleSkip(task: TaskDto) {
+  const handleSkip = useEvent(async function handleSkip(task: TaskDto) {
     if (!isAuthenticated) {
       let nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
       while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
@@ -296,9 +307,9 @@ export function useTaskActions({
       ? { ...t, dueDate: nextDue, currentStreakCount: data!.streakCount }
       : t
     ));
-  }
+  });
 
-  async function handleArchive(task: TaskDto) {
+  const handleArchive = useEvent(async function handleArchive(task: TaskDto) {
     const snapshot = task;
     setTasks((prev) => prev.filter((t) => t.taskId !== task.taskId));
     if (!isAuthenticated) return;
@@ -307,7 +318,7 @@ export function useTaskActions({
       setTasks((prev) => [snapshot, ...prev]);
       setError(error);
     }
-  }
+  });
 
   return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive };
 }

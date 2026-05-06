@@ -569,7 +569,7 @@ function Recurring() {
                         onToggleSelect={() => {}}
                         onOpenDetail={setDetailTask}
                         onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
-                        onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === item.taskId ? { ...tt, subtasks } : tt))}
+                        onSubtasksChange={(taskId, subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt))}
                       />
                     ))}
                     <div className="task-row-wrapper task-row-phantom" aria-hidden="true">

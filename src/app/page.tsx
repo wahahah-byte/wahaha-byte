@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, UpdateTaskRequest } from "@/lib/api/tasks";
@@ -19,7 +19,7 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
 import { canCheckInNow } from "@/lib/dateUtils";
-import { FILTERS } from "@/lib/constants";
+import { CATEGORIES, FILTERS, maxPointsFor } from "@/lib/constants";
 import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
 import { useToast } from "@/context/ToastContext";
@@ -38,6 +38,7 @@ function Home() {
   } = tasksHook;
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pagerRef = useRef<HTMLDivElement>(null);
   const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
 
   const [activeFilter, setActiveFilter] = useState(initialActiveFilter);
@@ -83,9 +84,19 @@ function Home() {
     setUnsubmittedPoints(total);
   }, [tasks, submittedTaskIds, setUnsubmittedPoints]);
 
+  // Stable callbacks so TaskRow's React.memo can skip re-renders when only
+  // activeFilter changes (e.g. swiping the filter strip).
+  const handleSubtasksChange = useCallback((taskId: string, subtasks: import("@/lib/api/tasks").Subtask[]) => {
+    setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt));
+  }, [setTasks]);
+
+  const handleRestartOverdue = useCallback((t: TaskDto) => {
+    setOverdueRestartTaskId(t.taskId);
+    setDetailTask(t);
+  }, []);
+
   function applyFilter(value: string) {
     setActiveFilter(value);
-    tasksHook.setFilterStatus(value);
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all") params.delete("tab");
     else params.set("tab", value);
@@ -144,21 +155,140 @@ function Home() {
 
   const submitBarVisible = activeFilter === "completed" && selectedIds.size > 0;
 
-  const listItems = buildListItems({ tasks, activeFilter, groupMode, sortMode, submittedTaskIds });
-  const allChunks = chunkListItems(listItems);
-  const completedSepIdx = allChunks.findIndex((c) => c.sep?.sepKey === "__sep-completed");
-  const hasCompletedChunk = completedSepIdx >= 0;
-  const showCollapseToggle = activeFilter === "all" && hasCompletedChunk;
-  const uncompletedChunks = hasCompletedChunk ? allChunks.slice(0, completedSepIdx) : allChunks;
-  const uncompletedCount = uncompletedChunks.reduce((s, c) => s + c.tasks.length, 0);
-  const visibleChunks = showCollapseToggle && uncompletedCollapsed
-    ? allChunks.slice(completedSepIdx)
-    : allChunks;
-
   const unsubmitted = tasks.filter((t) =>
     t.status === "completed" && !submittedTaskIds.has(t.taskId) && !t.pointsAwarded && t.submitted === false
   );
   const allUnsubmittedSelected = unsubmitted.length > 0 && unsubmitted.every((t) => selectedIds.has(t.taskId));
+
+  // Renders one filter "page" inside the horizontal pager. Each page computes
+  // its own listItems / chunks for its own filter so all four views are
+  // pre-rendered and the swipe between filters has no "load" between pages.
+  function renderFilterPage(filterValue: string) {
+    const items = buildListItems({ tasks, activeFilter: filterValue, groupMode, sortMode, submittedTaskIds });
+    const chunks = chunkListItems(items);
+    const compIdx = chunks.findIndex((c) => c.sep?.sepKey === "__sep-completed");
+    const hasComp = compIdx >= 0;
+    const showCollapse = filterValue === "all" && hasComp;
+    const uncompChunks = hasComp ? chunks.slice(0, compIdx) : chunks;
+    const uncompCount = uncompChunks.reduce((s, c) => s + c.tasks.length, 0);
+    const visible = showCollapse && uncompletedCollapsed ? chunks.slice(compIdx) : chunks;
+
+    if (tasks.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-2">
+          <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No items</p>
+        </div>
+      );
+    }
+
+    if (filterValue === "in_progress" && items.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-2">
+          <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>No tasks in progress</p>
+        </div>
+      );
+    }
+
+    if (filterValue === "pending" && items.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-2">
+          <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>No pending tasks</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {showCollapse && (
+          <button
+            type="button"
+            onClick={() => setUncompletedCollapsed((v) => !v)}
+            className="flex items-center gap-3 px-4 mt-2 mb-5 w-full cursor-pointer"
+            style={{ background: "transparent", border: "none" }}
+            aria-expanded={!uncompletedCollapsed}
+          >
+            <span className="text-[11px] font-semibold tracking-widest uppercase flex items-center gap-1.5" style={{ color: "var(--color-fg-muted)" }}>
+              Active ({uncompCount})
+              <span style={{ display: "inline-block", transform: uncompletedCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+            </span>
+            <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
+          </button>
+        )}
+
+        {visible.map((chunk, idx) => {
+          const isSection = chunk.sep?.sepKey === "__sep-completed";
+          const hasGroupLabel = !!chunk.sep && !isSection;
+          return (
+            <div
+              key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
+              style={{
+                position: hasGroupLabel ? "relative" : undefined,
+                marginTop: hasGroupLabel ? (idx > 0 ? "14px" : "10px") : undefined,
+              }}
+            >
+              {chunk.sep && isSection && (
+                <div className={`flex items-center gap-3 px-4 ${idx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
+                  <span className="tracking-widest uppercase text-[11px] font-semibold" style={{ color: "var(--color-fg-muted)" }}>
+                    {chunk.sep.label}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
+                </div>
+              )}
+              {hasGroupLabel && (
+                <span
+                  className="tracking-widest uppercase text-[9px]"
+                  style={{
+                    position: "absolute", top: "-6px", left: "10px",
+                    padding: "0 6px", background: "var(--color-bg)",
+                    color: "var(--color-fg-subtle)", lineHeight: 1, zIndex: 1,
+                  }}
+                >
+                  {chunk.sep!.label}
+                </span>
+              )}
+              {chunk.tasks.length > 0 && (
+                <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
+                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                  {chunk.tasks.map((item) => (
+                    <TaskRow
+                      key={item.taskId}
+                      task={item}
+                      activeFilter={filterValue}
+                      advancing={advancing}
+                      pausing={pausing}
+                      slashingId={slashingId}
+                      filingIds={filingIds}
+                      recentlyFiledIds={recentlyFiledIds}
+                      errorIds={errorIds}
+                      selectedIds={selectedIds}
+                      submittedTaskIds={submittedTaskIds}
+                      recurringPopup={recurringPopups.get(item.taskId)}
+                      penalizedTaskIds={penalizedTaskIds}
+                      onAdvance={handleAdvance}
+                      onCheckIn={handleCheckIn}
+                      onPause={handlePause}
+                      onDelete={handleDelete}
+                      onSkip={handleSkip}
+                      onToggleSelect={toggleSelect}
+                      onOpenDetail={setDetailTask}
+                      onRestartOverdue={handleRestartOverdue}
+                      onArchive={handleArchive}
+                      onSubtasksChange={handleSubtasksChange}
+                    />
+                  ))}
+                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
+                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -232,125 +362,43 @@ function Home() {
           <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
             <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
 
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
-            </div>
-          )}
+            {loading && (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
+              </div>
+            )}
 
-          {!loading && tasks.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No items</p>
-            </div>
-          )}
-
-          {!loading && activeFilter === "in_progress" && listItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>No tasks in progress</p>
-            </div>
-          )}
-
-          {!loading && activeFilter === "pending" && listItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>No pending tasks</p>
-            </div>
-          )}
-
-          {!loading && showCollapseToggle && (
-            <button
-              type="button"
-              onClick={() => setUncompletedCollapsed((v) => !v)}
-              className="flex items-center gap-3 px-4 mt-2 mb-5 w-full cursor-pointer"
-              style={{ background: "transparent", border: "none" }}
-              aria-expanded={!uncompletedCollapsed}
-            >
-              <span className="text-[11px] font-semibold tracking-widest uppercase flex items-center gap-1.5" style={{ color: "var(--color-fg-muted)" }}>
-                Active ({uncompletedCount})
-                <span style={{ display: "inline-block", transform: uncompletedCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
-              </span>
-              <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
-            </button>
-          )}
-
-          {!loading && visibleChunks.map((chunk, idx) => {
-            const isSection = chunk.sep?.sepKey === "__sep-completed";
-            const hasGroupLabel = !!chunk.sep && !isSection;
-            return (
-            <div
-              key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
-              style={{
-                position: hasGroupLabel ? "relative" : undefined,
-                marginTop: hasGroupLabel ? (idx > 0 ? "14px" : "10px") : undefined,
-              }}
-            >
-              {chunk.sep && isSection && (
-                <div className={`flex items-center gap-3 px-4 ${idx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
-                  <span
-                    className="tracking-widest uppercase text-[11px] font-semibold"
-                    style={{ color: "var(--color-fg-muted)" }}
-                  >
-                    {chunk.sep.label}
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
-                </div>
-              )}
-              {hasGroupLabel && (
-                <span
-                  className="tracking-widest uppercase text-[9px]"
+            {!loading && (
+              <div style={{ overflow: "hidden", width: "100%" }}>
+                <div
+                  ref={pagerRef}
                   style={{
-                    position: "absolute",
-                    top: "-6px",
-                    left: "10px",
-                    padding: "0 6px",
-                    background: "var(--color-bg)",
-                    color: "var(--color-fg-subtle)",
-                    lineHeight: 1,
-                    zIndex: 1,
+                    display: "flex",
+                    width: `${FILTERS.length * 100}%`,
+                    transform: `translateX(${-FILTERS.findIndex((f) => f.value === activeFilter) * (100 / FILTERS.length)}%)`,
+                    transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
+                    willChange: "transform",
                   }}
                 >
-                  {chunk.sep!.label}
-                </span>
-              )}
-              {chunk.tasks.length > 0 && (
-                <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
-                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
-                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
-                  </div>
-                  {chunk.tasks.map((item) => (
-                    <TaskRow
-                      key={item.taskId}
-                      task={item}
-                      activeFilter={activeFilter}
-                      advancing={advancing}
-                      pausing={pausing}
-                      slashingId={slashingId}
-                      filingIds={filingIds}
-                      recentlyFiledIds={recentlyFiledIds}
-                      errorIds={errorIds}
-                      selectedIds={selectedIds}
-                      submittedTaskIds={submittedTaskIds}
-                      recurringPopup={recurringPopups.get(item.taskId)}
-                      penalizedTaskIds={penalizedTaskIds}
-                      onAdvance={handleAdvance}
-                      onCheckIn={handleCheckIn}
-                      onPause={handlePause}
-                      onDelete={handleDelete}
-                      onSkip={handleSkip}
-                      onToggleSelect={toggleSelect}
-                      onOpenDetail={setDetailTask}
-                      onRestartOverdue={(t) => { setOverdueRestartTaskId(t.taskId); setDetailTask(t); }}
-                      onArchive={handleArchive}
-                      onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === item.taskId ? { ...tt, subtasks } : tt))}
-                    />
+                  {FILTERS.map((f) => (
+                    <div
+                      key={f.value}
+                      style={{
+                        flex: `0 0 ${100 / FILTERS.length}%`,
+                        minWidth: 0,
+                        // Inset each page so adjacent pages have visible breathing
+                        // room when swiping between filters (iOS-homescreen feel).
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {renderFilterPage(f.value)}
+                    </div>
                   ))}
-                  <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
-                    <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
-                  </div>
                 </div>
-              )}
-            </div>
-          );
-          })}
+              </div>
+            )}
           </div>
 
           {!loading && tasks.length > 0 && (
@@ -377,7 +425,52 @@ function Home() {
         onSortChange={setSortMode}
         onGroupChange={setGroupMode}
         onNewTask={() => setShowNewTask(true)}
+        onQuickCreate={async ({ title, dueDate, priority, category }) => {
+          const today = new Date();
+          const dd = dueDate ?? new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const cat = category ?? CATEGORIES[0];
+          const dueIso = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
+          const points = Math.min(25, maxPointsFor(cat));
+          if (!isAuthenticated) {
+            const local: TaskDto = {
+              taskId: `local-${Date.now()}`,
+              title,
+              description: null,
+              category: cat,
+              priority,
+              pointValue: points,
+              status: "pending",
+              dueDate: dueIso,
+              createdAt: new Date().toISOString(),
+              completedAt: null,
+              isRecurring: false,
+              recurrenceRule: null,
+              lastCheckInDate: null,
+              currentStreakCount: 0,
+              longestStreakCount: 0,
+              submitted: false,
+              pointsAwarded: false,
+              isArchived: false,
+              subtasks: [],
+            } as unknown as TaskDto;
+            setTasks((prev) => [local, ...prev]);
+            setSuccess(`Added "${title}"`);
+            return;
+          }
+          const { data, error } = await tasksApi.create({
+            title,
+            category: cat,
+            priority,
+            pointValue: points,
+            dueDate: dueIso,
+            isRecurring: false,
+          });
+          if (error || !data) { setError(error ?? "Failed to create task"); return; }
+          setTasks((prev) => [data, ...prev]);
+          setSuccess(`Added "${title}"`);
+        }}
         isAuthenticated={isAuthenticated}
+        pagerRef={pagerRef}
       />
 
       <SubmitBar

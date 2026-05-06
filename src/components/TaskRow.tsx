@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { TaskDto, Subtask } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
@@ -40,10 +40,10 @@ interface TaskRowProps {
   onOpenDetail: (task: TaskDto) => void;
   onArchive?: (task: TaskDto) => void;
   onUnarchive?: (task: TaskDto) => void;
-  onSubtasksChange?: (subtasks: Subtask[]) => void;
+  onSubtasksChange?: (taskId: string, subtasks: Subtask[]) => void;
 }
 
-export default function TaskRow({
+function TaskRowImpl({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
@@ -55,19 +55,19 @@ export default function TaskRow({
   async function handleToggleSubtask(s: Subtask) {
     const list = task.subtasks ?? [];
     const next = list.map((x) => x.subtaskId === s.subtaskId ? { ...x, completed: !x.completed } : x);
-    onSubtasksChange?.(next);
+    onSubtasksChange?.(task.taskId, next);
     if (!isAuthenticated || s.subtaskId < 0) return;
     const { error } = await subtasksApi.update(s.subtaskId, { completed: !s.completed });
-    if (error) onSubtasksChange?.(list);
+    if (error) onSubtasksChange?.(task.taskId, list);
   }
 
   async function handleDeleteSubtask(s: Subtask) {
     const list = task.subtasks ?? [];
     const next = list.filter((x) => x.subtaskId !== s.subtaskId);
-    onSubtasksChange?.(next);
+    onSubtasksChange?.(task.taskId, next);
     if (!isAuthenticated || s.subtaskId < 0) return;
     const { error } = await subtasksApi.delete(s.subtaskId);
-    if (error) onSubtasksChange?.(list);
+    if (error) onSubtasksChange?.(task.taskId, list);
   }
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
@@ -1007,3 +1007,6 @@ function StreakBonusChip({ task }: { task: TaskDto }) {
     </span>
   );
 }
+
+const TaskRow = memo(TaskRowImpl);
+export default TaskRow;

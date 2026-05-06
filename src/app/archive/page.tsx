@@ -201,7 +201,7 @@ export default function ArchivePage() {
                   onToggleSelect={() => {}}
                   onOpenDetail={() => {}}
                   onUnarchive={handleUnarchive}
-                  onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === task.taskId ? { ...tt, subtasks } : tt))}
+                  onSubtasksChange={(taskId, subtasks) => setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt))}
                 />
               ))}
               <div className="task-row-wrapper task-row-phantom" aria-hidden="true">

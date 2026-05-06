@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { TaskDto } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
@@ -32,13 +32,13 @@ export function useTaskSubmission({ tasks, isAuthenticated, setError }: UseTaskS
   const _capped = _selectedPts > _remaining;
   const _limitReached = _remaining <= 0;
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   async function doSubmit() {
     if (selectedIds.size === 0) return;
