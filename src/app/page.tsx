@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, UpdateTaskRequest } from "@/lib/api/tasks";
@@ -13,7 +13,9 @@ import TaskListControls from "@/components/TaskListControls";
 import TasksHeader from "@/components/TasksHeader";
 import UnsubmittedSummary from "@/components/UnsubmittedSummary";
 import MobileActionBar from "@/components/MobileActionBar";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
 import { canCheckInNow } from "@/lib/dateUtils";
@@ -32,8 +34,11 @@ function Home() {
   const tasksHook = useTasks({ initialFilterFromUrl: initialTab });
   const {
     tasks, setTasks, loading, setError,
-    isMounted, isAuthenticated, penalizedTaskIds, submittedSeed,
+    isMounted, isAuthenticated, penalizedTaskIds, submittedSeed, refetch,
   } = tasksHook;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
 
   const [activeFilter, setActiveFilter] = useState(initialActiveFilter);
   const [showNewTask, setShowNewTask] = useState(false);
@@ -224,7 +229,8 @@ function Home() {
             />
           )}
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
+            <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
 
           {loading && (
             <div className="flex items-center justify-center py-20">

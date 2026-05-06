@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
 import { FILTERS } from "@/lib/constants";
 import { MOCK_TASKS } from "@/lib/mockTasks";
@@ -21,6 +21,7 @@ type UseTasksReturn = {
   filters: TaskFilterParams;
   setFilterStatus: (value: string) => void;
   submittedSeed: Set<string> | null;
+  refetch: () => Promise<void>;
 };
 
 const isStatusFilterPassthrough = (value: string) =>
@@ -70,24 +71,28 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     }
   }, []);
 
+  const refetch = useCallback(async () => {
+    if (!isAuthenticated) {
+      setTasks(processPenalties(MOCK_TASKS.filter((t) => !t.isRecurring && !t.isArchived)));
+      return;
+    }
+    setError(null);
+    const taskResult = await tasksApi.getAll(filters);
+    if (taskResult.error) { setError(taskResult.error); return; }
+    const raw = taskResult.data!.data;
+    setTasks(raw);
+    setSubmittedSeed(new Set(raw.filter((t) => t.pointsAwarded).map((t) => t.taskId)));
+  }, [filters, isAuthenticated, setError]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    async function fetchTasks() {
-      setLoading(true);
-      setError(null);
-      const taskResult = await tasksApi.getAll(filters);
-      setLoading(false);
-      if (taskResult.error) { setError(taskResult.error); return; }
-      const raw = taskResult.data!.data;
-      setTasks(raw);
-      setSubmittedSeed(new Set(raw.filter((t) => t.pointsAwarded).map((t) => t.taskId)));
-    }
-    fetchTasks();
-  }, [filters, isAuthenticated]);
+    setLoading(true);
+    refetch().finally(() => setLoading(false));
+  }, [refetch, isAuthenticated]);
 
   return {
     tasks, setTasks, loading, error, setError,
     isMounted, isAuthenticated, penalizedTaskIds,
-    filters, setFilterStatus, submittedSeed,
+    filters, setFilterStatus, submittedSeed, refetch,
   };
 }

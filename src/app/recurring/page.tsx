@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams, UpdateTaskRequest } from "@/lib/api/tasks";
@@ -13,6 +13,8 @@ import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 import MobileActionBarRecurring from "@/components/MobileActionBarRecurring";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
@@ -81,19 +83,26 @@ function Recurring() {
     }
   }, []);
 
+  const refetch = useCallback(async () => {
+    if (!isAuthenticated) {
+      setTasks(MOCK_RECURRING);
+      return;
+    }
+    setError(null);
+    const filterParams: TaskFilterParams = { pageSize: 50, pageNumber: 1, isRecurring: true };
+    const taskResult = await tasksApi.getAll(filterParams);
+    if (taskResult.error) { setError(taskResult.error); return; }
+    setTasks(taskResult.data!.data);
+  }, [isAuthenticated, setError]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    async function fetchTasks() {
-      setLoading(true);
-      setError(null);
-      const filterParams: TaskFilterParams = { pageSize: 50, pageNumber: 1, isRecurring: true };
-      const taskResult = await tasksApi.getAll(filterParams);
-      setLoading(false);
-      if (taskResult.error) { setError(taskResult.error); return; }
-      setTasks(taskResult.data!.data);
-    }
-    fetchTasks();
-  }, [isAuthenticated]);
+    setLoading(true);
+    refetch().finally(() => setLoading(false));
+  }, [refetch, isAuthenticated]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
 
   function applyFilter(value: string) {
     setActiveFilter(value);
@@ -462,7 +471,8 @@ function Recurring() {
           </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
+            <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
 
           {loading && (
             <div className="flex items-center justify-center py-20">
