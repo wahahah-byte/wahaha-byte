@@ -207,6 +207,14 @@ input::placeholder, textarea::placeholder {
   pointer-events: none;
   overflow: hidden;
 }
+.task-list-panel {
+  border: 1px solid var(--color-border-soft);
+}
+@media (max-width: 639px) {
+  .task-list-panel {
+    border: none;
+  }
+}
 @media (hover: hover) {
   .task-row-wrapper:hover .task-row-inner.greyed {
     background: var(--color-row-greyed-hover);

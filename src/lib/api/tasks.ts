@@ -33,6 +33,7 @@ export interface TaskDto {
   hasCounter?: boolean;
   counterUnit?: string | null;
   subtasks?: Subtask[];
+  recentCycles?: CheckInCycleDto[];
 }
 
 export interface CreateTaskRequest {

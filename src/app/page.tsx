@@ -282,7 +282,7 @@ function Home() {
                 </span>
               )}
               {chunk.tasks.length > 0 && (
-                <div className="flex flex-col" style={{ background: "var(--color-surface-deep)", border: "1px solid var(--color-border-soft)", borderRadius: 6, overflow: "hidden" }}>
+                <div className="task-list-panel flex flex-col" style={{ background: "var(--color-surface-deep)", borderRadius: 6, overflow: "hidden" }}>
                   <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
                     <div className="task-row-inner" style={{ position: "absolute", inset: 0 }} />
                   </div>
@@ -621,6 +621,7 @@ function Home() {
         <CounterPromptModal
           taskTitle={counterPromptTask.title}
           unit={counterPromptTask.counterUnit}
+          recentValues={(counterPromptTask.recentCycles ?? []).map((c) => c.counterValue).filter((v): v is number => typeof v === "number")}
           onClose={() => setCounterPromptTask(null)}
           onSubmit={(value) => {
             const t = counterPromptTask;
@@ -635,6 +636,7 @@ function Home() {
           taskTitle={logPromptTask.title}
           unit={logPromptTask.counterUnit}
           mode="log"
+          recentValues={(logPromptTask.recentCycles ?? []).map((c) => c.counterValue).filter((v): v is number => typeof v === "number")}
           onClose={() => setLogPromptTask(null)}
           onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
         />

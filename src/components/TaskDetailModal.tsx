@@ -541,27 +541,50 @@ export default function TaskDetailModal({
               )}
             </div>
 
-            {/* Streak / bonus — same whitespace-only spacing */}
+            {/* Streak / bonus — segmented pixel bar showing progress to the next tier */}
             {(currentStreakCount ?? 0) >= 3 && (() => {
               const c = currentStreakCount ?? 0;
               const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
               const nextTier = c >= 30 ? null : c >= 14 ? { at: 30, mult: 2.0 } : c >= 7 ? { at: 14, mult: 1.8 } : { at: 7, mult: 1.5 };
+              const tierStart = c >= 14 ? 14 : c >= 7 ? 7 : 3;
+              const SEGMENTS = 12;
+              const filled = nextTier
+                ? Math.max(1, Math.min(SEGMENTS, Math.round(((c - tierStart) / (nextTier.at - tierStart)) * SEGMENTS)))
+                : SEGMENTS;
               const fmt = (m: number) => Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1);
               return (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--color-active-highlight-alt)" }}>
-                  <span>
-                    🔥{" "}
-                    <span style={{ fontWeight: 600 }}>{currentStreakCount}</span>
-                    {longestStreakCount != null && (
-                      <span style={{ opacity: 0.55 }}> / {longestStreakCount}</span>
-                    )}
-                  </span>
-                  <span><span style={{ fontWeight: 600 }}>{fmt(multiplier)}×</span> bonus</span>
-                  {nextTier && (
-                    <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>
-                      {nextTier.at - c} to {fmt(nextTier.mult)}×
+                <div className="flex flex-col gap-1.5" style={{ color: "var(--color-active-highlight-alt)" }}>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="inline-flex items-baseline gap-1.5">
+                      <span aria-hidden style={{ fontSize: "11px", lineHeight: 1 }}>🔥</span>
+                      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{c}</span>
+                      {longestStreakCount != null && longestStreakCount > c && (
+                        <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>/ {longestStreakCount}</span>
+                      )}
+                      <span style={{ marginLeft: 6, fontWeight: 600 }}>{fmt(multiplier)}×</span>
                     </span>
-                  )}
+                    {nextTier ? (
+                      <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>
+                        {nextTier.at - c} → {fmt(nextTier.mult)}×
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
+                        Max
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex" style={{ gap: 2 }} aria-hidden>
+                    {Array.from({ length: SEGMENTS }).map((_, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          flex: 1,
+                          height: 6,
+                          background: i < filled ? "var(--color-active-highlight-alt)" : "var(--color-border-soft)",
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               );
             })()}
@@ -572,8 +595,16 @@ export default function TaskDetailModal({
               </p>
             )}
 
+            {task.isRecurring && (task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") && (
+              <HeatmapStrip
+                rule={task.recurrenceRule}
+                hasCounter={task.hasCounter ?? false}
+                cycles={task.recentCycles ?? []}
+              />
+            )}
+
             {task.isRecurring && task.hasCounter && (
-              <CounterHistory taskId={task.taskId} unit={task.counterUnit ?? null} isAuthenticated={isAuthenticated} refreshKey={historyRefreshKey ?? 0} />
+              <CounterHistory taskId={task.taskId} unit={task.counterUnit ?? null} isAuthenticated={isAuthenticated} refreshKey={historyRefreshKey ?? 0} seed={task.recentCycles ?? null} />
             )}
 
             {/* Subtasks — hidden entirely when completed and there's nothing to read */}
@@ -852,6 +883,86 @@ function Field({ label, children, className }: { label: string; children: React.
 }
 
 const HISTORY_PAGE_SIZE = 30;
+const HEATMAP_DAYS = 14;
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[] }) {
+  // Build the last N expected check-in dates walking backwards from today.
+  // For "weekdays" we skip Sat/Sun so each cell represents an actual opportunity,
+  // not a calendar day where missing it would be misleading.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expected: string[] = [];
+  const cursor = new Date(today);
+  while (expected.length < HEATMAP_DAYS) {
+    const dow = cursor.getDay();
+    if (rule !== "weekdays" || (dow !== 0 && dow !== 6)) {
+      expected.push(dateKey(cursor));
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  expected.reverse();
+  const todayKey = dateKey(today);
+
+  const cycleByDate = new Map(cycles.map((c) => [c.checkInDate.split("T")[0], c]));
+  // Only used to scale opacity when hasCounter — clamp to 1 so a single zero-only
+  // task still renders solid cells.
+  const maxValue = Math.max(
+    1,
+    ...cycles.map((c) => (typeof c.counterValue === "number" ? c.counterValue : 0)),
+  );
+
+  const checkedCount = expected.reduce((n, k) => (cycleByDate.has(k) ? n + 1 : n), 0);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+          Last {HEATMAP_DAYS} {rule === "weekdays" ? "weekdays" : "days"}
+        </span>
+        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>
+          {checkedCount}/{HEATMAP_DAYS}
+        </span>
+      </div>
+      <div className="flex" style={{ gap: 2 }}>
+        {expected.map((k) => {
+          const cycle = cycleByDate.get(k);
+          const isToday = k === todayKey;
+          const checked = !!cycle;
+          const value = typeof cycle?.counterValue === "number" ? cycle!.counterValue : null;
+          const intensity = checked && hasCounter && value != null && value > 0
+            ? 0.4 + 0.6 * (value / maxValue)
+            : checked ? 1 : 1;
+          const tooltip = `${fmtCycleDate(k)}${
+            checked
+              ? hasCounter
+                ? value != null ? ` · ${value.toLocaleString()}` : " · checked in"
+                : " · checked in"
+              : " · no check-in"
+          }`;
+          return (
+            <div
+              key={k}
+              title={tooltip}
+              style={{
+                flex: 1,
+                height: 18,
+                borderRadius: 2,
+                background: checked ? "var(--color-active-highlight-alt)" : "var(--color-border-soft)",
+                opacity: checked ? intensity : 1,
+                outline: isToday ? "1px solid var(--color-active-highlight)" : "none",
+                outlineOffset: 1,
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function fmtCycleDate(iso: string): string {
   const [y, m, d] = iso.split("T")[0].split("-").map(Number);
@@ -863,10 +974,13 @@ function fmtCycleTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function CounterHistory({ taskId, unit, isAuthenticated, refreshKey }: { taskId: string; unit: string | null; isAuthenticated: boolean; refreshKey: number }) {
-  const [items, setItems] = useState<CheckInCycleDto[]>([]);
+function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { taskId: string; unit: string | null; isAuthenticated: boolean; refreshKey: number; seed: CheckInCycleDto[] | null }) {
+  // Seed synchronously from TaskDto.recentCycles so first paint already shows
+  // history. The effect below still refetches in the background so stale seeds
+  // (e.g. after a fresh check-in) get reconciled and we pick up TotalCount.
+  const [items, setItems] = useState<CheckInCycleDto[]>(seed ?? []);
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(seed?.length ?? 0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
@@ -878,7 +992,10 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey }: { taskId:
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
-    setLoading(true);
+    // Only show the spinner if we have nothing to render yet — otherwise the
+    // background refresh stays invisible and seeded rows remain in place.
+    const hasSeededContent = items.length > 0;
+    if (!hasSeededContent) setLoading(true);
     setError(null);
     tasksApi.getCheckInHistory(taskId, 1, HISTORY_PAGE_SIZE).then(({ data, error }) => {
       if (cancelled) return;
@@ -889,6 +1006,9 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey }: { taskId:
       setPage(1);
     });
     return () => { cancelled = true; };
+    // items.length is intentionally omitted — we only want this effect to fire
+    // on identity/auth/refresh changes, and the spinner-skip check is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, isAuthenticated, refreshKey]);
 
   async function loadMore() {
@@ -980,7 +1100,7 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey }: { taskId:
         return (
           <div
             style={{
-              maxHeight: 350,
+              maxHeight: 150,
               overflowY: "auto",
               borderRadius: 6,
               background: "var(--color-surface-deep)",
