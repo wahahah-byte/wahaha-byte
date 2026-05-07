@@ -127,9 +127,10 @@ function Recurring() {
     refetch().finally(() => setLoading(false));
   }, [refetch, isAuthenticated]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeScrollEl, setActiveScrollEl] = useState<HTMLDivElement | null>(null);
+  const scrollRefForPtr = useMemo(() => ({ current: activeScrollEl }), [activeScrollEl]);
   const pagerRef = useRef<HTMLDivElement>(null);
-  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
+  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRefForPtr, refetch);
 
   function applyFilter(value: string) {
     setActiveFilter(value);
@@ -638,9 +639,7 @@ function Recurring() {
           </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
-            <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
-
+          <div className="flex-1 overflow-hidden">
             {loading && (
               <div className="flex items-center justify-center py-20">
                 <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-active-highlight-alt)" }} />
@@ -663,46 +662,45 @@ function Recurring() {
             )}
 
             {!loading && tasks.length > 0 && (
-              <div style={{ overflow: "hidden", width: "100%" }}>
+              <div style={{ overflow: "hidden", width: "100%", height: "100%" }}>
                 <div
                   ref={pagerRef}
                   style={{
                     display: "flex",
                     width: `${RECURRING_FILTERS.length * 100}%`,
+                    height: "100%",
                     transform: `translateX(${-RECURRING_FILTERS.findIndex((f) => f.value === activeFilter) * (100 / RECURRING_FILTERS.length)}%)`,
                     transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
                     willChange: "transform",
                   }}
                 >
-                  {RECURRING_FILTERS.map((f) => (
-                    <div
-                      key={f.value}
-                      style={{
-                        flex: `0 0 ${100 / RECURRING_FILTERS.length}%`,
-                        minWidth: 0,
-                        paddingLeft: 10,
-                        paddingRight: 10,
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      {renderFilterPage(f.value)}
-                    </div>
-                  ))}
+                  {RECURRING_FILTERS.map((f) => {
+                    const isActivePage = f.value === activeFilter;
+                    return (
+                      <div
+                        key={f.value}
+                        ref={isActivePage ? setActiveScrollEl : null}
+                        className="has-mobile-bottom-pad"
+                        style={{
+                          flex: `0 0 ${100 / RECURRING_FILTERS.length}%`,
+                          minWidth: 0,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          boxSizing: "border-box",
+                          height: "100%",
+                          overflowY: "auto",
+                          overscrollBehavior: "contain",
+                        }}
+                      >
+                        {isActivePage && <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />}
+                        {renderFilterPage(f.value)}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
-
-          {!loading && tasks.length > 0 && (
-            <div className="flex justify-between items-center mt-2 mb-5 sm:mb-4 px-1 shrink-0">
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
-                {todayCount} ready
-              </span>
-              <span className="text-[10px] tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
-                {tasks.length} total
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
