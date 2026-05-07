@@ -20,16 +20,12 @@ type Props = {
   /** Optional ref to the page-content pager. Horizontal swipes on the tray drive
    *  this element's transform 1:1 with the thumb (carousel-style page slide). */
   pagerRef?: React.RefObject<HTMLElement | null>;
-  /** Optional ref to the tray's own root element. Lets the action-bar handle
-   *  drive the tray's vertical translate directly during a drag-to-open or
-   *  drag-to-close gesture. */
+  /** Optional ref to the tray's own root element. */
   trayElementRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-const HANDLE_HEIGHT = 8;
-const FILTERS_HEIGHT = 28;
-const TRAY_HEIGHT = HANDLE_HEIGHT + FILTERS_HEIGHT;          // 36
-const PEEK_OFFSET = TRAY_HEIGHT - HANDLE_HEIGHT;             // 28 — translate distance when "closed" (handle stays visible)
+const TRAY_HEIGHT = 28;
+const TRAY_HEIGHT_TOTAL = TRAY_HEIGHT + 8; // matches the closed translateY(calc(100% + 8px)) gap
 const DISMISS_DRAG_PX = 50;
 const AXIS_DEADZONE_PX = 8;
 const SWIPE_CYCLE_THRESHOLD = 36;
@@ -42,6 +38,7 @@ export default function FilterTray({
   const [cycleHint, setCycleHint] = useState<string | null>(null);
   const swipeRef = useRef<{ startX: number; startY: number; startIdx: number; locked: "v" | "h" | null } | null>(null);
   const handleDragRef = useRef<{ startX: number; startY: number; startedOpen: boolean; locked: "v" | "h" | null; moved: boolean } | null>(null);
+  const handleRef = useRef<HTMLButtonElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const activeIdx = Math.max(0, filters.findIndex((f) => f.value === activeFilter));
 
@@ -158,9 +155,7 @@ export default function FilterTray({
   }
 
   // Handle gestures: tap to toggle, vertical drag to open/close, horizontal swipe to cycle filter.
-  // stopPropagation prevents the underlying tray's onTouch* handlers from firing.
   function onHandleTouchStart(e: React.TouchEvent) {
-    e.stopPropagation();
     const t = e.touches[0];
     handleDragRef.current = {
       startX: t.clientX, startY: t.clientY,
@@ -168,7 +163,6 @@ export default function FilterTray({
     };
   }
   function onHandleTouchMove(e: React.TouchEvent) {
-    e.stopPropagation();
     const d = handleDragRef.current;
     if (!d) return;
     const t = e.touches[0];
@@ -191,29 +185,36 @@ export default function FilterTray({
 
     if (d.locked === "v") {
       const tray = trayElementRef?.current;
-      if (!tray) return;
-      const baseY = d.startedOpen ? 0 : PEEK_OFFSET;
-      const targetY = Math.max(0, Math.min(PEEK_OFFSET, baseY + dy));
+      const handle = handleRef.current;
+      if (!tray || !handle) return;
+      const baseY = d.startedOpen ? 0 : TRAY_HEIGHT_TOTAL;
+      const targetY = Math.max(0, Math.min(TRAY_HEIGHT_TOTAL, baseY + dy));
       // eslint-disable-next-line react-hooks/immutability
       tray.style.transition = "none";
       tray.style.transform = `translateY(${targetY}px)`;
+      const progress = 1 - targetY / TRAY_HEIGHT_TOTAL;
+      const handleBottom = bottomOffsetPx + TRAY_HEIGHT * progress;
+      handle.style.transition = "none";
+      handle.style.bottom = `calc(${handleBottom}px + env(safe-area-inset-bottom, 0px))`;
     }
   }
-  function onHandleTouchEnd(e: React.TouchEvent) {
-    e.stopPropagation();
+  function onHandleTouchEnd() {
     const d = handleDragRef.current;
     handleDragRef.current = null;
     if (!d) return;
 
     if (d.locked === "v") {
       const tray = trayElementRef?.current;
-      if (!tray) return;
+      const handle = handleRef.current;
+      if (!tray || !handle) return;
       const match = tray.style.transform.match(/translateY\((-?[\d.]+)px\)/);
       const currentY = match ? parseFloat(match[1]) : 0;
-      const willOpen = currentY < PEEK_OFFSET / 2;
+      const willOpen = currentY < TRAY_HEIGHT_TOTAL / 2;
       // eslint-disable-next-line react-hooks/immutability
       tray.style.transition = "transform 0.22s cubic-bezier(0.2, 0, 0, 1)";
-      tray.style.transform = willOpen ? "translateY(0)" : `translateY(${PEEK_OFFSET}px)`;
+      tray.style.transform = willOpen ? "translateY(0)" : `translateY(calc(100% + 8px))`;
+      handle.style.transition = "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)";
+      handle.style.bottom = `calc(${bottomOffsetPx + (willOpen ? TRAY_HEIGHT : 0)}px + env(safe-area-inset-bottom, 0px))`;
       if (willOpen !== open) onToggle?.();
     }
   }
@@ -228,34 +229,71 @@ export default function FilterTray({
 
   return createPortal(
     <>
-      {cycleHint && (
-        <div
-          aria-live="polite"
-          className="sm:hidden"
+      <button
+        ref={handleRef}
+        type="button"
+        onClick={onHandleClick}
+        onTouchStart={onHandleTouchStart}
+        onTouchMove={onHandleTouchMove}
+        onTouchEnd={onHandleTouchEnd}
+        onTouchCancel={onHandleTouchEnd}
+        aria-label={open ? "Close filter" : "Open filter"}
+        className="sm:hidden"
+        style={{
+          position: "fixed",
+          left: "50%",
+          bottom: open
+            ? `calc(${bottomOffsetPx + TRAY_HEIGHT}px + env(safe-area-inset-bottom, 0px))`
+            : `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom, 0px))`,
+          transform: "translateX(-50%)",
+          padding: "14px 30px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          touchAction: "none",
+          WebkitTapHighlightColor: "transparent",
+          zIndex: 35,
+          transition: "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)",
+        }}
+      >
+        {cycleHint && (
+          <div
+            aria-live="polite"
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 4px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--color-surface)",
+              color: "var(--color-active-highlight)",
+              border: "1px solid var(--color-active-highlight-border)",
+              borderRadius: 3,
+              padding: "4px 10px",
+              fontSize: "10px",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+              animation: "filter-cycle-hint 0.9s ease-out forwards",
+            }}
+          >
+            {cycleHint}
+          </div>
+        )}
+        <span
+          aria-hidden
           style={{
-            position: "fixed",
-            left: "50%",
-            bottom: `calc(${bottomOffsetPx + TRAY_HEIGHT + 4}px + env(safe-area-inset-bottom, 0px))`,
-            transform: "translateX(-50%)",
-            background: "var(--color-surface)",
-            color: "var(--color-active-highlight)",
-            border: "1px solid var(--color-active-highlight-border)",
-            borderRadius: 3,
-            padding: "4px 10px",
-            fontSize: "10px",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-            pointerEvents: "none",
-            zIndex: 35,
-            animation: "filter-cycle-hint 0.9s ease-out forwards",
+            display: "block",
+            width: 60, height: 3,
+            borderRadius: 1.5,
+            background: open ? "var(--color-active-highlight)" : "var(--color-border)",
+            transition: "background 0.18s",
           }}
-        >
-          {cycleHint}
-        </div>
-      )}
+        />
+      </button>
+
       <div
         ref={trayElementRef}
         className="fixed left-0 right-0 sm:hidden overflow-hidden"
@@ -268,9 +306,10 @@ export default function FilterTray({
           zIndex: 34,
           transform: open
             ? (dragY > 0 ? `translateY(${dragY}px)` : "translateY(0)")
-            : `translateY(${PEEK_OFFSET}px)`,
+            : "translateY(calc(100% + 8px))",
           transition: dragY > 0 ? "none" : "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
           willChange: "transform",
+          pointerEvents: open ? "auto" : "none",
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
@@ -278,44 +317,7 @@ export default function FilterTray({
         onTouchCancel={onTouchEnd}
         aria-hidden={!open}
       >
-        <button
-          type="button"
-          onClick={onHandleClick}
-          onTouchStart={onHandleTouchStart}
-          onTouchMove={onHandleTouchMove}
-          onTouchEnd={onHandleTouchEnd}
-          onTouchCancel={onHandleTouchEnd}
-          aria-label={open ? "Close filter" : "Open filter"}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            height: HANDLE_HEIGHT,
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            touchAction: "none",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              display: "block",
-              width: 60, height: 3,
-              borderRadius: 1.5,
-              background: open ? "var(--color-active-highlight)" : "var(--color-border)",
-              transition: "background 0.18s",
-            }}
-          />
-        </button>
-
-        <div
-          className="flex items-stretch px-2 relative"
-          style={{ height: FILTERS_HEIGHT, pointerEvents: open ? "auto" : "none" }}
-        >
+        <div className="h-full flex items-stretch px-2 relative">
           <div
             ref={highlightRef}
             aria-hidden

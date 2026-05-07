@@ -67,18 +67,6 @@ export default function ThreadSubtaskRow({ subtask, isLast, onToggle, onDelete }
         overflow: "hidden",
       }}
     >
-      {/* Static thread connector — stays put while the row slides */}
-      <svg
-        aria-hidden
-        width={THREAD_GUTTER}
-        height={ROW_HEIGHT}
-        viewBox={`0 0 ${THREAD_GUTTER} ${ROW_HEIGHT}`}
-        style={{ position: "absolute", left: 0, top: 0, color: "var(--color-border-faint)", pointerEvents: "none" }}
-      >
-        <line x1="3" y1="0" x2="3" y2={isLast ? ROW_HEIGHT / 2 : ROW_HEIGHT} stroke="currentColor" strokeWidth="1" />
-        <line x1="3" y1={ROW_HEIGHT / 2} x2={THREAD_GUTTER - 2} y2={ROW_HEIGHT / 2} stroke="currentColor" strokeWidth="1" />
-      </svg>
-
       {/* Red delete action behind the row, revealed by the swipe */}
       <div
         aria-hidden
@@ -190,6 +178,22 @@ export default function ThreadSubtaskRow({ subtask, isLast, onToggle, onDelete }
           </svg>
         </button>
       </div>
+
+      {/* Static thread connector — rendered last so it paints on top of the
+          foreground row's background. Sits in the gutter (0..THREAD_GUTTER),
+          which doesn't visually overlap the row content (paddingLeft = THREAD_GUTTER). */}
+      <svg
+        aria-hidden
+        width={THREAD_GUTTER}
+        height={ROW_HEIGHT}
+        viewBox={`0 0 ${THREAD_GUTTER} ${ROW_HEIGHT}`}
+        style={{ position: "absolute", left: 0, top: 0, color: "var(--color-border-faint)", pointerEvents: "none" }}
+      >
+        {/* Vertical at x=8 lines up under the parent row's expanded chevron tip
+            (chevron sits at row x≈24; thread paddingLeft=16, so 16+8=24). */}
+        <line x1="8" y1="8" x2="8" y2={isLast ? ROW_HEIGHT / 2 : ROW_HEIGHT} stroke="currentColor" strokeWidth="1" />
+        <line x1="8" y1={ROW_HEIGHT / 2} x2="15" y2={ROW_HEIGHT / 2} stroke="currentColor" strokeWidth="1" />
+      </svg>
     </div>
   );
 }

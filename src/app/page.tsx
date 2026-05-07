@@ -11,7 +11,7 @@ import CounterPromptModal from "@/components/CounterPromptModal";
 import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
-import TasksHeader from "@/components/TasksHeader";
+import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 import MobileActionBar from "@/components/MobileActionBar";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -338,9 +338,7 @@ function Home() {
             </div>
           )}
 
-          <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
-            <TasksHeader isAuthenticated={isAuthenticated} onNewTask={() => setShowNewTask(true)} />
-
+          <div style={{ paddingTop: 12, background: "var(--color-bg)" }}>
             <div className="hidden sm:flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
               <div className="flex items-center">
                 {FILTERS.map((f) => (
@@ -361,12 +359,48 @@ function Home() {
                 ))}
               </div>
               <div className="flex-1" />
+              <CategoryCapsTooltip variant="regular">
+                <div
+                  tabIndex={0}
+                  aria-label="Show task point caps"
+                  className="flex items-center justify-center mr-1"
+                  style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                    <path d="M9 16l2 2 4-4" />
+                  </svg>
+                </div>
+              </CategoryCapsTooltip>
               <TaskListControls
                 sortMode={sortMode}
                 groupMode={groupMode}
                 onSortChange={setSortMode}
                 onGroupChange={setGroupMode}
               />
+              <button
+                onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
+                disabled={!isAuthenticated}
+                title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
+                aria-label="New task"
+                className="flex items-center justify-center ml-1"
+                style={{
+                  width: 26, height: 26,
+                  fontSize: "18px",
+                  lineHeight: 1,
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--color-fg)",
+                  cursor: !isAuthenticated ? "not-allowed" : "pointer",
+                  opacity: !isAuthenticated ? 0.3 : 1,
+                  padding: 0,
+                }}
+                onMouseEnter={(e) => { if (isAuthenticated) e.currentTarget.style.color = "var(--color-active-highlight)"; }}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+              >
+                +
+              </button>
             </div>
 
             <div

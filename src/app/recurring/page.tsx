@@ -403,74 +403,7 @@ function Recurring() {
             </div>
           )}
 
-          <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
-          <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "22px", height: "38px" }}>
-            <CategoryCapsTooltip variant="recurring">
-              <div
-                tabIndex={0}
-                aria-label="Show recurring point caps"
-                style={{
-                  width: "38px", minWidth: "38px", height: "38px",
-                  background: "var(--color-surface-2)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  borderRight: "1px solid var(--color-border-hairline)",
-                  cursor: "help",
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                  fill="none" style={{ stroke: "var(--color-fg)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a9 9 0 1 1-3-6.7" />
-                  <polyline points="21 4 21 10 15 10" />
-                </svg>
-              </div>
-            </CategoryCapsTooltip>
-
-            <div style={{ position: "relative", display: "flex", alignItems: "center", paddingLeft: "14px", overflow: "hidden" }}>
-              <span style={{
-                fontSize: "12px", fontWeight: 700, letterSpacing: "0.22em",
-                textTransform: "uppercase", color: "var(--color-fg)",
-                whiteSpace: "nowrap", position: "relative", zIndex: 1,
-              }}>Recurring</span>
-              <div style={{
-                position: "absolute",
-                left: "108px",
-                top: 0,
-                width: "160px",
-                height: "100%",
-                background: "repeating-linear-gradient(-60deg, transparent, transparent 4px, var(--color-border-hairline) 4px, var(--color-border-hairline) 8px)",
-                WebkitMaskImage: "linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)",
-                maskImage: "linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)",
-              }} />
-            </div>
-
-            <div style={{ flex: 1 }} />
-
-            <div className="hidden sm:flex items-center">
-              <button
-                onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
-                disabled={!isAuthenticated}
-                title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
-                aria-label="New task"
-                style={{
-                  fontSize: "20px",
-                  lineHeight: 1,
-                  alignSelf: "center",
-                  margin: "0 6px",
-                  padding: "4px 10px",
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--color-fg)",
-                  cursor: !isAuthenticated ? "not-allowed" : "pointer",
-                  opacity: !isAuthenticated ? 0.3 : 1,
-                }}
-                onMouseEnter={(e) => { if (isAuthenticated) e.currentTarget.style.color = "var(--color-active-highlight-alt)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
-              >
-                +
-              </button>
-            </div>
-          </div>
-
+          <div style={{ paddingTop: 12, background: "var(--color-bg)" }}>
           <div className="hidden sm:flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
             <div className="flex items-center">
               {RECURRING_FILTERS.map((f) => {
@@ -495,6 +428,20 @@ function Recurring() {
               })}
             </div>
             <div className="flex-1" />
+            <CategoryCapsTooltip variant="recurring">
+              <div
+                tabIndex={0}
+                aria-label="Show recurring point caps"
+                className="flex items-center justify-center mr-1"
+                style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <polyline points="21 4 21 10 15 10" />
+                </svg>
+              </div>
+            </CategoryCapsTooltip>
             <div className="relative mb-px mr-1">
               {showSortMenu && (
                 <div className="fixed inset-0 z-[15]" onClick={() => setShowSortMenu(false)} />
@@ -627,6 +574,28 @@ function Recurring() {
                 </div>
               )}
             </div>
+            <button
+              onClick={() => !isAuthenticated ? undefined : setShowNewTask(true)}
+              disabled={!isAuthenticated}
+              title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
+              aria-label="New task"
+              className="flex items-center justify-center ml-1 mb-px"
+              style={{
+                width: 26, height: 26,
+                fontSize: "18px",
+                lineHeight: 1,
+                background: "transparent",
+                border: "none",
+                color: "var(--color-fg)",
+                cursor: !isAuthenticated ? "not-allowed" : "pointer",
+                opacity: !isAuthenticated ? 0.3 : 1,
+                padding: 0,
+              }}
+              onMouseEnter={(e) => { if (isAuthenticated) e.currentTarget.style.color = "var(--color-active-highlight-alt)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+            >
+              +
+            </button>
           </div>
 
           <div
