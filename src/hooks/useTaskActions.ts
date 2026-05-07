@@ -156,7 +156,7 @@ export function useTaskActions({
     }
   });
 
-  const handleCheckIn = useEvent(async function handleCheckIn(task: TaskDto) {
+  const handleCheckIn = useEvent(async function handleCheckIn(task: TaskDto, counterValue?: number) {
     if (advancing === task.taskId) return;
     setAdvancing(task.taskId);
     const todayIso = (() => {
@@ -164,7 +164,8 @@ export function useTaskActions({
       return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     })();
     if (!isAuthenticated) {
-      const nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
+      let nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
+      while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
       const newCount = (task.currentStreakCount ?? 0) + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
@@ -175,7 +176,7 @@ export function useTaskActions({
       setAdvancing(null);
       return;
     }
-    const { data, error } = await tasksApi.checkIn(task.taskId);
+    const { data, error } = await tasksApi.checkIn(task.taskId, counterValue);
     if (error) { setAdvancing(null); setError(error); return; }
     const awarded = data!.pointsAwarded;
     setRecurringSubmittedToday(data!.recurringDailyTotal);

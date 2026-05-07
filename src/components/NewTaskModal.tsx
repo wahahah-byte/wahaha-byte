@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
 import DatePicker from "@/components/DatePicker";
-import { CATEGORIES, maxPointsFor } from "@/lib/constants";
+import { CATEGORIES, COUNTER_UNITS, maxPointsFor } from "@/lib/constants";
 
 const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
   { label: "Once",    value: "once",     rule: null },
@@ -41,8 +41,14 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
   );
   const [isRecurring, setIsRecurring] = useState(initialRecurring);
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
+  const [hasCounter, setHasCounter] = useState(false);
+  const [counterUnit, setCounterUnit] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isRecurring && hasCounter) setHasCounter(false);
+  }, [isRecurring, hasCounter]);
 
   useEffect(() => {
     if (isRecurring) {
@@ -76,6 +82,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
         : undefined,
       isRecurring,
       recurrenceRule: isRecurring ? recurrenceRule : undefined,
+      hasCounter: isRecurring ? hasCounter : false,
+      counterUnit: isRecurring && hasCounter && counterUnit ? counterUnit : null,
     };
     const { data, error: apiError } = await tasksApi.create(dto);
     setSubmitting(false);
@@ -271,6 +279,34 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                 })}
               </div>
             </Field>
+
+            {isRecurring && (
+              <Field label="Counter">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setHasCounter((v) => !v)}
+                    className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                    style={{
+                      background: hasCounter ? "var(--color-active-highlight-bg)" : "transparent",
+                      color: hasCounter ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                      border: `1px solid ${hasCounter ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
+                      borderRadius: "999px",
+                      fontWeight: hasCounter ? 600 : 400,
+                      padding: "3px 10px",
+                    }}
+                  >
+                    {hasCounter ? "On" : "Off"}
+                  </button>
+                  {hasCounter && (
+                    <CompactSelect
+                      value={counterUnit}
+                      onChange={setCounterUnit}
+                      options={[{ value: "", label: "(no unit)" }, ...COUNTER_UNITS.map((u) => ({ value: u, label: u }))]}
+                    />
+                  )}
+                </div>
+              </Field>
+            )}
           </div>
         )}
 

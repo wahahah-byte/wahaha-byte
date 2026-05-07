@@ -30,6 +30,8 @@ export interface TaskDto {
   longestStreakCount?: number;
   lastCheckInDate?: string | null;
   isArchived?: boolean;
+  hasCounter?: boolean;
+  counterUnit?: string | null;
   subtasks?: Subtask[];
 }
 
@@ -43,6 +45,8 @@ export interface CreateTaskRequest {
   dueDate?: string;
   isRecurring?: boolean;
   recurrenceRule?: string;
+  hasCounter?: boolean;
+  counterUnit?: string | null;
 }
 
 export interface UpdateTaskRequest {
@@ -58,6 +62,16 @@ export interface UpdateTaskRequest {
   isRecurring: boolean;
   recurrenceRule?: string;
   submitted: boolean;
+  hasCounter?: boolean;
+  counterUnit?: string | null;
+}
+
+export interface CheckInCycleDto {
+  cycleId: number;
+  taskId: string;
+  checkInDate: string;
+  counterValue: number | null;
+  createdAt: string;
 }
 
 export interface TaskFilterParams {
@@ -133,8 +147,22 @@ export const tasksApi = {
   delete: (id: string) =>
     authedDelete<void>(`/api/tasks/${id}`),
 
-  checkIn: (id: string) =>
-    authedPost<CheckInResponse>(`/api/tasks/${id}/checkin`, {}),
+  checkIn: (id: string, counterValue?: number) =>
+    authedPost<CheckInResponse>(
+      `/api/tasks/${id}/checkin`,
+      counterValue !== undefined ? { counterValue } : {}
+    ),
+
+  getCheckInHistory: (id: string, pageNumber = 1, pageSize = 30) =>
+    authedGet<PagedResult<CheckInCycleDto>>(
+      `/api/tasks/${id}/checkin-history?pageNumber=${pageNumber}&pageSize=${pageSize}`
+    ),
+
+  updateCheckInCycle: (taskId: string, cycleId: number, counterValue: number | null) =>
+    authedPatch<void>(`/api/tasks/${taskId}/checkin-history/${cycleId}`, { counterValue }),
+
+  logCounter: (id: string, counterValue: number) =>
+    authedPost<CheckInCycleDto>(`/api/tasks/${id}/log-counter`, { counterValue }),
 
   skipCycle: (id: string) =>
     authedPost<SkipCycleResponse>(`/api/tasks/${id}/skip-cycle`, {}),

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TaskDto, Subtask } from "@/lib/api/tasks";
+import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
-import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR } from "@/lib/constants";
+import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
 import SubtaskRow from "@/components/SubtaskRow";
 
@@ -25,6 +25,8 @@ export interface EditableTaskFields {
   category: string;
   priority: string;
   dueDate: string | null;
+  hasCounter?: boolean;
+  counterUnit?: string | null;
 }
 
 interface Props {
@@ -39,6 +41,8 @@ interface Props {
   onPause?: () => void;
   onUndo?: () => void;
   onDelete?: () => void;
+  onLog?: () => void;
+  historyRefreshKey?: number;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
   isActing?: boolean;
@@ -114,6 +118,7 @@ function ActionBtn({
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
+  onLog, historyRefreshKey,
   onSave, onSubtasksChange, isActing, canUndo, initialEditMode, mustReschedule,
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
@@ -210,6 +215,8 @@ export default function TaskDetailModal({
       ? rescheduleDefault()
       : task.dueDate ? parseDateOnly(task.dueDate) : null
   );
+  const [editHasCounter, setEditHasCounter] = useState<boolean>(!!task.hasCounter);
+  const [editCounterUnit, setEditCounterUnit] = useState<string>(task.counterUnit ?? "");
   const [showEditDescription, setShowEditDescription] = useState(!!editDescription);
 
   function startEdit() {
@@ -219,6 +226,8 @@ export default function TaskDetailModal({
     setEditPriority(task.priority);
     setEditCategory(task.category);
     setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
+    setEditHasCounter(!!task.hasCounter);
+    setEditCounterUnit(task.counterUnit ?? "");
     setEditError(null);
     setIsEditing(true);
   }
@@ -243,6 +252,8 @@ export default function TaskDetailModal({
       dueDate: editDueDate
         ? `${editDueDate.getFullYear()}-${String(editDueDate.getMonth() + 1).padStart(2, "0")}-${String(editDueDate.getDate()).padStart(2, "0")}`
         : null,
+      hasCounter: task.isRecurring ? editHasCounter : undefined,
+      counterUnit: task.isRecurring ? (editHasCounter && editCounterUnit ? editCounterUnit : null) : undefined,
     });
     setIsSaving(false);
     if (err) { setEditError(err); return; }
@@ -452,6 +463,48 @@ export default function TaskDetailModal({
               </div>
             </Field>
 
+            {task.isRecurring && (
+              <Field label="Counter">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setEditHasCounter((v) => !v)}
+                    className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                    style={{
+                      background: editHasCounter ? "var(--color-active-highlight-bg)" : "transparent",
+                      color: editHasCounter ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                      border: `1px solid ${editHasCounter ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
+                      borderRadius: "999px",
+                      fontWeight: editHasCounter ? 600 : 400,
+                      padding: "3px 10px",
+                    }}
+                  >
+                    {editHasCounter ? "On" : "Off"}
+                  </button>
+                  {editHasCounter && (
+                    <div className="relative">
+                      <select
+                        value={editCounterUnit}
+                        onChange={(e) => setEditCounterUnit(e.target.value)}
+                        className="px-2 py-1.5 text-xs appearance-none outline-none cursor-pointer pr-6"
+                        style={{
+                          background: "var(--color-input)",
+                          color: "var(--color-input-fg)",
+                          border: "1px solid var(--color-border-hairline)",
+                          borderRadius: "3px",
+                        }}
+                      >
+                        <option value="" style={{ background: "var(--color-input)" }}>(no unit)</option>
+                        {COUNTER_UNITS.map((u) => (
+                          <option key={u} value={u} style={{ background: "var(--color-input)" }}>{u}</option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
+                    </div>
+                  )}
+                </div>
+              </Field>
+            )}
+
             {editError && (
               <p className="text-xs" style={{ color: "var(--color-danger)" }}>
                 {editError}
@@ -517,6 +570,10 @@ export default function TaskDetailModal({
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-fg-muted)" }}>
                 {task.description}
               </p>
+            )}
+
+            {task.isRecurring && task.hasCounter && (
+              <CounterHistory taskId={task.taskId} unit={task.counterUnit ?? null} isAuthenticated={isAuthenticated} refreshKey={historyRefreshKey ?? 0} />
             )}
 
             {/* Subtasks — hidden entirely when completed and there's nothing to read */}
@@ -641,6 +698,22 @@ export default function TaskDetailModal({
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
                       <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  }
+                />
+              )}
+
+              {task.isRecurring && task.hasCounter && onLog && (
+                <ActionBtn
+                  onClick={onLog}
+                  disabled={isActing}
+                  color="var(--color-active-highlight)"
+                  hoverBg="var(--color-active-highlight-bg)"
+                  label="Log"
+                  icon={
+                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                      <line x1="5" y1="1.5" x2="5" y2="8.5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="1.5" y1="5" x2="8.5" y2="5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   }
                 />
@@ -774,6 +847,258 @@ function Field({ label, children, className }: { label: string; children: React.
         {label}
       </span>
       {children}
+    </div>
+  );
+}
+
+const HISTORY_PAGE_SIZE = 30;
+
+function fmtCycleDate(iso: string): string {
+  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtCycleTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function CounterHistory({ taskId, unit, isAuthenticated, refreshKey }: { taskId: string; unit: string | null; isAuthenticated: boolean; refreshKey: number }) {
+  const [items, setItems] = useState<CheckInCycleDto[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [savingCycleId, setSavingCycleId] = useState<number | null>(null);
+
+  const hasMore = items.length < totalCount;
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    tasksApi.getCheckInHistory(taskId, 1, HISTORY_PAGE_SIZE).then(({ data, error }) => {
+      if (cancelled) return;
+      setLoading(false);
+      if (error) { setError(error); return; }
+      setItems(data!.data);
+      setTotalCount(data!.totalCount);
+      setPage(1);
+    });
+    return () => { cancelled = true; };
+  }, [taskId, isAuthenticated, refreshKey]);
+
+  async function loadMore() {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    const next = page + 1;
+    const { data, error } = await tasksApi.getCheckInHistory(taskId, next, HISTORY_PAGE_SIZE);
+    setLoading(false);
+    if (error) { setError(error); return; }
+    setItems((prev) => [...prev, ...data!.data]);
+    setPage(next);
+  }
+
+  function startEdit(c: CheckInCycleDto) {
+    setEditingCycleId(c.cycleId);
+    setEditValue(c.counterValue == null ? "" : String(c.counterValue));
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditingCycleId(null);
+    setEditValue("");
+  }
+
+  async function saveEdit(c: CheckInCycleDto) {
+    const trimmed = editValue.trim();
+    let newValue: number | null;
+    if (trimmed === "") {
+      newValue = null;
+    } else if (!/^\d+$/.test(trimmed)) {
+      setError("Enter a whole number, or leave blank to clear.");
+      return;
+    } else {
+      newValue = Number(trimmed);
+      if (newValue < 0) { setError("Must be 0 or greater."); return; }
+    }
+    if (newValue === c.counterValue) {
+      cancelEdit();
+      return;
+    }
+    setSavingCycleId(c.cycleId);
+    const { error: apiError } = await tasksApi.updateCheckInCycle(taskId, c.cycleId, newValue);
+    setSavingCycleId(null);
+    if (apiError) { setError(apiError); return; }
+    setItems((prev) => prev.map((x) => x.cycleId === c.cycleId ? { ...x, counterValue: newValue } : x));
+    cancelEdit();
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+          History
+        </span>
+        <p className="text-xs" style={{ color: "var(--color-fg-subtle)" }}>Sign in to see counter history.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+          History{unit ? ` · ${unit}` : ""}
+        </span>
+        {totalCount > 0 && (
+          <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
+            {items.length}/{totalCount}
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>
+      )}
+
+      {!loading && items.length === 0 && !error && (
+        <p className="text-xs" style={{ color: "var(--color-fg-subtle)" }}>No check-ins yet.</p>
+      )}
+
+      {items.length > 0 && (() => {
+        const groups: { dateKey: string; entries: CheckInCycleDto[] }[] = [];
+        for (const c of items) {
+          const dateKey = c.checkInDate.split("T")[0];
+          const last = groups[groups.length - 1];
+          if (last && last.dateKey === dateKey) last.entries.push(c);
+          else groups.push({ dateKey, entries: [c] });
+        }
+        return (
+          <div
+            style={{
+              maxHeight: 350,
+              overflowY: "auto",
+              borderRadius: 6,
+              background: "var(--color-surface-deep)",
+              boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
+              padding: "6px 10px 10px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {groups.map(({ dateKey, entries }, gIdx) => (
+              <div key={dateKey}>
+                <div className={`flex items-center gap-3 ${gIdx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
+                  <span
+                    className="tracking-widest uppercase text-[11px] font-semibold"
+                    style={{ color: "var(--color-fg-muted)" }}
+                  >
+                    {fmtCycleDate(dateKey)}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
+                </div>
+                <div className="flex flex-col">
+                  {entries.map((c, idx) => {
+                    const isEditing = editingCycleId === c.cycleId;
+                    const isSaving = savingCycleId === c.cycleId;
+                    return (
+                      <div
+                        key={c.cycleId}
+                        className="flex items-center justify-between gap-3"
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--color-fg-muted)",
+                          padding: "5px 0",
+                          borderBottom: idx === entries.length - 1
+                            ? "none"
+                            : "1px dashed var(--color-border-hairline)",
+                        }}
+                      >
+                        <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {fmtCycleTime(c.createdAt)}
+                        </span>
+                        {isEditing ? (
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); saveEdit(c); }
+                                else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+                              }}
+                              onBlur={() => saveEdit(c)}
+                              disabled={isSaving}
+                              placeholder="—"
+                              className="outline-none text-right"
+                              style={{
+                                width: 64,
+                                background: "var(--color-input)",
+                                color: "var(--color-input-fg)",
+                                border: "1px solid var(--color-active-highlight-border)",
+                                borderRadius: "3px",
+                                padding: "2px 6px",
+                                fontSize: "11px",
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            />
+                            {unit && <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>{unit}</span>}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => startEdit(c)}
+                            className="inline-flex items-baseline gap-1 cursor-text"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              padding: "1px 4px",
+                              borderRadius: "3px",
+                              color: c.counterValue == null ? "var(--color-fg-subtle)" : "var(--color-fg)",
+                              fontWeight: 600,
+                              fontVariantNumeric: "tabular-nums",
+                              fontSize: "11px",
+                            }}
+                            title="Click to edit"
+                          >
+                            {c.counterValue == null ? "—" : c.counterValue.toLocaleString()}
+                            {unit && c.counterValue != null && (
+                              <span style={{ color: "var(--color-fg-subtle)", fontWeight: 400, fontSize: "10px" }}>{unit}</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          disabled={loading}
+          className="self-start text-[10px] tracking-widest uppercase cursor-pointer disabled:opacity-40"
+          style={{
+            color: "var(--color-active-highlight)",
+            background: "transparent",
+            border: "1px solid var(--color-active-highlight-border)",
+            borderRadius: "999px",
+            padding: "3px 10px",
+          }}
+        >
+          {loading ? "Loading…" : "Load more"}
+        </button>
+      )}
     </div>
   );
 }

@@ -48,7 +48,7 @@ function TaskRowImpl({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
-  onSkip, onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange,
+  onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
@@ -318,22 +318,6 @@ function TaskRowImpl({
         }}
       >
         {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
-          if (overdueRecurring) {
-            return (
-              <button
-                onClick={() => onRestartOverdue ? onRestartOverdue(task) : onSkip(task)}
-                disabled={isAdvancing}
-                title="Resume — reschedule to today"
-                style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: isAdvancing ? "not-allowed" : "pointer", background: "var(--color-surface-deep)", border: "none", opacity: isAdvancing ? 0.3 : 1 }}
-                onMouseEnter={(e) => { if (!isAdvancing) e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
-              >
-                <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
-                  <polygon points="2,1 9,5 2,9" style={{ fill: "var(--color-danger)" }} />
-                </svg>
-              </button>
-            );
-          }
           const eligible = canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
           return (
             <button
@@ -655,8 +639,8 @@ function TaskRowImpl({
                 </>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
-                const overdue = isLocked && isOverdue(task.dueDate);
+                const overdue = isOverdue(task.dueDate);
+                const isLocked = !overdue && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
                 const cyclesOverdue = overdue ? getCyclesOverdue(task.dueDate, task.recurrenceRule) : 0;
                 const isPenalized = cyclesOverdue >= 3;
                 const unlockInfo = isLocked && !overdue ? getUnlockInfo(task.dueDate) : null;
@@ -865,34 +849,22 @@ function TaskRowImpl({
 
       <div className="row-toolbar" onClick={stop}>
         {task.status === "pending" && task.isRecurring && !isInProgress && (
-          overdueRecurring ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRestartOverdue ? onRestartOverdue(task) : onSkip(task); }}
-              disabled={isAdvancing}
-              title="Resume — reschedule to today"
-            >
+          <button
+            onClick={eligibleCheckIn ? (e) => { e.stopPropagation(); onCheckIn(task); } : undefined}
+            disabled={isAdvancing || !eligibleCheckIn}
+            title={eligibleCheckIn ? "Check In" : "Not yet available"}
+          >
+            {eligibleCheckIn ? (
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <polygon points="2,1 9,5 2,9" fill="currentColor" />
+                <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </button>
-          ) : (
-            <button
-              onClick={eligibleCheckIn ? (e) => { e.stopPropagation(); onCheckIn(task); } : undefined}
-              disabled={isAdvancing || !eligibleCheckIn}
-              title={eligibleCheckIn ? "Check In" : "Not yet available"}
-            >
-              {eligibleCheckIn ? (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                </svg>
-              )}
-            </button>
-          )
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+                <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+              </svg>
+            )}
+          </button>
         )}
         {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
           <button

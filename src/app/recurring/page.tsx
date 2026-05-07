@@ -7,6 +7,7 @@ import { tasksApi, TaskDto, TaskFilterParams, UpdateTaskRequest } from "@/lib/ap
 import NewTaskModal from "@/components/NewTaskModal";
 import TaskDetailModal, { EditableTaskFields } from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
+import CounterPromptModal from "@/components/CounterPromptModal";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { canCheckInNow, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
@@ -23,7 +24,7 @@ const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r4", userId: "demo", title: "Monthly budget review", description: null, category: "Finance", priority: "high", status: "pending", pointValue: 5, dueDate: "2026-05-15", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "monthly", submitted: false },
   // Streak tier showcase
   { taskId: "r5", userId: "demo", title: "10-minute meditation", description: "Sit, breathe, settle", category: "Wellness", priority: "medium", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-04-04T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 31, longestStreakCount: 31 },
-  { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22 },
+  { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22, hasCounter: true, counterUnit: "words" },
   { taskId: "r7", userId: "demo", title: "Floss", description: "One more day to 2.0x", category: "Wellness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-05T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 29, longestStreakCount: 29 },
   { taskId: "r8", userId: "demo", title: "5-min stretch", description: null, category: "Fitness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-29T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 6, longestStreakCount: 9 },
 ];
@@ -32,7 +33,8 @@ const EMPTY_SET = new Set<string>();
 
 function tabMatches(task: TaskDto, tab: string): boolean {
   if (tab === "all") return true;
-  if (tab === "today") return canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+  if (tab === "today")
+    return canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate) && !isOverdue(task.dueDate);
   if (tab === "missed") return isOverdue(task.dueDate);
   if (tab === "upcoming")
     return !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate) && !isOverdue(task.dueDate);
@@ -51,6 +53,9 @@ function Recurring() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
   const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
+  const [counterPromptTask, setCounterPromptTask] = useState<TaskDto | null>(null);
+  const [logPromptTask, setLogPromptTask] = useState<TaskDto | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   type GroupMode = "none" | "frequency" | "category";
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
@@ -146,6 +151,31 @@ function Recurring() {
     setDetailTask(t);
   }, []);
 
+  const requestCheckIn = useCallback((t: TaskDto) => {
+    if (t.hasCounter) {
+      setCounterPromptTask(t);
+      return;
+    }
+    handleCheckIn(t);
+  }, [handleCheckIn]);
+
+  const requestLog = useCallback((t: TaskDto) => {
+    setLogPromptTask(t);
+  }, []);
+
+  const submitLog = useCallback(async (value: number) => {
+    const t = logPromptTask;
+    if (!t) return;
+    setLogPromptTask(null);
+    if (!isAuthenticated) {
+      setHistoryRefreshKey((k) => k + 1);
+      return;
+    }
+    const { error } = await tasksApi.logCounter(t.taskId, value);
+    if (error) { setError(error); return; }
+    setHistoryRefreshKey((k) => k + 1);
+  }, [logPromptTask, isAuthenticated, setError]);
+
   const noopToggle = useCallback(() => {}, []);
 
   async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
@@ -171,6 +201,8 @@ function Recurring() {
       isRecurring: detailTask.isRecurring,
       recurrenceRule: detailTask.recurrenceRule ?? undefined,
       submitted: detailTask.submitted,
+      hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
+      counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
     };
     const { error } = await tasksApi.update(detailTask.taskId, req);
     if (error) return error;
@@ -335,7 +367,7 @@ function Recurring() {
                     recurringPopup={recurringPopups.get(item.taskId)}
                     penalizedTaskIds={EMPTY_SET}
                     onAdvance={handleAdvance}
-                    onCheckIn={handleCheckIn}
+                    onCheckIn={requestCheckIn}
                     onPause={handlePause}
                     onDelete={handleDelete}
                     onSkip={handleSkip}
@@ -356,7 +388,7 @@ function Recurring() {
     );
   }
 
-  const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate)).length;
+  const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate) && !isOverdue(t.dueDate)).length;
   const missedCount = tasks.filter((t) => isOverdue(t.dueDate)).length;
 
   return (
@@ -708,8 +740,10 @@ function Recurring() {
             onClose={closeDetail}
             canUndo={false}
             isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
-            onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
+            onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
             checkInBlocked={!canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
+            onLog={dt.hasCounter ? () => requestLog(dt) : undefined}
+            historyRefreshKey={historyRefreshKey}
             onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
             onSave={handleSaveTask}
             onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}
@@ -724,6 +758,29 @@ function Recurring() {
           initialRecurring={true}
           onClose={() => setShowNewTask(false)}
           onCreated={(task) => { setTasks((prev) => [task, ...prev]); setShowNewTask(false); }}
+        />
+      )}
+
+      {counterPromptTask && (
+        <CounterPromptModal
+          taskTitle={counterPromptTask.title}
+          unit={counterPromptTask.counterUnit}
+          onClose={() => setCounterPromptTask(null)}
+          onSubmit={(value) => {
+            const t = counterPromptTask;
+            setCounterPromptTask(null);
+            handleCheckIn(t, value);
+          }}
+        />
+      )}
+
+      {logPromptTask && (
+        <CounterPromptModal
+          taskTitle={logPromptTask.title}
+          unit={logPromptTask.counterUnit}
+          mode="log"
+          onClose={() => setLogPromptTask(null)}
+          onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
         />
       )}
     </>

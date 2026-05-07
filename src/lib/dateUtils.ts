@@ -31,7 +31,6 @@ export function canCheckInNow(
   const due = parseLocalDate(dueDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  if (today > due) return false;
   const prevStart = getPrevPeriodStart(due, r);
   if (today <= prevStart) return false;
   if (lastCheckInDate) {

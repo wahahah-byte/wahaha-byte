@@ -169,7 +169,7 @@ export default function MobileActionBarRecurring({
           cursor: "pointer",
           touchAction: "none",
           WebkitTapHighlightColor: "transparent",
-          zIndex: 36,
+          zIndex: 34,
           transition: "bottom 0.22s cubic-bezier(0.2, 0, 0, 1)",
         }}
       >

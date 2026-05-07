@@ -61,3 +61,14 @@ export const PER_TASK_VALUE_CAP: Record<string, number> = {
 export function maxPointsFor(category: string): number {
   return PER_TASK_VALUE_CAP[category] ?? 25;
 }
+
+export const COUNTER_UNITS = [
+  "words", "pages", "chapters",
+  "minutes", "hours",
+  "reps", "sets", "pushups", "situps",
+  "km", "miles", "steps",
+  "glasses", "calories",
+  "items", "tasks",
+] as const;
+
+export type CounterUnit = typeof COUNTER_UNITS[number];

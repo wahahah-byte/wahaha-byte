@@ -7,6 +7,7 @@ import { tasksApi, TaskDto, UpdateTaskRequest } from "@/lib/api/tasks";
 import NewTaskModal from "@/components/NewTaskModal";
 import TaskDetailModal, { EditableTaskFields } from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
+import CounterPromptModal from "@/components/CounterPromptModal";
 import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
@@ -49,6 +50,9 @@ function Home() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
   const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
+  const [counterPromptTask, setCounterPromptTask] = useState<TaskDto | null>(null);
+  const [logPromptTask, setLogPromptTask] = useState<TaskDto | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [sortMode, setSortMode] = useState<SortMode>("due");
   const [uncompletedCollapsed, setUncompletedCollapsed] = useState(false);
@@ -99,6 +103,31 @@ function Home() {
     setDetailTask(t);
   }, []);
 
+  const requestCheckIn = useCallback((t: TaskDto) => {
+    if (t.hasCounter) {
+      setCounterPromptTask(t);
+      return;
+    }
+    handleCheckIn(t);
+  }, [handleCheckIn]);
+
+  const requestLog = useCallback((t: TaskDto) => {
+    setLogPromptTask(t);
+  }, []);
+
+  const submitLog = useCallback(async (value: number) => {
+    const t = logPromptTask;
+    if (!t) return;
+    setLogPromptTask(null);
+    if (!isAuthenticated) {
+      setHistoryRefreshKey((k) => k + 1);
+      return;
+    }
+    const { error } = await tasksApi.logCounter(t.taskId, value);
+    if (error) { setError(error); return; }
+    setHistoryRefreshKey((k) => k + 1);
+  }, [logPromptTask, isAuthenticated, setError]);
+
   function applyFilter(value: string) {
     setActiveFilter(value);
     const params = new URLSearchParams(searchParams.toString());
@@ -135,6 +164,8 @@ function Home() {
       isRecurring: detailTask.isRecurring,
       recurrenceRule: detailTask.recurrenceRule ?? undefined,
       submitted: detailTask.submitted,
+      hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
+      counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
     };
     const { error } = await tasksApi.update(detailTask.taskId, req);
     if (error) return error;
@@ -271,7 +302,7 @@ function Home() {
                       recurringPopup={recurringPopups.get(item.taskId)}
                       penalizedTaskIds={penalizedTaskIds}
                       onAdvance={handleAdvance}
-                      onCheckIn={handleCheckIn}
+                      onCheckIn={requestCheckIn}
                       onPause={handlePause}
                       onDelete={handleDelete}
                       onSkip={handleSkip}
@@ -519,7 +550,9 @@ function Home() {
             canUndo={dtCanUndo}
             isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
             onStart={dt.status === "pending" && !dt.isRecurring ? () => { closeDetail(); handleAdvance(dt); } : undefined}
-            onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); handleCheckIn(dt); } : undefined}
+            onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
+            onLog={dt.isRecurring && dt.hasCounter ? () => requestLog(dt) : undefined}
+            historyRefreshKey={historyRefreshKey}
             checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
             onPause={dt.status === "in_progress" ? () => { closeDetail(); handlePause(dt); } : undefined}
             onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
@@ -547,6 +580,29 @@ function Home() {
           remaining={remaining}
           onClose={() => setShowCapWarning(false)}
           onConfirm={doSubmit}
+        />
+      )}
+
+      {counterPromptTask && (
+        <CounterPromptModal
+          taskTitle={counterPromptTask.title}
+          unit={counterPromptTask.counterUnit}
+          onClose={() => setCounterPromptTask(null)}
+          onSubmit={(value) => {
+            const t = counterPromptTask;
+            setCounterPromptTask(null);
+            handleCheckIn(t, value);
+          }}
+        />
+      )}
+
+      {logPromptTask && (
+        <CounterPromptModal
+          taskTitle={logPromptTask.title}
+          unit={logPromptTask.counterUnit}
+          mode="log"
+          onClose={() => setLogPromptTask(null)}
+          onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
         />
       )}
     </>
