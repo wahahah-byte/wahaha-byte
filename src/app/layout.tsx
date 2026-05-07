@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
 import MobileNav from "@/components/MobileNav";
-import ThemeToggle from "@/components/ThemeToggle";
 import { PointsProvider } from "@/context/PointsContext";
 import { ToastProvider, ToastBanner } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -49,7 +48,7 @@ export default function RootLayout({
         <PointsProvider>
         <ToastProvider>
         <header
-          className="flex items-center justify-between px-6 py-3"
+          className="flex items-center justify-between px-6"
           style={{
             background: "var(--color-header)",
             borderTop: "2px solid var(--color-active-highlight)",
@@ -58,6 +57,7 @@ export default function RootLayout({
             position: "sticky",
             top: 0,
             zIndex: 30,
+            height: "50px",
           }}
         >
           <div className="flex items-center gap-6">
@@ -71,7 +71,6 @@ export default function RootLayout({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <ThemeToggle />
             <AuthHeader />
           </div>
         </header>

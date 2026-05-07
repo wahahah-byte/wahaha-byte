@@ -52,11 +52,6 @@ function parseDateOnly(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function fmt(dateStr: string | null) {
-  if (!dateStr) return "—";
-  return parseDateOnly(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 function fmtShort(dateStr: string | null) {
   if (!dateStr) return "—";
   return parseDateOnly(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -98,8 +93,14 @@ function ActionBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-      style={{ color, background: "transparent", border: `1px solid color-mix(in srgb, ${color} 28%, transparent)`, borderRadius: "3px" }}
+      className="flex items-center gap-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{
+        color,
+        background: "transparent",
+        border: `1px solid color-mix(in srgb, ${color} 28%, transparent)`,
+        borderRadius: "999px",
+        padding: "5px 10px",
+      }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = hoverBg; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
@@ -108,6 +109,7 @@ function ActionBtn({
     </button>
   );
 }
+
 
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
@@ -123,9 +125,6 @@ export default function TaskDetailModal({
   const [addingSubtask, setAddingSubtask] = useState(false);
   useEffect(() => { setSubtasksState(task.subtasks ?? []); }, [task.taskId, task.subtasks]);
 
-  // Single setter that updates local state + tells the parent. Always called with
-  // a concrete next-array so neither React's render phase nor the parent's setter
-  // sees a stale closure or runs inside a child's reconciler.
   function commitSubtasks(next: Subtask[]) {
     setSubtasksState(next);
     onSubtasksChange?.(next);
@@ -156,7 +155,7 @@ export default function TaskDetailModal({
 
   async function handleAddSubtask() {
     const title = newSubtaskTitle.trim();
-    if (!title || addingSubtask) return;
+    if (!title || addingSubtask || task.status === "completed") return;
     setAddingSubtask(true);
     const snapshot = subtasks;
     const sortOrder = (snapshot[snapshot.length - 1]?.sortOrder ?? -1) + 1;
@@ -211,10 +210,12 @@ export default function TaskDetailModal({
       ? rescheduleDefault()
       : task.dueDate ? parseDateOnly(task.dueDate) : null
   );
+  const [showEditDescription, setShowEditDescription] = useState(!!editDescription);
 
   function startEdit() {
     setEditTitle(task.title);
     setEditDescription(task.description ?? "");
+    setShowEditDescription(!!(task.description ?? ""));
     setEditPriority(task.priority);
     setEditCategory(task.category);
     setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
@@ -252,66 +253,103 @@ export default function TaskDetailModal({
     ? CATEGORIES
     : [...CATEGORIES, task.category].sort();
 
+  const titleColor = !isEditing && task.status === "completed" ? "var(--color-fg-muted)" : "var(--color-fg)";
+  const titleDecoration = !isEditing && task.status === "completed" ? "line-through" : "none";
+
+  const priorityDot = isEditing ? (PRIORITY_DOT[editPriority] ?? "var(--color-fg-muted)") : dot;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: "var(--color-modal-overlay)" }}
       onClick={isEditing ? undefined : onClose}
     >
       <div
-        className={`w-full max-w-md sm:max-w-lg flex flex-col rounded${isEditing ? "" : " overflow-hidden"}`}
-        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-popover)" }}
+        className="w-full max-w-md sm:max-w-lg flex flex-col relative"
+        style={{
+          background: "var(--color-panel)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "6px",
+          boxShadow: "var(--shadow-popover)",
+          padding: "20px 20px 14px",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ background: "var(--color-panel-header)", borderBottom: "1px solid var(--color-border)", ...(isEditing && { borderRadius: "4px 4px 0 0" }) }}
+        <button
+          onClick={isEditing ? () => setIsEditing(false) : onClose}
+          aria-label="Close"
+          className="absolute top-2.5 right-2.5 transition-colors text-base leading-none cursor-pointer flex items-center justify-center"
+          style={{
+            color: "var(--color-fg-subtle)",
+            background: "transparent",
+            border: "none",
+            width: 28,
+            height: 28,
+            padding: 0,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: isEditing ? (PRIORITY_DOT[editPriority] ?? "var(--color-fg-muted)") : dot }} />
-            <span
-              className="text-sm font-semibold tracking-wide truncate"
+          ✕
+        </button>
+
+        {/* Title row: priority dot + title (or input) + status pill */}
+        <div className="flex items-center gap-2.5 min-w-0 pr-8 mb-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: priorityDot }} />
+          {isEditing ? (
+            <input
+              autoFocus={!titleLocked}
+              value={editTitle}
+              disabled={titleLocked}
+              title={titleLocked ? "Title is locked 24 hours after creation." : undefined}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } }}
+              className="flex-1 min-w-0 bg-transparent outline-none disabled:cursor-not-allowed"
               style={{
-                color: !isEditing && task.status === "completed" ? "var(--color-fg-muted)" : "var(--color-input-fg)",
-                textDecoration: !isEditing && task.status === "completed" ? "line-through" : "none",
+                color: titleLocked ? "var(--color-fg-muted)" : "var(--color-fg)",
+                fontSize: "16px",
+                fontWeight: 600,
+                border: "none",
+                padding: 0,
+                letterSpacing: "0.01em",
+              }}
+            />
+          ) : (
+            <span
+              className="truncate"
+              style={{
+                color: titleColor,
+                textDecoration: titleDecoration,
+                fontSize: "16px",
+                fontWeight: 600,
+                letterSpacing: "0.01em",
               }}
             >
-              {isEditing ? (editTitle || "Edit Task") : task.title}
+              {task.title}
             </span>
-            {isEditing ? (
-              <span
-                className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
-                style={{ color: "var(--color-active-highlight)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "2px" }}
-              >
-                Editing
-              </span>
-            ) : (
-              <span
-                className="flex-shrink-0 text-[8px] tracking-widest uppercase px-1.5 py-0.5"
-                style={{ color: status.color, border: `1px solid ${status.color}55`, borderRadius: "2px", fontWeight: 600 }}
-              >
-                {status.label}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={isEditing ? () => setIsEditing(false) : onClose}
-            className="flex-shrink-0 ml-3 transition-colors text-lg leading-none cursor-pointer"
-            style={{ color: "var(--color-fg-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
-          >
-            ✕
-          </button>
+          )}
+          {!isEditing && (
+            <span
+              className="flex-shrink-0 text-[8px] tracking-widest uppercase"
+              style={{
+                color: status.color,
+                border: `1px solid color-mix(in srgb, ${status.color} 30%, transparent)`,
+                borderRadius: "999px",
+                padding: "2px 7px",
+                fontWeight: 600,
+              }}
+            >
+              {status.label}
+            </span>
+          )}
         </div>
 
         {/* Body */}
         {isEditing ? (
-          <div className="flex flex-col gap-3 px-5 py-4">
+          <div className="flex flex-col gap-3 mt-1">
             {mustReschedule && (
               <div
-                className="px-3 py-2 text-xs leading-relaxed flex items-start gap-2"
+                className="flex items-start gap-2 px-3 py-2"
                 style={{ background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px", color: "var(--color-danger)" }}
               >
                 <span style={{ fontSize: "11px", lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
@@ -322,268 +360,248 @@ export default function TaskDetailModal({
                 </span>
               </div>
             )}
-            <EditField label="Title">
-              <input
-                autoFocus={!titleLocked}
-                value={editTitle}
-                disabled={titleLocked}
-                title={titleLocked ? "Title is locked 24 hours after creation." : undefined}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                className="w-full px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
-                style={{
-                  background: titleLocked ? "var(--color-surface-deep)" : "var(--color-input)",
-                  color: titleLocked ? "var(--color-fg-subtle)" : "var(--color-input-fg)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "3px",
-                }}
-                onFocus={(e) => { if (!titleLocked) e.currentTarget.style.borderColor = "var(--color-active-highlight)"; }}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
-              />
-            </EditField>
 
-            <EditField label="Description">
+            {/* Description (lazy) */}
+            {showEditDescription ? (
               <textarea
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Optional details…"
+                placeholder="Description"
                 rows={2}
-                className="w-full px-3 py-2 text-sm outline-none resize-none"
-                style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                className="w-full bg-transparent outline-none resize-none"
+                style={{
+                  color: "var(--color-fg-muted)",
+                  fontSize: "12px",
+                  border: "none",
+                  padding: 0,
+                  lineHeight: 1.5,
+                }}
               />
-            </EditField>
-
-            {(!task.isRecurring || mustReschedule) && (
-              <EditField label="Due Date">
-                <DatePicker value={editDueDate} onChange={setEditDueDate} />
-              </EditField>
+            ) : (
+              <button
+                onClick={() => setShowEditDescription(true)}
+                className="self-start cursor-pointer transition-colors"
+                style={{
+                  color: "var(--color-fg-subtle)",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  fontSize: "11px",
+                  letterSpacing: "0.05em",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg-muted)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
+              >
+                + Description
+              </button>
             )}
 
-            <EditField label="Category">
-              <div className="relative">
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{
-                    background: "var(--color-input)",
-                    color: CATEGORY_COLOR[editCategory] ?? "var(--color-input-fg)",
-                    border: `1px solid ${(CATEGORY_COLOR[editCategory] ?? "var(--color-border)") + "55"}`,
-                    borderRadius: "3px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {categoryOptions.map((c) => (
-                    <option key={c} value={c} style={{ background: "var(--color-input)", color: "var(--color-input-fg)", fontWeight: 400 }}>{c}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: CATEGORY_COLOR[editCategory] ?? "var(--color-fg-subtle)" }}>▾</span>
-              </div>
-            </EditField>
+            {/* Inline metadata fields */}
+            {(!task.isRecurring || mustReschedule) && (
+              <Field label="Due">
+                <DatePicker value={editDueDate} onChange={setEditDueDate} />
+              </Field>
+            )}
 
-            <EditField label="Priority">
-              <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
-                {PRIORITIES.map((p, i) => (
-                  <button
-                    key={p.value}
-                    onClick={() => setEditPriority(p.value)}
-                    className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
+            <div className="flex gap-3">
+              <Field label="Category" className="flex-1 min-w-0">
+                <div className="relative">
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs appearance-none outline-none cursor-pointer"
                     style={{
-                      background: editPriority === p.value ? p.bg : "transparent",
-                      color: editPriority === p.value ? p.color : "var(--color-fg-subtle)",
-                      borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
-                      fontWeight: editPriority === p.value ? 600 : 400,
-                      borderBottom: editPriority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
+                      background: "var(--color-input)",
+                      color: CATEGORY_COLOR[editCategory] ?? "var(--color-input-fg)",
+                      border: `1px solid color-mix(in srgb, ${CATEGORY_COLOR[editCategory] ?? "var(--color-border-hairline)"} 35%, transparent)`,
+                      borderRadius: "3px",
+                      fontWeight: 600,
                     }}
                   >
-                    {p.label}
-                  </button>
-                ))}
+                    {categoryOptions.map((c) => (
+                      <option key={c} value={c} style={{ background: "var(--color-input)", color: "var(--color-input-fg)", fontWeight: 400 }}>{c}</option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: CATEGORY_COLOR[editCategory] ?? "var(--color-fg-subtle)" }}>▾</span>
+                </div>
+              </Field>
+            </div>
+
+            <Field label="Priority">
+              <div className="flex flex-wrap gap-1.5">
+                {PRIORITIES.map((p) => {
+                  const active = editPriority === p.value;
+                  return (
+                    <button
+                      key={p.value}
+                      onClick={() => setEditPriority(p.value)}
+                      className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                      style={{
+                        background: active ? p.bg : "transparent",
+                        color: active ? p.color : "var(--color-fg-subtle)",
+                        border: `1px solid ${active ? p.color : "var(--color-border-hairline)"}`,
+                        borderRadius: "999px",
+                        fontWeight: active ? 600 : 400,
+                        padding: "3px 10px",
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
               </div>
-            </EditField>
+            </Field>
 
             {editError && (
-              <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}>
+              <p className="text-xs" style={{ color: "var(--color-danger)" }}>
                 {editError}
               </p>
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-3 px-5 py-3">
+          <div className="flex flex-col gap-3 mt-1">
+            {/* Metadata — items separated by whitespace, no middle-dots */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--color-fg-muted)" }}>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: dot }} />
+                <span style={{ color: dot, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{task.priority}</span>
+              </span>
+              {task.category && (
+                <span style={{ color: CATEGORY_COLOR[task.category] ?? "var(--color-fg)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  {task.category}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1" style={{ color: "var(--color-warning)", fontWeight: 600 }}>
+                <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+                  <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                </svg>
+                {task.pointValue.toLocaleString()}p
+              </span>
+              <span style={{ color: "var(--color-fg)", fontWeight: 600 }}>
+                {task.completedAt ? fmtFull(task.completedAt) : fmtShort(task.dueDate)}
+              </span>
+              {task.isRecurring && task.recurrenceRule && (
+                <span className="inline-flex items-center gap-1" style={{ color: "var(--color-active-highlight-alt)", fontWeight: 600 }}>
+                  <span style={{ fontSize: "12px", lineHeight: 1 }}>↻</span>
+                  <span style={{ textTransform: "lowercase" }}>{task.recurrenceRule}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Streak / bonus — same whitespace-only spacing */}
+            {(currentStreakCount ?? 0) >= 3 && (() => {
+              const c = currentStreakCount ?? 0;
+              const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
+              const nextTier = c >= 30 ? null : c >= 14 ? { at: 30, mult: 2.0 } : c >= 7 ? { at: 14, mult: 1.8 } : { at: 7, mult: 1.5 };
+              const fmt = (m: number) => Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1);
+              return (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--color-active-highlight-alt)" }}>
+                  <span>
+                    🔥{" "}
+                    <span style={{ fontWeight: 600 }}>{currentStreakCount}</span>
+                    {longestStreakCount != null && (
+                      <span style={{ opacity: 0.55 }}> / {longestStreakCount}</span>
+                    )}
+                  </span>
+                  <span><span style={{ fontWeight: 600 }}>{fmt(multiplier)}×</span> bonus</span>
+                  {nextTier && (
+                    <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>
+                      {nextTier.at - c} to {fmt(nextTier.mult)}×
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
             {task.description && (
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-fg-muted)" }}>
                 {task.description}
               </p>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                  Subtasks
-                </span>
-                {subtasks.length > 0 && (
-                  <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
-                    {subtaskDoneCount}/{subtasks.length} done
+            {/* Subtasks — hidden entirely when completed and there's nothing to read */}
+            {(task.status !== "completed" || subtasks.length > 0) && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                    Subtasks
                   </span>
+                  {subtasks.length > 0 && (
+                    <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
+                      {subtaskDoneCount}/{subtasks.length} done
+                    </span>
+                  )}
+                </div>
+                {subtasks.map((s) => (
+                  <SubtaskRow
+                    key={s.subtaskId}
+                    subtask={s}
+                    onToggle={() => handleToggleSubtask(s)}
+                    onDelete={() => handleDeleteSubtask(s)}
+                  />
+                ))}
+                {task.status !== "completed" && (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center" style={{ color: "var(--color-fg-subtle)", fontSize: "12px", lineHeight: 1 }}>+</span>
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                      }}
+                      placeholder="Add subtask…"
+                      disabled={addingSubtask}
+                      className="flex-1 text-xs outline-none bg-transparent"
+                      style={{ color: "var(--color-fg)", border: "none", padding: "2px 0" }}
+                    />
+                  </div>
                 )}
               </div>
-              {subtasks.map((s) => (
-                <SubtaskRow
-                  key={s.subtaskId}
-                  subtask={s}
-                  onToggle={() => handleToggleSubtask(s)}
-                  onDelete={() => handleDeleteSubtask(s)}
-                />
-              ))}
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center" style={{ color: "var(--color-fg-subtle)", fontSize: "12px", lineHeight: 1 }}>+</span>
-                <input
-                  type="text"
-                  value={newSubtaskTitle}
-                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                  }}
-                  placeholder="Add subtask…"
-                  disabled={addingSubtask}
-                  className="flex-1 text-xs outline-none bg-transparent"
-                  style={{ color: "var(--color-fg)", border: "none", padding: "2px 0" }}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5">
-              <Row label="Priority">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot }} />
-                  <span style={{ color: dot, fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
-                    {task.priority}
-                  </span>
-                </div>
-              </Row>
-
-              <Row label="Category">
-                <span style={{
-                  color: CATEGORY_COLOR[task.category] ?? "var(--color-fg)",
-                  fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600,
-                }}>
-                  {task.category || "—"}
-                </span>
-              </Row>
-
-              <Row label="Points">
-                <div className="flex items-center gap-1">
-                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
-                    <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                    <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
-                  </svg>
-                  <span style={{ color: "var(--color-warning)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em" }}>
-                    {task.pointValue.toLocaleString()}
-                  </span>
-                </div>
-              </Row>
-
-              <Row label={task.isRecurring ? "Cycle Due" : "Due Date"}>
-                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmtShort(task.dueDate)}</span>
-              </Row>
-
-              <Row label="Created">
-                <span style={{ color: "var(--color-fg-muted)", fontSize: "11px" }}>{fmtLocalDate(task.createdAt)}</span>
-              </Row>
-
-              {task.isRecurring && task.recurrenceRule && (
-                <Row label="Recurrence">
-                  <div className="flex items-center gap-1.5">
-                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", lineHeight: 1 }}>↻</span>
-                    <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
-                      {task.recurrenceRule.charAt(0).toUpperCase() + task.recurrenceRule.slice(1)}
-                    </span>
-                  </div>
-                </Row>
-              )}
-
-              {task.completedAt && (
-                <Row label="Completed">
-                  <span style={{ color: "var(--color-success)", fontSize: "11px" }}>{fmtFull(task.completedAt)}</span>
-                </Row>
-              )}
-
-              {(currentStreakCount ?? 0) >= 3 && (() => {
-                const c = currentStreakCount ?? 0;
-                const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
-                const nextTier = c >= 30 ? null : c >= 14 ? { at: 30, mult: 2.0 } : c >= 7 ? { at: 14, mult: 1.8 } : { at: 7, mult: 1.5 };
-                const bonusPts = Math.round(task.pointValue * multiplier) - task.pointValue;
-                const fmt = (m: number) => Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1);
-                return (
-                  <>
-                    <Row label="Streak">
-                      <div className="flex items-center gap-1.5">
-                        <span style={{ fontSize: "12px" }}>🔥</span>
-                        <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-                          {currentStreakCount}
-                          <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontWeight: 400 }}>
-                            {" "}/ {longestStreakCount}
-                          </span>
-                        </span>
-                      </div>
-                    </Row>
-                    <div className="col-span-2 sm:col-span-3">
-                      <Row label="Bonus">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-                            {fmt(multiplier)}x
-                          </span>
-                          <span style={{ color: "var(--color-active-highlight-alt)", opacity: 0.55, fontSize: "11px" }}>
-                            (+{bonusPts} pts/check-in)
-                          </span>
-                          {nextTier && (
-                            <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.05em" }}>
-                              · {nextTier.at - c} more → {fmt(nextTier.mult)}x
-                            </span>
-                          )}
-                        </div>
-                      </Row>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
+            )}
           </div>
         )}
 
         {/* Actions */}
-        <div
-          className="flex items-center gap-2 flex-wrap px-5 py-3"
-          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)" }}
-        >
+        <div className="flex items-center gap-1.5 flex-wrap mt-4">
           {isEditing ? (
             <>
               <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="pixel-btn"
+                style={{ fontSize: "10px", padding: "5px 12px" }}
+              >
+                {isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
+              </button>
+              <button
                 onClick={() => mustReschedule ? onClose() : setIsEditing(false)}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                style={{ color: "var(--color-fg-subtle)", background: "transparent", border: "1px solid var(--color-border-faint)", borderRadius: "3px" }}
+                className="text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                style={{
+                  color: "var(--color-fg-subtle)",
+                  background: "transparent",
+                  border: "1px solid var(--color-border-hairline)",
+                  borderRadius: "999px",
+                  padding: "5px 12px",
+                }}
                 onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-overlay-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="pixel-btn"
-                style={{ fontSize: "10px", padding: "6px 12px" }}
-              >
-                {isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
-              </button>
               {mustReschedule && onDelete && (
                 <button
                   onClick={onDelete}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs sm:text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40 ml-auto"
-                  style={{ color: "var(--color-danger)", background: "transparent", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}
+                  className="ml-auto flex items-center gap-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+                  style={{
+                    color: "var(--color-danger)",
+                    background: "transparent",
+                    border: "1px solid var(--color-danger-border)",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                  }}
                   onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-danger-bg)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
@@ -591,8 +609,6 @@ export default function TaskDetailModal({
                     <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
                     <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
                     <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    <line x1="4.2" y1="4.5" x2="4.2" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
-                    <line x1="5.8" y1="4.5" x2="5.8" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
                   </svg>
                   Delete
                 </button>
@@ -631,7 +647,7 @@ export default function TaskDetailModal({
               )}
 
               {checkInBlocked && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ border: "1px solid var(--color-warning-border)", borderRadius: "3px", background: "var(--color-warning-bg)" }}>
+                <div className="flex items-center gap-1.5 px-2.5" style={{ border: "1px solid var(--color-warning-border)", borderRadius: "999px", background: "var(--color-warning-bg)", padding: "5px 10px" }}>
                   <svg width="8" height="9" viewBox="0 0 10 12" fill="none">
                     <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="var(--color-warning)" strokeWidth="1.2" fill="none"/>
                     <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="var(--color-warning)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
@@ -716,8 +732,6 @@ export default function TaskDetailModal({
                       <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
                       <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
                       <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      <line x1="4.2" y1="4.5" x2="4.2" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
-                      <line x1="5.8" y1="4.5" x2="5.8" y2="7.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.7" strokeLinecap="round" />
                     </svg>
                   }
                 />
@@ -726,38 +740,37 @@ export default function TaskDetailModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div
-          className="flex items-center justify-between px-5 py-2"
-          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)", ...(isEditing && { borderRadius: "0 0 4px 4px" }) }}
-        >
-          <span style={{ color: "var(--color-border-faint)", fontSize: "9px", letterSpacing: "0.15em", fontFamily: "monospace" }}>
-            {task.taskId.slice(0, 8).toUpperCase()}
-          </span>
-          <span style={{ color: "var(--color-border-faint)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            {task.submitted ? "Banked" : "Unbanked"}
-          </span>
-        </div>
+        {/* Tiny footer (view mode only) */}
+        {!isEditing && (
+          <div className="flex items-center justify-between mt-3 pt-2 gap-3" style={{ borderTop: "1px solid var(--color-border-hairline)" }}>
+            <span className="flex items-center gap-2" style={{ color: "var(--color-fg-subtle)", opacity: 0.6, fontSize: "9px", letterSpacing: "0.1em" }}>
+              <span style={{ fontFamily: "monospace", letterSpacing: "0.15em" }}>{task.taskId.slice(0, 8).toUpperCase()}</span>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span style={{ textTransform: "uppercase" }}>created {fmtLocalDate(task.createdAt)}</span>
+            </span>
+            <span
+              style={{
+                color: task.submitted ? "var(--color-warning)" : "var(--color-fg-subtle)",
+                opacity: task.submitted ? 0.85 : 0.6,
+                fontSize: "9px",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                fontWeight: task.submitted ? 600 : 400,
+              }}
+            >
+              {task.submitted ? "Banked" : "Unbanked"}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-        {label}
-      </span>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function EditField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+    <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+      <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
         {label}
       </span>
       {children}

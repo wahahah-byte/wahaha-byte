@@ -13,7 +13,7 @@ type Props = {
   onClose: () => void;
   getCount?: (value: string) => number;
   badgeColor?: (value: string) => string | null;
-  /** Distance from screen bottom to the tray. Defaults match MobileActionBar (44px) + MobileNav (44px). */
+  /** Distance from screen bottom to the tray. Defaults match MobileActionBar (50px) + MobileNav (50px). */
   bottomOffsetPx?: number;
   /** Optional ref to the page-content pager. Horizontal swipes on the tray drive
    *  this element's transform 1:1 with the thumb (carousel-style page slide). */
@@ -30,7 +30,7 @@ const AXIS_DEADZONE_PX = 8;
 
 export default function FilterTray({
   open, filters, activeFilter, onChange, onClose, getCount, badgeColor,
-  bottomOffsetPx = 88, pagerRef, trayElementRef,
+  bottomOffsetPx = 100, pagerRef, trayElementRef,
 }: Props) {
   const [dragY, setDragY] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; startIdx: number; locked: "v" | "h" | null } | null>(null);

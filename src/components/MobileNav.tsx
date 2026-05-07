@@ -33,7 +33,7 @@ export default function MobileNav() {
             className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
             style={{
               color: isActive ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
-              height: 44,
+              height: 50,
               lineHeight: 1,
             }}
           >

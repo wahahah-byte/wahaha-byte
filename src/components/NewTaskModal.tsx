@@ -6,12 +6,12 @@ import DatePicker from "@/components/DatePicker";
 import { CATEGORIES, maxPointsFor } from "@/lib/constants";
 
 const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
-  { label: "Once", value: "once", rule: null },
-  { label: "Daily", value: "daily", rule: "daily" },
-  { label: "Wkdys", value: "weekdays", rule: "weekdays" },
-  { label: "Weekly", value: "weekly", rule: "weekly" },
-  { label: "Biweek", value: "biweekly", rule: "biweekly" },
-  { label: "Monthly", value: "monthly", rule: "monthly" },
+  { label: "Once",    value: "once",     rule: null },
+  { label: "Daily",   value: "daily",    rule: "daily" },
+  { label: "Wkdys",   value: "weekdays", rule: "weekdays" },
+  { label: "Weekly",  value: "weekly",   rule: "weekly" },
+  { label: "Biweek",  value: "biweekly", rule: "biweekly" },
+  { label: "Monthly", value: "monthly",  rule: "monthly" },
 ];
 
 const PRIORITIES = [
@@ -31,6 +31,8 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [showDescription, setShowDescription] = useState(false);
+  const [showDetails, setShowDetails] = useState(initialRecurring);
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [priority, setPriority] = useState("medium");
   const [pointValue, setPointValue] = useState(initialRecurring ? 1 : 25);
@@ -83,184 +85,223 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: "var(--color-modal-overlay)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`w-full max-w-md flex flex-col${isRecurring ? " recurring-scope" : ""}`}
-        style={{ background: "var(--color-panel)", border: "1px solid var(--color-border)", borderRadius: "4px", boxShadow: "var(--shadow-popover)" }}
+        className={`w-full max-w-sm relative${isRecurring ? " recurring-scope" : ""}`}
+        style={{
+          background: "var(--color-panel)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "6px",
+          boxShadow: "var(--shadow-popover)",
+          padding: "20px 20px 16px",
+        }}
       >
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ background: "var(--color-panel-header)", borderBottom: "1px solid var(--color-border)", borderRadius: "4px 4px 0 0" }}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-2.5 right-2.5 transition-colors text-base leading-none cursor-pointer flex items-center justify-center"
+          style={{
+            color: "var(--color-fg-subtle)",
+            background: "transparent",
+            border: "none",
+            width: 28,
+            height: 28,
+            padding: 0,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
         >
-          <h2 className="text-xs font-bold tracking-widest uppercase" style={{ color: "var(--color-fg)" }}>New Task</h2>
+          ✕
+        </button>
+
+        {/* Title — borderless, prominent */}
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }}
+          placeholder="What needs to be done?"
+          className="w-full bg-transparent outline-none mb-2 pr-8"
+          style={{
+            color: "var(--color-fg)",
+            fontSize: "16px",
+            fontWeight: 600,
+            border: "none",
+            padding: 0,
+            letterSpacing: "0.01em",
+          }}
+        />
+
+        {/* Description (lazy-revealed) */}
+        {showDescription || description ? (
+          <textarea
+            autoFocus={!description}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            rows={2}
+            className="w-full bg-transparent outline-none resize-none mb-3"
+            style={{
+              color: "var(--color-fg-muted)",
+              fontSize: "12px",
+              border: "none",
+              padding: 0,
+              lineHeight: 1.5,
+            }}
+          />
+        ) : (
           <button
-            onClick={onClose}
-            className="transition-colors text-lg leading-none cursor-pointer flex items-center justify-center min-w-[32px] min-h-[32px]"
-            style={{ color: "var(--color-fg-subtle)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg)")}
+            onClick={() => setShowDescription(true)}
+            className="cursor-pointer transition-colors mb-3"
+            style={{
+              color: "var(--color-fg-subtle)",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              fontSize: "11px",
+              letterSpacing: "0.05em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg-muted)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
           >
-            ✕
+            + Description
           </button>
+        )}
+
+        {/* Priority pills — always visible */}
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {PRIORITIES.map((p) => {
+            const active = priority === p.value;
+            return (
+              <button
+                key={p.value}
+                onClick={() => setPriority(p.value)}
+                className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                style={{
+                  background: active ? p.bg : "transparent",
+                  color: active ? p.color : "var(--color-fg-subtle)",
+                  border: `1px solid ${active ? p.color : "var(--color-border-hairline)"}`,
+                  borderRadius: "999px",
+                  fontWeight: active ? 600 : 400,
+                  padding: "3px 10px",
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex flex-col gap-4 px-5 py-4">
-          <Field label="Title">
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              placeholder="What needs to be done?"
-              className="w-full px-3 py-2 text-sm outline-none"
-              style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
-            />
-            <span className="text-[9px] leading-tight mt-1 block" style={{ color: "var(--color-fg-subtle)" }}>
-              Title and points cannot be edited 24 hours after creation.
-            </span>
-          </Field>
-
-          <Field label="Description">
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details..."
-              rows={2}
-              className="w-full px-3 py-2 text-sm outline-none resize-none placeholder-white/20"
-              style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
-            />
-          </Field>
-
-          <Field label={isRecurring ? "First Due" : "Due Date"}>
-            <DatePicker value={dueDate} onChange={setDueDate} />
-          </Field>
-
-          <div className="flex gap-3">
-            <Field label="Category" className="flex-1">
-              <div className="relative">
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "var(--color-input)", color: "var(--color-input-fg)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c} style={{ background: "var(--color-input)" }}>{c}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
-              </div>
+        {/* More details disclosure (collapsed by default unless recurring) */}
+        {!showDetails ? (
+          <button
+            onClick={() => setShowDetails(true)}
+            className="cursor-pointer transition-colors mb-3"
+            style={{
+              color: "var(--color-fg-subtle)",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              fontSize: "11px",
+              letterSpacing: "0.05em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg-muted)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
+          >
+            More details ▾
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 mb-3 mt-1">
+            <Field label={isRecurring ? "First Due" : "Due"}>
+              <DatePicker value={dueDate} onChange={setDueDate} />
             </Field>
 
-            <Field label="Points" className="w-24">
-              <div className="relative">
-                <select
-                  value={pointValue}
-                  onChange={(e) => setPointValue(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm appearance-none outline-none cursor-pointer"
-                  style={{ background: "var(--color-input)", color: "var(--color-active-highlight)", border: "1px solid var(--color-border)", borderRadius: "3px" }}
-                >
-                  {(isRecurring
+            <div className="flex gap-3">
+              <Field label="Category" className="flex-1 min-w-0">
+                <CompactSelect
+                  value={category}
+                  onChange={setCategory}
+                  options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                />
+              </Field>
+              <Field label="Points" className="w-20">
+                <CompactSelect
+                  value={String(pointValue)}
+                  onChange={(v) => setPointValue(Number(v))}
+                  options={(isRecurring
                     ? [1, 2, 3, 4, 5]
                     : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(category))
-                  ).map((v) => (
-                    <option key={v} value={v} style={{ background: "var(--color-input)" }}>{v}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-active-highlight)", opacity: 0.6 }}>▾</span>
+                  ).map((v) => ({ value: String(v), label: String(v) }))}
+                  highlight
+                />
+              </Field>
+            </div>
+
+            <Field label="Repeat">
+              <div className="flex flex-wrap gap-1">
+                {REPEAT_OPTIONS.map((opt) => {
+                  const active = opt.rule === null ? !isRecurring : isRecurring && recurrenceRule === opt.rule;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        if (opt.rule === null) {
+                          setIsRecurring(false);
+                        } else {
+                          setIsRecurring(true);
+                          setRecurrenceRule(opt.rule);
+                        }
+                      }}
+                      className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                      style={{
+                        background: active ? "var(--color-active-highlight-bg)" : "transparent",
+                        color: active ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                        border: `1px solid ${active ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
+                        borderRadius: "999px",
+                        fontWeight: active ? 600 : 400,
+                        padding: "3px 10px",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
-              <span className="text-[9px] leading-tight mt-1 block" style={{ color: "var(--color-active-highlight)", opacity: 0.65 }}>
-                Max {isRecurring ? 5 : maxPointsFor(category)} pts
-              </span>
             </Field>
           </div>
+        )}
 
-          <Field label="Repeat">
-            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
-              {REPEAT_OPTIONS.map((opt, i) => {
-                const active = opt.rule === null ? !isRecurring : isRecurring && recurrenceRule === opt.rule;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      if (opt.rule === null) {
-                        setIsRecurring(false);
-                      } else {
-                        setIsRecurring(true);
-                        setRecurrenceRule(opt.rule);
-                      }
-                    }}
-                    className="flex-1 py-2 text-[9px] tracking-widest uppercase transition-colors cursor-pointer"
-                    style={{
-                      background: active ? "var(--color-active-highlight-bg)" : "transparent",
-                      color: active ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
-                      borderRight: i < REPEAT_OPTIONS.length - 1 ? "1px solid var(--color-border)" : "none",
-                      fontWeight: active ? 600 : 400,
-                      borderBottom: active ? "2px solid var(--color-active-highlight)" : "2px solid transparent",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
+        {error && (
+          <p className="text-xs mb-3" style={{ color: "var(--color-danger)" }}>
+            {error}
+          </p>
+        )}
 
-          <Field label="Priority">
-            <div className="flex" style={{ border: "1px solid var(--color-border)", borderRadius: "3px", overflow: "hidden" }}>
-              {PRIORITIES.map((p, i) => (
-                <button
-                  key={p.value}
-                  onClick={() => setPriority(p.value)}
-                  className="flex-1 py-2 text-[10px] tracking-widest uppercase transition-colors cursor-pointer"
-                  style={{
-                    background: priority === p.value ? p.bg : "transparent",
-                    color: priority === p.value ? p.color : "var(--color-fg-subtle)",
-                    borderRight: i < PRIORITIES.length - 1 ? "1px solid var(--color-border)" : "none",
-                    fontWeight: priority === p.value ? 600 : 400,
-                    borderBottom: priority === p.value ? `2px solid ${p.color}` : "2px solid transparent",
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          {error && (
-            <p className="text-xs px-3 py-2" style={{ color: "var(--color-danger)", background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px" }}>
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div
-          className="flex gap-2 px-5 py-3"
-          style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-panel-header)", borderRadius: "0 0 4px 4px" }}
-        >
+        <div className="flex justify-end items-center gap-3 mt-1">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 text-xs tracking-widest uppercase cursor-pointer transition-colors"
-            style={{ color: "var(--color-fg-subtle)", border: "1px solid var(--color-border)", background: "transparent", borderRadius: "3px" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-fg-muted)"; e.currentTarget.style.borderColor = "var(--color-button-border)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-fg-subtle)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
+            className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+            style={{
+              color: "var(--color-fg-subtle)",
+              background: "transparent",
+              border: "none",
+              padding: "4px 8px",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-fg-muted)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting}
-            className="pixel-btn flex-1 justify-center"
-            style={{ fontSize: "12px", padding: "10px 12px" }}
+            disabled={submitting || !title.trim()}
+            className="pixel-btn"
+            style={{ fontSize: "10px", padding: "5px 14px" }}
           >
-            {submitting ? "Creating…" : "Create Task"}
+            {submitting ? "Creating…" : "Create"}
           </button>
         </div>
       </div>
@@ -270,11 +311,39 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`flex flex-col gap-1.5 ${className ?? ""}`}>
-      <span className="text-[9px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
+    <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+      <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
         {label}
       </span>
       {children}
+    </div>
+  );
+}
+
+function CompactSelect({ value, onChange, options, highlight }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  highlight?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-2 py-1.5 text-xs appearance-none outline-none cursor-pointer"
+        style={{
+          background: "var(--color-input)",
+          color: highlight ? "var(--color-active-highlight)" : "var(--color-input-fg)",
+          border: "1px solid var(--color-border-hairline)",
+          borderRadius: "3px",
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value} style={{ background: "var(--color-input)" }}>{o.label}</option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: highlight ? "var(--color-active-highlight)" : "var(--color-fg-subtle)" }}>▾</span>
     </div>
   );
 }

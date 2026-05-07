@@ -9,7 +9,7 @@ export default function ThemeToggle() {
       onClick={toggleTheme}
       aria-label="Toggle theme"
       title="Toggle theme"
-      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-colors"
+      className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-colors"
       style={{
         background: "var(--color-button-bg)",
         border: "1px solid var(--color-button-border)",

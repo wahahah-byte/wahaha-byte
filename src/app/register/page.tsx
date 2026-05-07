@@ -55,7 +55,7 @@ export default function RegisterPage() {
           {error && (
             <div
               className="px-3 py-2.5 text-xs leading-relaxed"
-              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: "3px", color: "var(--color-danger)" }}
+              style={{ background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", borderRadius: "3px", color: "var(--color-danger)" }}
             >
               {error}
             </div>
@@ -81,7 +81,7 @@ export default function RegisterPage() {
                   borderRadius: "3px",
                   color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
@@ -104,7 +104,7 @@ export default function RegisterPage() {
                   borderRadius: "3px",
                   color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
@@ -127,7 +127,7 @@ export default function RegisterPage() {
                   borderRadius: "3px",
                   color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
             </div>
@@ -146,15 +146,15 @@ export default function RegisterPage() {
                 className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
                 style={{
                   background: "var(--color-input)",
-                  border: `1px solid ${confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-border)"}`,
+                  border: `1px solid ${confirm && confirm !== password ? "var(--color-danger)" : "var(--color-border)"}`,
                   borderRadius: "3px",
                   color: "var(--color-input-fg)",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-accent)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = confirm && confirm !== password ? "rgba(239,68,68,0.6)" : "var(--color-border)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = confirm !== password ? "var(--color-danger)" : "var(--color-active-highlight)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = confirm && confirm !== password ? "var(--color-danger)" : "var(--color-border)")}
               />
               {confirm && confirm !== password && (
-                <span style={{ color: "rgba(239,68,68,0.75)", fontSize: "10px", letterSpacing: "0.04em" }}>
+                <span style={{ color: "var(--color-danger)", opacity: 0.85, fontSize: "10px", letterSpacing: "0.04em" }}>
                   Passwords do not match
                 </span>
               )}
@@ -164,9 +164,9 @@ export default function RegisterPage() {
               type="submit"
               disabled={loading}
               className="w-full py-2.5 text-xs font-semibold tracking-widest uppercase cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-              style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-accent-bg)"; }}
+              style={{ background: "var(--color-active-highlight-bg)", color: "var(--color-active-highlight)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "color-mix(in srgb, var(--color-active-highlight) 18%, transparent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-active-highlight-bg)"; }}
             >
               {loading ? "Creating account…" : "Create Account"}
             </button>
@@ -175,7 +175,7 @@ export default function RegisterPage() {
 
         <p className="text-center text-xs" style={{ color: "var(--color-fg-subtle)" }}>
           Already have an account?{" "}
-          <Link href="/login" className="transition-colors" style={{ color: "var(--color-accent)" }}
+          <Link href="/login" className="transition-colors" style={{ color: "var(--color-active-highlight)" }}
             onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
             onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
           >

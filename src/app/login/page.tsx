@@ -42,7 +42,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded text-sm px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "var(--color-danger)" }}>
+              <div className="rounded text-sm px-3 py-2" style={{ background: "var(--color-danger-bg)", border: "1px solid var(--color-danger-border)", color: "var(--color-danger)" }}>
                 {error}
               </div>
             )}
@@ -59,7 +59,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 className="w-full rounded px-3 py-2.5 text-sm border focus:outline-none transition-colors"
                 style={{ background: "var(--color-input)", color: "var(--color-input-fg)", borderColor: "var(--color-border)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
                 placeholder="Enter your email"
               />
@@ -70,7 +70,7 @@ export default function LoginPage() {
                 <label className="block text-xs font-bold tracking-wide uppercase" style={{ color: "var(--color-fg-muted)" }}>
                   Password <span style={{ color: "var(--color-danger)" }}>*</span>
                 </label>
-                <a href="#" className="text-xs hover:underline" style={{ color: "var(--color-accent)" }}>
+                <a href="#" className="text-xs hover:underline" style={{ color: "var(--color-active-highlight)" }}>
                   Forgot your password?
                 </a>
               </div>
@@ -82,7 +82,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 className="w-full rounded px-3 py-2.5 text-sm border focus:outline-none transition-colors"
                 style={{ background: "var(--color-input)", color: "var(--color-input-fg)", borderColor: "var(--color-border)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
                 placeholder="Enter your password"
               />
@@ -92,9 +92,9 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full disabled:opacity-50 font-medium rounded py-2.5 text-sm transition-colors cursor-pointer mt-2"
-              style={{ background: "var(--color-accent-bg)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--color-accent-bg-hover)"; }}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-accent-bg)")}
+              style={{ background: "var(--color-active-highlight-bg)", color: "var(--color-active-highlight)", border: "1px solid var(--color-active-highlight-border)" }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "color-mix(in srgb, var(--color-active-highlight) 18%, transparent)"; }}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-active-highlight-bg)")}
             >
               {loading ? "Signing in…" : "Log In"}
             </button>
@@ -102,7 +102,7 @@ export default function LoginPage() {
 
           <p className="text-sm mt-4" style={{ color: "var(--color-fg-muted)" }}>
             Need an account?{" "}
-            <a href="/register" className="hover:underline" style={{ color: "var(--color-accent)" }}>
+            <a href="/register" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>
               Register
             </a>
           </p>

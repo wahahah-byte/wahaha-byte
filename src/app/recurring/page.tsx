@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams, UpdateTaskRequest } from "@/lib/api/tasks";
@@ -57,6 +57,25 @@ function Recurring() {
   type SortMode = "due" | "streak" | "priority" | "title" | "points";
   const [sortMode, setSortMode] = useState<SortMode>("due");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  // Categories present among recurring tasks (for the icon filter strip).
+  const availableCategories = useMemo(() => {
+    const seen = new Set<string>();
+    for (const t of tasks) if (t.category) seen.add(t.category);
+    return [...seen].sort();
+  }, [tasks]);
+
+  // Drop the active category if the user deletes the last task in it.
+  useEffect(() => {
+    if (activeCategory && !availableCategories.includes(activeCategory)) {
+      setActiveCategory(null);
+    }
+  }, [activeCategory, availableCategories]);
+
+  function passesCategory(t: TaskDto): boolean {
+    return !activeCategory || t.category === activeCategory;
+  }
 
   // useTaskActions requires these but recurring tasks aren't selected/staged/submitted.
   const [stagedTaskIds, setStagedTaskIds] = useState<string[]>([]);
@@ -199,7 +218,7 @@ function Recurring() {
   };
 
   function buildListItemsForFilter(filterValue: string): (TaskDto | Sep)[] {
-    const filtered = tasks.filter((t) => tabMatches(t, filterValue));
+    const filtered = tasks.filter((t) => tabMatches(t, filterValue) && passesCategory(t));
     if (groupMode === "frequency") {
       const buckets = new Map<string, TaskDto[]>();
       for (const t of filtered) {
@@ -245,7 +264,7 @@ function Recurring() {
   }
 
   function renderFilterPage(filterValue: string) {
-    const filtered = tasks.filter((t) => tabMatches(t, filterValue));
+    const filtered = tasks.filter((t) => tabMatches(t, filterValue) && passesCategory(t));
     if (tasks.length > 0 && filtered.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-20 gap-2">
@@ -345,9 +364,9 @@ function Recurring() {
       <div className="recurring-scope task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad">
           {!isAuthenticated && (
-            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-accent-bg)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}>
-              <span style={{ color: "var(--color-accent)", opacity: 0.85 }}>Demo · changes are not saved</span>
-              <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
+            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
+              <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>
+              <Link href="/login" style={{ color: "var(--color-active-highlight)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
             </div>
           )}
 
@@ -659,7 +678,7 @@ function Recurring() {
         filters={RECURRING_FILTERS}
         activeFilter={activeFilter}
         onFilterChange={applyFilter}
-        getCount={(v) => tasks.filter((t) => tabMatches(t, v)).length}
+        getCount={(v) => tasks.filter((t) => tabMatches(t, v) && passesCategory(t)).length}
         badgeColor={(v) => {
           if (v === "today" && todayCount > 0) return "var(--color-active-highlight-alt)";
           if (v === "missed" && missedCount > 0) return "var(--color-danger)";
@@ -672,6 +691,9 @@ function Recurring() {
         onNewTask={() => setShowNewTask(true)}
         isAuthenticated={isAuthenticated}
         pagerRef={pagerRef}
+        availableCategories={availableCategories}
+        activeCategory={activeCategory}
+        onCategoryChange={setActiveCategory}
       />
 
       {detailTask && (() => {

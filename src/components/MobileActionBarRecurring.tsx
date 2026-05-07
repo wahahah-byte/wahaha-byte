@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import FilterTray from "@/components/FilterTray";
+import { CategoryIcon } from "@/lib/categoryIcons";
+import { CATEGORY_COLOR } from "@/lib/constants";
 
 type Filter = { label: string; shortLabel: string; value: string };
 
@@ -22,6 +24,11 @@ interface Props {
   isAuthenticated: boolean;
   /** When provided, the FilterTray will mirror its scroll position to this element's transform. */
   pagerRef?: React.RefObject<HTMLElement | null>;
+  /** Categories present among recurring tasks — only those render in the icon strip. */
+  availableCategories?: string[];
+  /** Currently active category filter, or null when none selected. */
+  activeCategory?: string | null;
+  onCategoryChange?: (category: string | null) => void;
 }
 
 const SORT_OPTIONS: [RecurringSortMode, string][] = [
@@ -44,6 +51,7 @@ export default function MobileActionBarRecurring({
   filters, activeFilter, onFilterChange, getCount, badgeColor,
   sortMode, groupMode, onSortChange, onGroupChange,
   onNewTask, isAuthenticated, pagerRef,
+  availableCategories = [], activeCategory = null, onCategoryChange,
 }: Props) {
   const [showSort, setShowSort] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
@@ -102,7 +110,7 @@ export default function MobileActionBarRecurring({
       tray.style.transition = "none";
       tray.style.transform = `translateY(${targetY}px)`;
       const progress = 1 - targetY / trayHeightTotal;
-      const handleBottom = 88 + (116 - 88) * progress;
+      const handleBottom = 100 + (128 - 100) * progress;
       handle.style.transition = "none";
       handle.style.bottom = `calc(${handleBottom}px + env(safe-area-inset-bottom, 0px))`;
     }
@@ -126,11 +134,11 @@ export default function MobileActionBarRecurring({
 
     if (willOpen) {
       tray.style.transform = "translateY(0)";
-      handle.style.bottom = "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))";
+      handle.style.bottom = "calc(50px + 50px + 28px + env(safe-area-inset-bottom, 0px))";
       if (!trayOpen) setTrayOpen(true);
     } else {
       tray.style.transform = "translateY(calc(100% + 8px))";
-      handle.style.bottom = "calc(44px + 44px + env(safe-area-inset-bottom, 0px))";
+      handle.style.bottom = "calc(50px + 50px + env(safe-area-inset-bottom, 0px))";
       if (trayOpen) setTrayOpen(false);
     }
   }
@@ -152,8 +160,8 @@ export default function MobileActionBarRecurring({
           position: "fixed",
           left: "50%",
           bottom: trayOpen
-            ? "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))"
-            : "calc(44px + 44px + env(safe-area-inset-bottom, 0px))",
+            ? "calc(50px + 50px + 28px + env(safe-area-inset-bottom, 0px))"
+            : "calc(50px + 50px + env(safe-area-inset-bottom, 0px))",
           transform: "translateX(-50%)",
           padding: "5px 28px 5px",
           background: "transparent",
@@ -206,17 +214,48 @@ export default function MobileActionBarRecurring({
       <div
         className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
         style={{
-          bottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
-          height: "44px",
+          bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+          height: "50px",
           background: "var(--color-header)",
           borderTop: "1px solid var(--color-border-soft)",
           boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",
           zIndex: 35,
         }}
       >
-        <div className="flex-1" />
+        <div
+          className="flex-1 flex items-center gap-1 overflow-x-auto min-w-0"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {availableCategories.map((cat) => {
+            const active = activeCategory === cat;
+            const color = CATEGORY_COLOR[cat] ?? "var(--color-fg-muted)";
+            return (
+              <button
+                key={cat}
+                onClick={() => onCategoryChange?.(active ? null : cat)}
+                aria-label={`Filter by ${cat}`}
+                aria-pressed={active}
+                title={cat}
+                className="flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors"
+                style={{
+                  width: 26,
+                  height: 26,
+                  background: active ? `color-mix(in srgb, ${color} 18%, transparent)` : "transparent",
+                  border: `1px solid ${active ? `color-mix(in srgb, ${color} 50%, transparent)` : "transparent"}`,
+                  borderRadius: 4,
+                  color,
+                  opacity: !activeCategory || active ? 1 : 0.4,
+                  padding: 0,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <CategoryIcon category={cat} size={14} />
+              </button>
+            );
+          })}
+        </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center flex-shrink-0">
           <div className="relative mb-px mr-1">
             {showSort && <div className="fixed inset-0 z-[15]" onClick={() => setShowSort(false)} />}
             <button

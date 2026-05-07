@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { tasksApi, TaskDto, UpdateTaskRequest } from "@/lib/api/tasks";
@@ -36,9 +36,14 @@ function Home() {
     isMounted, isAuthenticated, penalizedTaskIds, submittedSeed, refetch,
   } = tasksHook;
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Per-page scroll: each filter view has its own overflow-y-auto container so
+  // a short list doesn't inherit scroll-height from a longer sibling page. The
+  // active page's element is captured via a callback ref into state, then wrapped
+  // as a synthetic RefObject for usePullToRefresh.
+  const [activeScrollEl, setActiveScrollEl] = useState<HTMLDivElement | null>(null);
+  const scrollRefForPtr = useMemo(() => ({ current: activeScrollEl }), [activeScrollEl]);
   const pagerRef = useRef<HTMLDivElement>(null);
-  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRef, refetch);
+  const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRefForPtr, refetch);
 
   const [activeFilter, setActiveFilter] = useState(initialActiveFilter);
   const [showNewTask, setShowNewTask] = useState(false);
@@ -293,12 +298,12 @@ function Home() {
     <>
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className={`max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad${submitBarVisible ? " sm:pb-24" : ""}`}
+          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden"
         >
           {!isAuthenticated && (
-            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-accent-bg)", border: "1px solid var(--color-accent-border)", borderRadius: "3px" }}>
-              <span style={{ color: "var(--color-accent)", opacity: 0.85 }}>Demo · changes are not saved</span>
-              <Link href="/login" style={{ color: "var(--color-accent)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
+            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
+              <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>
+              <Link href="/login" style={{ color: "var(--color-active-highlight)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
             </div>
           )}
 
@@ -374,9 +379,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{ overscrollBehavior: "contain" }}>
-            <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />
-
+          <div className="flex-1 overflow-hidden">
             {loading && (
               <div className="flex items-center justify-center py-20">
                 <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
@@ -384,33 +387,43 @@ function Home() {
             )}
 
             {!loading && (
-              <div style={{ overflow: "hidden", width: "100%" }}>
+              <div style={{ overflow: "hidden", width: "100%", height: "100%" }}>
                 <div
                   ref={pagerRef}
                   style={{
                     display: "flex",
                     width: `${FILTERS.length * 100}%`,
+                    height: "100%",
                     transform: `translateX(${-FILTERS.findIndex((f) => f.value === activeFilter) * (100 / FILTERS.length)}%)`,
                     transition: "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
                     willChange: "transform",
                   }}
                 >
-                  {FILTERS.map((f) => (
-                    <div
-                      key={f.value}
-                      style={{
-                        flex: `0 0 ${100 / FILTERS.length}%`,
-                        minWidth: 0,
-                        // Inset each page so adjacent pages have visible breathing
-                        // room when swiping between filters (iOS-homescreen feel).
-                        paddingLeft: 10,
-                        paddingRight: 10,
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      {renderFilterPage(f.value)}
-                    </div>
-                  ))}
+                  {FILTERS.map((f) => {
+                    const isActivePage = f.value === activeFilter;
+                    return (
+                      <div
+                        key={f.value}
+                        ref={isActivePage ? setActiveScrollEl : null}
+                        className={`has-mobile-bottom-pad${submitBarVisible ? " sm:pb-24" : ""}`}
+                        style={{
+                          flex: `0 0 ${100 / FILTERS.length}%`,
+                          minWidth: 0,
+                          // Inset each page so adjacent pages have visible breathing
+                          // room when swiping between filters (iOS-homescreen feel).
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          boxSizing: "border-box",
+                          height: "100%",
+                          overflowY: "auto",
+                          overscrollBehavior: "contain",
+                        }}
+                      >
+                        {isActivePage && <PullToRefreshIndicator pullY={pullY} phase={phase} triggerDistance={triggerDistance} />}
+                        {renderFilterPage(f.value)}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

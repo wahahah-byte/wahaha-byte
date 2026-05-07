@@ -6,6 +6,7 @@ import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
 import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
+import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -567,6 +568,18 @@ function TaskRowImpl({
                 </svg>
               </span>
             </button>
+          ) : task.isRecurring ? (
+            <span
+              className="flex-shrink-0 flex items-center justify-center"
+              style={{
+                width: 14,
+                height: 14,
+                color: CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)",
+              }}
+              aria-hidden
+            >
+              <CategoryIcon category={task.category} size={14} />
+            </span>
           ) : (
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dot }} />
           )}
@@ -715,17 +728,41 @@ function TaskRowImpl({
           {isSubmitted ? (
             <div
               className={`flex items-center gap-1 px-1.5 py-0.5${recentlyFiledIds.has(task.taskId) ? " filed-badge-enter" : ""}`}
-              style={{ border: "1px solid rgba(74,222,128,0.35)", borderRadius: "2px", background: "rgba(74,222,128,0.06)" }}
+              style={{ border: "1px solid var(--color-warning-border)", borderRadius: "2px", background: "var(--color-warning-bg)" }}
             >
-              <svg width="9" height="9" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
-                <rect x="3" y="1" width="6" height="1" style={{ fill: "var(--color-success)" }} opacity="0.55" />
-                <rect x="2" y="2" width="8" height="2" style={{ fill: "var(--color-success)" }} opacity="0.55" />
-                <rect x="3" y="4" width="6" height="1" style={{ fill: "var(--color-success)" }} opacity="0.55" />
-                <rect x="3" y="5" width="6" height="1" style={{ fill: "var(--color-success)" }} opacity="0.95" />
-                <rect x="2" y="6" width="8" height="2" style={{ fill: "var(--color-success)" }} opacity="0.95" />
-                <rect x="3" y="8" width="6" height="1" style={{ fill: "var(--color-success)" }} opacity="0.95" />
+              <svg width="12" height="10" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
+                {/* Pile of pixelated GP coins. Each disc is rendered as a single
+                    row, alternating bright (top edge highlight) and darker
+                    (front rim shadow) so the stacks read as multiple coins.
+                    Tall stack of 8 coins center-left, shorter stack of 4 coins
+                    to its right, plus two loose oval coins lying at the base. */}
+                {/* Tall stack — bright top edges */}
+                <rect x="4" y="0" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="4" y="2" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="4" y="4" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="4" y="6" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                {/* Tall stack — darker rim bodies */}
+                <rect x="4" y="1" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+                <rect x="4" y="3" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+                <rect x="4" y="5" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+                <rect x="4" y="7" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+
+                {/* Short stack — bright top edges */}
+                <rect x="9" y="4" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="9" y="6" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                {/* Short stack — darker rim bodies */}
+                <rect x="9" y="5" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+                <rect x="9" y="7" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+
+                {/* Loose coin A — front-left (smaller oval) */}
+                <rect x="1" y="8" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="0" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+
+                {/* Loose coin B — front-right (larger oval) */}
+                <rect x="8" y="8" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                <rect x="7" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
               </svg>
-              <span style={{ color: "rgba(74,222,128,0.75)", fontSize: "8px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>
+              <span style={{ color: "var(--color-warning)", opacity: 0.85, fontSize: "8px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>
                 Banked
               </span>
             </div>

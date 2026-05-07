@@ -149,16 +149,13 @@ body:has(.task-page-shell) {
   height: 100dvh;
 }
 
-/* Constrains the task pages so only the task list scrolls.
-   Mobile: subtract auth header (51px) + mobile action bar (52px) + mobile nav (56px) + iOS home indicator.
-   Desktop (≥ sm): no mobile bars, just subtract auth header. */
+/* Constrains the task pages so only the task list scrolls. Shell extends full
+   viewport (minus the 50px auth header) on both viewports — on mobile the bottom
+   UI stack (nav + action bar + filter strip) overlays the shell, and
+   `.has-mobile-bottom-pad` reserves 128px+safe-area of padding-bottom inside the
+   content so the last task row can scroll to just above the strip. */
 .task-page-shell {
-  height: calc(100dvh - 51px - 52px - 56px - env(safe-area-inset-bottom, 0px));
-}
-@media (min-width: 640px) {
-  .task-page-shell {
-    height: calc(100dvh - 51px);
-  }
+  height: calc(100dvh - 50px);
 }
 body {
   background: var(--background);
@@ -452,11 +449,11 @@ input::placeholder, textarea::placeholder {
   display: none;
 }
 /* Reserve space at the bottom of the page content area on mobile so the task
- * counter sits above the always-visible filter tray (44px nav + 44px action bar
- * + 28px tray = 116px) plus the safe-area inset. Inline `paddingBottom` from
+ * counter sits above the always-visible filter tray (50px nav + 50px action bar
+ * + 28px tray = 128px) plus the safe-area inset. Inline `paddingBottom` from
  * SubmitBar visibility takes precedence when it's set (96px). */
 .has-mobile-bottom-pad {
-  padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
 }
 @media (min-width: 640px) {
   .has-mobile-bottom-pad {

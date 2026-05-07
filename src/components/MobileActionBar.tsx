@@ -98,9 +98,9 @@ export default function MobileActionBar({
       // Tray follows finger.
       tray.style.transition = "none";
       tray.style.transform = `translateY(${targetY}px)`;
-      // Handle rides on the tray's top edge: closed → 88px (44+44), open → 116px (44+44+28).
+      // Handle rides on the tray's top edge: closed → 100px (50+50), open → 128px (50+50+28).
       const progress = 1 - targetY / trayHeightTotal;  // 0 closed, 1 open
-      const handleBottom = 88 + (116 - 88) * progress;
+      const handleBottom = 100 + (128 - 100) * progress;
       handle.style.transition = "none";
       handle.style.bottom = `calc(${handleBottom}px + env(safe-area-inset-bottom, 0px))`;
     }
@@ -125,11 +125,11 @@ export default function MobileActionBar({
 
     if (willOpen) {
       tray.style.transform = "translateY(0)";
-      handle.style.bottom = "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))";
+      handle.style.bottom = "calc(50px + 50px + 28px + env(safe-area-inset-bottom, 0px))";
       if (!trayOpen) setTrayOpen(true);
     } else {
       tray.style.transform = "translateY(calc(100% + 8px))";
-      handle.style.bottom = "calc(44px + 44px + env(safe-area-inset-bottom, 0px))";
+      handle.style.bottom = "calc(50px + 50px + env(safe-area-inset-bottom, 0px))";
       if (trayOpen) setTrayOpen(false);
     }
   }
@@ -151,8 +151,8 @@ export default function MobileActionBar({
           position: "fixed",
           left: "50%",
           bottom: trayOpen
-            ? "calc(44px + 44px + 28px + env(safe-area-inset-bottom, 0px))"
-            : "calc(44px + 44px + env(safe-area-inset-bottom, 0px))",
+            ? "calc(50px + 50px + 28px + env(safe-area-inset-bottom, 0px))"
+            : "calc(50px + 50px + env(safe-area-inset-bottom, 0px))",
           transform: "translateX(-50%)",
           padding: "5px 28px 5px",
           background: "transparent",
@@ -206,8 +206,8 @@ export default function MobileActionBar({
         <div
           className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
           style={{
-            bottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
-            height: "44px",
+            bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+            height: "50px",
             background: "var(--color-header)",
             borderTop: "1px solid var(--color-border-soft)",
             boxShadow: "0 -2px 12px rgba(0, 0, 0, 0.08)",

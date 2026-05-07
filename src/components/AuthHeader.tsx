@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
+import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function AuthHeader() {
   const [isMounted, setIsMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   const {
     balance, username, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
@@ -32,7 +35,9 @@ export default function AuthHeader() {
     });
   }, [pathname]);
 
-  if (!isMounted || !hasToken) return null;
+  // Always render the theme toggle, even before mount or when unauthenticated.
+  // Authenticated users get the toggle inside the avatar dropdown instead.
+  if (!isMounted || !hasToken) return <ThemeToggle />;
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -69,7 +74,7 @@ export default function AuthHeader() {
       <div className="relative shrink-0">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+          className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
           style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -145,6 +150,18 @@ export default function AuthHeader() {
                 );
               })()}
               <div className="py-1">
+                <button
+                  onClick={toggleTheme}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors"
+                  style={{ color: "var(--color-fg-muted)", background: "transparent", border: "none" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <span>Theme</span>
+                  <span style={{ color: "var(--color-active-highlight)", fontWeight: 600, letterSpacing: "0.15em" }}>
+                    {theme === "dark" ? "Dark" : "Light"}
+                  </span>
+                </button>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
