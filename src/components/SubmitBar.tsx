@@ -94,12 +94,12 @@ export default function SubmitBar({
         </div>
       </div>
 
-      {/* Mobile: compact bar that takes over the action-bar slot above the nav */}
+      {/* Mobile: compact bar that takes over the action-bar slot at the bottom */}
       <div
         className="sm:hidden flex items-center gap-2 px-3 pb-px"
         style={{
           position: "fixed",
-          bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+          bottom: "env(safe-area-inset-bottom, 0px)",
           left: 0, right: 0,
           height: "50px",
           zIndex: 35,

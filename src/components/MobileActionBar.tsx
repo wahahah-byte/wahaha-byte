@@ -49,7 +49,7 @@ export default function MobileActionBar({
         <div
           className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
           style={{
-            bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+            bottom: "env(safe-area-inset-bottom, 0px)",
             height: "50px",
             background: "var(--color-header)",
             borderTop: "1px solid var(--color-border-soft)",
@@ -107,6 +107,7 @@ export default function MobileActionBar({
         onToggle={() => setTrayOpen((v) => !v)}
         getCount={getCount}
         badgeColor={badgeColor}
+        bottomOffsetPx={50}
         pagerRef={pagerRef}
         trayElementRef={trayElementRef}
       />

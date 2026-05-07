@@ -448,12 +448,12 @@ input::placeholder, textarea::placeholder {
 .filter-tray-strip::-webkit-scrollbar {
   display: none;
 }
-/* Reserve space at the bottom of the page content area on mobile so the task
- * counter sits above the always-visible filter tray (50px nav + 50px action bar
- * + 28px tray = 128px) plus the safe-area inset. Inline `paddingBottom` from
- * SubmitBar visibility takes precedence when it's set (96px). */
+/* Reserve space at the bottom of the page content area on mobile so content
+ * sits above the always-visible bottom UI (50px action bar + 28px filter tray
+ * = 78px) plus the safe-area inset. Inline `paddingBottom` from SubmitBar
+ * visibility takes precedence when it's set (96px). */
 .has-mobile-bottom-pad {
-  padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
 }
 @media (min-width: 640px) {
   .has-mobile-bottom-pad {

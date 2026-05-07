@@ -15,7 +15,8 @@ type Props = {
   onToggle?: () => void;
   getCount?: (value: string) => number;
   badgeColor?: (value: string) => string | null;
-  /** Distance from screen bottom to the tray. Defaults match MobileActionBar (50px) + MobileNav (50px). */
+  /** Distance from screen bottom to the tray. Default sits the tray right above the
+   *  bottom action bar (50px). Pass a different value if the action bar isn't there. */
   bottomOffsetPx?: number;
   /** Optional ref to the page-content pager. Horizontal swipes on the tray drive
    *  this element's transform 1:1 with the thumb (carousel-style page slide). */
@@ -32,7 +33,7 @@ const SWIPE_CYCLE_THRESHOLD = 36;
 
 export default function FilterTray({
   open, filters, activeFilter, onChange, onClose, onToggle, getCount, badgeColor,
-  bottomOffsetPx = 100, pagerRef, trayElementRef,
+  bottomOffsetPx = 50, pagerRef, trayElementRef,
 }: Props) {
   const [dragY, setDragY] = useState(0);
   const [cycleHint, setCycleHint] = useState<string | null>(null);
