@@ -80,7 +80,7 @@ function Recurring() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 1024px)");
+    const mq = window.matchMedia("(min-width: 880px)");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     const update = () => setIsDesktop(mq.matches);
     update();
@@ -546,7 +546,6 @@ function Recurring() {
   );
 
   if (isDesktop) {
-    const label = RECURRING_FILTERS.find((f) => f.value === activeFilter)?.label ?? "Recurring";
     const sidebar = (
       <DesktopSidebar
         navItems={[
@@ -590,11 +589,13 @@ function Recurring() {
             <Link href="/login" style={{ color: "var(--color-active-highlight)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
           </div>
         )}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3" style={{ borderBottom: "1px solid var(--color-border-soft)" }}>
-          <h1 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.04em", color: "var(--color-fg)", margin: 0 }}>
-            {label}
-            {activeCategory && <span style={{ marginLeft: 10, fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>· {activeCategory}</span>}
-          </h1>
+        <div className="flex items-center justify-between px-6 pt-4 pb-3" style={{ borderBottom: "1px solid var(--color-border-soft)" }}>
+          {/* Page-name title intentionally omitted on desktop — the sidebar
+              shows the active section. Active category appears as a small
+              breadcrumb on the left when one is set. */}
+          <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            {activeCategory ?? " "}
+          </span>
           <div className="flex items-center gap-1.5">
             <div className="relative mr-1">
               {showSortMenu && (

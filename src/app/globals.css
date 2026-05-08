@@ -140,6 +140,23 @@ html,
 body {
   overflow-x: clip;
   max-width: 100%;
+  /* Below 400px the layout starts breaking (controls overlap, text wraps
+     awkwardly). Hold the page at 400px minimum and let the document scroll
+     horizontally so very narrow phones don't get content clipped off. */
+  min-width: 400px;
+}
+
+@media (max-width: 399px) {
+  html,
+  body {
+    overflow-x: auto;
+  }
+  /* Override the task-page lock so the body can scroll horizontally below the
+     min-width threshold. The inner task list still scrolls vertically as before. */
+  html:has(.task-page-shell),
+  body:has(.task-page-shell) {
+    overflow-x: auto;
+  }
 }
 
 /* Lock the document on task pages so only the inner task list scrolls.
@@ -252,17 +269,39 @@ textarea::placeholder {
   margin-inline: auto;
 }
 
-/* On desktop the task panel hugs the left of the main column with a sensible
-   max width — leaving the right side of the main column quiet so the detail
-   panel column is the visual focus when opened. */
-@media (min-width: 1024px) {
+/* On desktop the task panel fills its column. Drop the left/right borders so
+   it reads as a continuous list, and put a hairline between consecutive task
+   rows for separation. The phantom-row spacers at top/bottom are excluded so
+   they don't pick up a divider. */
+@media (min-width: 880px) {
   .desktop-shell .task-list-panel {
-    max-width: 560px;
+    max-width: none;
     margin-inline: 0;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+  }
+  .desktop-shell .task-list-panel .task-row-wrapper:not(.task-row-phantom)
+    + .task-row-wrapper:not(.task-row-phantom) {
+    border-top: 1px solid var(--color-border-hairline);
   }
   .desktop-shell .grid[style*="max-width: 420"] {
-    max-width: 560px !important;
+    max-width: none !important;
     margin-inline: 0 !important;
+  }
+}
+
+/* Below the 3-column desktop breakpoint (880px), the mobile JSX is in use.
+   Its inline maxWidth: 420 cap and the panel's 365px cap make the list look
+   like a centered narrow column on a wider window — so always let the panel
+   flow edge-to-edge until the desktop shell takes over. Phones (<640px)
+   already fit inside the 420px cap, so removing it is a no-op visually. */
+@media (max-width: 879px) {
+  .task-page-shell > div[style*="max-width: 420"] {
+    max-width: none !important;
+  }
+  .task-list-panel {
+    max-width: none;
   }
 }
 
@@ -368,16 +407,27 @@ textarea::placeholder {
   display: none;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 880px) {
   .desktop-shell {
     display: grid;
     /* Right column is always reserved so opening a detail panel never
-       reflows the task list. When empty, the column just renders blank. */
-    grid-template-columns: 240px 1fr 380px;
+       reflows the task list. When empty, the column just renders blank.
+       Sidebar + detail narrow at the lower end of the breakpoint so the
+       middle column keeps a usable amount of space at ~880px. */
+    grid-template-columns: 200px 1fr 300px;
     height: 100dvh;
     overflow: hidden;
     background: var(--color-bg);
   }
+}
+
+@media (min-width: 1100px) {
+  .desktop-shell {
+    grid-template-columns: 240px 1fr 380px;
+  }
+}
+
+@media (min-width: 880px) {
 
   /* Subtle visual cue when the detail column is empty — keeps the divider
      line but suppresses the panel chrome so it reads as reserved space. */
@@ -504,6 +554,9 @@ textarea::placeholder {
   /* Mobile-only chrome that should disappear inside the desktop shell. */
   .desktop-shell .task-page-shell { height: 100%; max-width: none !important; }
   .desktop-shell .task-page-shell > * { max-width: none !important; }
+  /* The archive page's big "ARCHIVE" banner is redundant on desktop — the
+     sidebar already shows the active section. */
+  .desktop-shell .archive-page-banner { display: none; }
 }
 
 .row-counter-spark {

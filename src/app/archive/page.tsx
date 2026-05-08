@@ -25,7 +25,7 @@ export default function ArchivePage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 1024px)");
+    const mq = window.matchMedia("(min-width: 880px)");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     const update = () => setIsDesktop(mq.matches);
     update();
@@ -145,7 +145,7 @@ export default function ArchivePage() {
         )}
 
         <div style={{ paddingTop: 22, background: "var(--color-bg)" }}>
-          <div style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "22px", height: "38px" }}>
+          <div className="archive-page-banner" style={{ display: "flex", alignItems: "stretch", background: "var(--color-surface)", marginBottom: "22px", height: "38px" }}>
             <div style={{ width: "38px", minWidth: "38px", height: "38px", background: "var(--color-surface-2)", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid var(--color-border-hairline)" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-fg)" }}>
                 <rect x="3" y="4" width="18" height="4" rx="1" />
