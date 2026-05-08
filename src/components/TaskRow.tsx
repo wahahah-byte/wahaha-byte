@@ -706,12 +706,8 @@ function TaskRowImpl({
                 padding: "1px 4px",
               }}
             >
+              {/* Coin Stack  */}
               <svg width="15" height="12" viewBox="0 0 12 10" fill="none">
-                {/* Pile of GP coins, viewed from a slight angle. The topmost coin
-                    of each stack shows its top face as an ellipse; sides of the
-                    stack below are alternating bright/dark rows for the rims. */}
-
-                {/* Tall stack — top face (3D oval, slightly brighter front lip) */}
                 <ellipse cx="6" cy="0.55" rx="2" ry="0.55" fill="var(--color-warning)" opacity="0.95" />
                 <path d="M 4,0.55 A 2,0.55 0 0 0 8,0.55" stroke="var(--color-warning)" strokeWidth="0.25" fill="none" opacity="1" />
                 {/* Tall stack — side rims (dark) and coin edges (bright) below the top */}
