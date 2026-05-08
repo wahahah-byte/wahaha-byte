@@ -6,6 +6,8 @@ import { tasksApi, TaskDto } from "@/lib/api/tasks";
 import TaskRow from "@/components/TaskRow";
 import { useToast } from "@/context/ToastContext";
 import { MOCK_TASKS } from "@/lib/mockTasks";
+import DesktopShell from "@/components/DesktopShell";
+import DesktopSidebar from "@/components/DesktopSidebar";
 
 const PAGE_SIZE = 25;
 
@@ -17,7 +19,19 @@ export default function ArchivePage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Desktop layout (>=1024px) wraps the page in a static sidebar + main shell.
+  const [isDesktop, setIsDesktop] = useState(false);
   const { setError } = useToast();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const hasMore = tasks.length < totalCount;
@@ -120,7 +134,7 @@ export default function ArchivePage() {
 
   const noopSet = new Set<string>();
 
-  return (
+  const mainContent = (
     <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
       <div className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden" style={{ maxWidth: 420 }}>
         {!isAuthenticated && (
@@ -231,5 +245,43 @@ export default function ArchivePage() {
         )}
       </div>
     </div>
+  );
+
+  if (isDesktop) {
+    const sidebar = (
+      <DesktopSidebar
+        navItems={[
+          { href: "/", label: "Today", icon: <NavIconList /> },
+          { href: "/recurring", label: "Recurring", icon: <NavIconRepeat /> },
+          { href: "/archive", label: "Archive", icon: <NavIconArchive />, active: true },
+        ]}
+      />
+    );
+    return <DesktopShell sidebar={sidebar} main={mainContent} />;
+  }
+
+  return mainContent;
+}
+
+function NavIconList() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" />
+      <polyline points="3,6 4,7 6,5" /><polyline points="3,12 4,13 6,11" /><polyline points="3,18 4,19 6,17" />
+    </svg>
+  );
+}
+function NavIconRepeat() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 4 21 10 15 10" />
+    </svg>
+  );
+}
+function NavIconArchive() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
   );
 }

@@ -20,12 +20,24 @@ export default function MobileEdgeDrawer() {
   const [open, setOpen] = useState(false);
   const [dragX, setDragX] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  // Track viewport so we can disable the drawer + its document-level swipe
+  // listeners on desktop (>=1024px), where DesktopSidebar replaces it.
+  const [isDesktop, setIsDesktop] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; startedOpen: boolean; locked: "h" | "v" | null } | null>(null);
 
   // Defer the portal until after hydration so server (no DOM) and first client
   // render both return null — otherwise React sees a mismatch.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   // Escape closes (mostly defensive — mobile-only component).
   useEffect(() => {
@@ -48,7 +60,7 @@ export default function MobileEdgeDrawer() {
   // panel) opens the drawer. The exclusion lets task rows keep their own
   // swipe-to-reveal-actions gesture without interference.
   useEffect(() => {
-    if (open) return;
+    if (open || isDesktop) return;
     const dragXRef: { current: number | null } = { current: null };
 
     function onStart(e: TouchEvent) {
@@ -120,7 +132,7 @@ export default function MobileEdgeDrawer() {
       document.removeEventListener("touchend", onEnd);
       document.removeEventListener("touchcancel", onEnd);
     };
-  }, [open]);
+  }, [open, isDesktop]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
@@ -176,6 +188,8 @@ export default function MobileEdgeDrawer() {
   }, [dragX]);
 
   if (!mounted) return null;
+  // On desktop the static DesktopSidebar replaces this drawer entirely.
+  if (isDesktop) return null;
   if (pathname === "/login" || pathname === "/register") return null;
 
   // Where the drawer's left edge sits — interpolated during a drag, snapped otherwise.

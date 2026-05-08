@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   CATEGORIES,
   CATEGORY_COLOR,
@@ -20,9 +21,24 @@ interface Props {
 
 export default function CategoryCapsTooltip({ variant, children }: Props) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setMounted(true); }, []);
+
+  // Portal-mount the tooltip to escape any overflow:hidden ancestor (e.g. the
+  // desktop main column). Position it below + right-aligned to the trigger.
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const r = triggerRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+  }, [open]);
 
   return (
     <div
+      ref={triggerRef}
       style={{ position: "relative", display: "inline-flex" }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
@@ -30,14 +46,14 @@ export default function CategoryCapsTooltip({ variant, children }: Props) {
       onBlur={() => setOpen(false)}
     >
       {children}
-      {open && (
+      {open && mounted && pos && createPortal(
         <div
           role="tooltip"
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            left: 0,
-            zIndex: 40,
+            position: "fixed",
+            top: pos.top,
+            right: pos.right,
+            zIndex: 60,
             background: "var(--color-surface)",
             border: "1px solid var(--color-border)",
             borderRadius: 4,
@@ -48,7 +64,8 @@ export default function CategoryCapsTooltip({ variant, children }: Props) {
           }}
         >
           {variant === "regular" ? <RegularCapsContent /> : <RecurringCapsContent />}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

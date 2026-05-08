@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { tasksApi, TaskDto } from "@/lib/api/tasks";
+import { tasksApi, TaskDto, UndoCheckInResponse } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
 import { getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
@@ -48,6 +48,25 @@ export function useTaskActions({
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [pausing, setPausing] = useState<string | null>(null);
   const [slashingId, setSlashingId] = useState<string | null>(null);
+
+  // After a successful auth-mode check-in we surface a 5s window during which
+  // the user can hit "Undo" in the toast. Cleared on dismiss or expiry.
+  const [undoableCheckIn, setUndoableCheckIn] = useState<{ taskId: string; cycleId: number; taskTitle: string } | null>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissUndoableCheckIn = useCallback(() => {
+    if (undoTimeoutRef.current) { clearTimeout(undoTimeoutRef.current); undoTimeoutRef.current = null; }
+    setUndoableCheckIn(null);
+  }, []);
+
+  const armUndoToast = useCallback((taskId: string, cycleId: number, taskTitle: string) => {
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setUndoableCheckIn({ taskId, cycleId, taskTitle });
+    undoTimeoutRef.current = setTimeout(() => {
+      setUndoableCheckIn(null);
+      undoTimeoutRef.current = null;
+    }, 5000);
+  }, []);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
   const [tierUp, setTierUp] = useState<TierUpMessage | null>(null);
   const dismissTierUp = useCallback(() => setTierUp(null), []);
@@ -184,8 +203,17 @@ export function useTaskActions({
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
       const tier = tierForStreak(prevCount, newCount);
       if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
+      const nowIso = new Date().toISOString();
+      const synthCycle = {
+        cycleId: -Date.now(),
+        taskId: task.taskId,
+        checkInDate: nowIso,
+        counterValue: counterValue ?? null,
+        createdAt: nowIso,
+        cycleType: "checkin" as const,
+      };
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-        ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0) }
+        ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0), recentCycles: [synthCycle, ...(t.recentCycles ?? [])] }
         : t
       ));
       setAdvancing(null);
@@ -231,11 +259,91 @@ export function useTaskActions({
       }
     }
     setAdvancing(null);
+    // Append the new cycle to recentCycles so the in-row Undo button (and
+    // today-chip / heatmap) can find its cycleId without a refetch.
+    const nowIso = new Date().toISOString();
+    const newCycle = {
+      cycleId: data!.cycleId,
+      taskId: task.taskId,
+      checkInDate: nowIso,
+      counterValue: counterValue ?? null,
+      createdAt: nowIso,
+      cycleType: "checkin" as const,
+    };
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
       ? { ...t, status: "pending", dueDate: nextDueDate, lastCheckInDate: todayIso, completedAt: null, submitted: false,
-          currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount }
+          currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount,
+          recentCycles: [newCycle, ...(t.recentCycles ?? [])] }
       : t
     ));
+    armUndoToast(task.taskId, data!.cycleId, task.title);
+  });
+
+  const handleUndoCheckIn = useEvent(async function handleUndoCheckIn(task: TaskDto, cycleId: number): Promise<UndoCheckInResponse | null> {
+    // Demo / unauthenticated: best-effort local rollback. We can't perfectly
+    // restore the streak's previous state without server-side history, so we
+    // just decrement, roll the dueDate back one period, and clear
+    // lastCheckInDate so canCheckInNow() unlocks the task.
+    if (!isAuthenticated) {
+      setTasks((prev) => prev.map((t) => {
+        if (t.taskId !== task.taskId) return t;
+        const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
+        const newStreak = Math.max(0, (t.currentStreakCount ?? 0) - 1);
+        return {
+          ...t,
+          recentCycles: cycles,
+          currentStreakCount: newStreak,
+          dueDate: getPrevPeriodStart(parseLocalDate(t.dueDate ?? ""), t.recurrenceRule ?? "daily").toISOString().split("T")[0],
+          lastCheckInDate: null,
+        };
+      }));
+      return null;
+    }
+    const { data, error } = await tasksApi.undoCheckIn(task.taskId, cycleId);
+    if (error) { setError(error); return null; }
+    setBalance(data!.newBalance);
+    setRecurringSubmittedToday(data!.recurringDailyTotal);
+    if (data!.pointsRefunded > 0) {
+      setDailySubmitted((prev) => Math.max(0, prev - data!.pointsRefunded));
+    }
+    setTasks((prev) => prev.map((t) => {
+      if (t.taskId !== task.taskId) return t;
+      const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
+      // Empty string from server means "no prior check-in" — clear the local
+      // lastCheckInDate so canCheckInNow() unlocks the task. Otherwise the
+      // slider/check-in button stays disabled.
+      const restoredLastCheckIn = data!.previousLastCheckInDate || null;
+      // If the server has no PreviousDueDate snapshot (cycle created before
+      // the rollback fields were added), compute it by rolling t.dueDate back
+      // one period. Without this fallback the task would land in UPCOMING
+      // because dueDate would still point to the post-check-in cycle.
+      const restoredDueDate = data!.previousDueDate
+        || (t.dueDate && t.recurrenceRule
+          ? (() => {
+              const prev = getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule);
+              return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+            })()
+          : t.dueDate);
+      return {
+        ...t,
+        recentCycles: cycles,
+        currentStreakCount: data!.streakCount,
+        longestStreakCount: data!.longestCount,
+        dueDate: restoredDueDate,
+        lastCheckInDate: restoredLastCheckIn,
+      };
+    }));
+    return data!;
+  });
+
+  const handleDeleteLogCycle = useEvent(async function handleDeleteLogCycle(task: TaskDto, cycleId: number) {
+    setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+      ? { ...t, recentCycles: (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId) }
+      : t
+    ));
+    if (!isAuthenticated) return;
+    const { error } = await tasksApi.deleteLogCycle(task.taskId, cycleId);
+    if (error) { setError(error); return; }
   });
 
   const handlePause = useEvent(async function handlePause(task: TaskDto) {
@@ -327,5 +435,11 @@ export function useTaskActions({
     }
   });
 
-  return { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive };
+  // When undo is invoked from the toast, also clear the toast itself.
+  const handleUndoCheckInFromToast = useEvent(async function handleUndoCheckInFromToast(task: TaskDto, cycleId: number) {
+    dismissUndoableCheckIn();
+    await handleUndoCheckIn(task, cycleId);
+  });
+
+  return { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn };
 }

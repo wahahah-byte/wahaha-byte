@@ -50,10 +50,18 @@ interface Props {
   historyRefreshKey?: number;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
+  // Reverses the most recent same-day cycle. Branches on the cycle's CycleType:
+  // - "checkin" calls onUndoCheckIn (full rollback of points/streak/dueDate)
+  // - "log"     calls onDeleteLogCycle (just removes the row)
+  onUndoCheckIn?: (cycleId: number) => Promise<void> | void;
+  onDeleteLogCycle?: (cycleId: number) => Promise<void> | void;
   isActing?: boolean;
   canUndo?: boolean;
   initialEditMode?: boolean;
   mustReschedule?: boolean;
+  // Render inline as a panel (no overlay, no portal, no mobile bottom-sheet).
+  // Used by the desktop 3-column shell as the right-hand detail column.
+  inline?: boolean;
 }
 
 function parseDateOnly(dateStr: string): Date {
@@ -124,7 +132,8 @@ export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
   onLog, historyRefreshKey,
-  onSave, onSubtasksChange, isActing, canUndo, initialEditMode, mustReschedule,
+  onSave, onSubtasksChange, onUndoCheckIn, onDeleteLogCycle,
+  isActing, canUndo, initialEditMode, mustReschedule, inline,
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
@@ -292,11 +301,11 @@ export default function TaskDetailModal({
 
   // Lock background scroll while the sheet is open on mobile (matches DatePicker pattern).
   useEffect(() => {
-    if (!isMobile) return;
+    if (!isMobile || inline) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [isMobile]);
+  }, [isMobile, inline]);
 
   const handleHandleTouchStart = useCallback((e: React.TouchEvent) => {
     sheetDragRef.current = { startY: e.touches[0].clientY };
@@ -323,11 +332,20 @@ export default function TaskDetailModal({
 
   if (!mounted) return null;
 
-  const sheetWrapperClass = isMobile
-    ? "fixed left-0 right-0 flex flex-col"
-    : "w-full max-w-md sm:max-w-lg flex flex-col relative";
+  const sheetWrapperClass = inline
+    ? "w-full h-full flex flex-col relative"
+    : isMobile
+      ? "fixed left-0 right-0 flex flex-col"
+      : "w-full max-w-md sm:max-w-lg flex flex-col relative";
 
-  const sheetWrapperStyle: React.CSSProperties = isMobile
+  const sheetWrapperStyle: React.CSSProperties = inline
+    ? {
+        background: "var(--color-panel)",
+        padding: "20px 20px 14px",
+        overflowY: "auto",
+        flex: 1,
+      }
+    : isMobile
     ? {
         bottom: 0,
         zIndex: 61,
@@ -358,19 +376,14 @@ export default function TaskDetailModal({
     ? { background: "var(--color-modal-overlay)", zIndex: 60, animation: "detail-overlay-in 0.18s ease-out" }
     : { background: "var(--color-modal-overlay)" };
 
-  const tree = (
+  const sheet = (
     <div
-      data-edge-drawer-block
-      className={overlayClass}
-      style={overlayStyle}
-      onClick={isEditing ? undefined : onClose}
+      className={sheetWrapperClass}
+      style={sheetWrapperStyle}
+      onClick={(e) => e.stopPropagation()}
+      data-edge-drawer-block={inline ? "" : undefined}
     >
-      <div
-        className={sheetWrapperClass}
-        style={sheetWrapperStyle}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {isMobile && (
+        {isMobile && !inline && (
           <div
             onTouchStart={handleHandleTouchStart}
             onTouchMove={handleHandleTouchMove}
@@ -389,7 +402,7 @@ export default function TaskDetailModal({
           </div>
         )}
         <div
-          style={isMobile
+          style={isMobile && !inline
             ? { overflowY: "auto", padding: "4px 4px 4px", flex: 1, position: "relative" }
             : undefined
           }
@@ -711,8 +724,25 @@ export default function TaskDetailModal({
                   {
                     key: "stage",
                     content: (
-                      <div className="flex-1 flex items-center justify-center">
+                      <div className="flex-1 flex flex-col items-center justify-center gap-2">
                         <ChibiAvatar equipped={buildMockEquipped()} height={192} />
+                        {(() => {
+                          if (!task.hasCounter) return null;
+                          const today = new Date(); today.setHours(0, 0, 0, 0);
+                          const todayKey = dateKey(today);
+                          let sum = 0; let count = 0;
+                          for (const c of task.recentCycles ?? []) {
+                            if (c.checkInDate.split("T")[0] === todayKey && typeof c.counterValue === "number") {
+                              sum += c.counterValue; count++;
+                            }
+                          }
+                          if (count === 0) return null;
+                          return (
+                            <span style={{ fontSize: 11, color: "var(--color-fg)", fontWeight: 600 }}>
+                              Today · {sum.toLocaleString()}{task.counterUnit ? ` ${task.counterUnit}` : ""}
+                            </span>
+                          );
+                        })()}
                       </div>
                     ),
                   },
@@ -734,6 +764,8 @@ export default function TaskDetailModal({
                             isAuthenticated={isAuthenticated}
                             refreshKey={historyRefreshKey ?? 0}
                             seed={task.recentCycles ?? null}
+                            onUndoCheckIn={onUndoCheckIn}
+                            onDeleteLogCycle={onDeleteLogCycle}
                           />
                         ) : (
                           // Recurring task without a counter — explain what would
@@ -1037,7 +1069,7 @@ export default function TaskDetailModal({
         {/* Pinned slider zone (mobile only) — sits outside the scroll container
             so it stays at the user's thumb regardless of how much content is
             above it. Only renders for recurring tasks where check-in is unlocked. */}
-        {isMobile && !isEditing && task.status === "pending" && task.isRecurring && onCheckIn && (
+        {isMobile && !inline && !isEditing && task.status === "pending" && task.isRecurring && onCheckIn && (
           <div
             style={{
               flexShrink: 0,
@@ -1054,6 +1086,20 @@ export default function TaskDetailModal({
           </div>
         )}
       </div>
+  );
+
+  // Inline mode (desktop right-panel) skips the overlay + portal and renders
+  // just the sheet content sized to fill its container.
+  if (inline) return sheet;
+
+  const tree = (
+    <div
+      data-edge-drawer-block
+      className={overlayClass}
+      style={overlayStyle}
+      onClick={isEditing ? undefined : onClose}
+    >
+      {sheet}
     </div>
   );
 
@@ -1139,12 +1185,15 @@ function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: 
               title={tooltip}
               style={{
                 flex: 1,
+                minWidth: 0,
                 height: 18,
                 borderRadius: 2,
                 background: checked ? "var(--color-active-highlight-alt)" : "var(--color-border-soft)",
                 opacity: checked ? intensity : 1,
-                outline: isToday ? "1px solid var(--color-active-highlight)" : "none",
-                outlineOffset: 1,
+                // Inset ring so the today highlight stays inside the cell's bounds —
+                // an outset outline gets clipped by DetailPager's overflow: hidden
+                // since today is always the rightmost cell.
+                boxShadow: isToday ? "inset 0 0 0 1.5px var(--color-active-highlight)" : undefined,
               }}
             />
           );
@@ -1164,7 +1213,15 @@ function fmtCycleTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { taskId: string; unit: string | null; isAuthenticated: boolean; refreshKey: number; seed: CheckInCycleDto[] | null }) {
+function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed, onUndoCheckIn, onDeleteLogCycle }: {
+  taskId: string;
+  unit: string | null;
+  isAuthenticated: boolean;
+  refreshKey: number;
+  seed: CheckInCycleDto[] | null;
+  onUndoCheckIn?: (cycleId: number) => Promise<void> | void;
+  onDeleteLogCycle?: (cycleId: number) => Promise<void> | void;
+}) {
   // Seed synchronously from TaskDto.recentCycles so first paint already shows
   // history. The effect below still refetches in the background so stale seeds
   // (e.g. after a fresh check-in) get reconciled and we pick up TotalCount.
@@ -1176,6 +1233,7 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [savingCycleId, setSavingCycleId] = useState<number | null>(null);
+  const [undoingCycleId, setUndoingCycleId] = useState<number | null>(null);
 
   const hasMore = items.length < totalCount;
 
@@ -1324,6 +1382,25 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
           if (last && last.dateKey === dateKey) last.entries.push(c);
           else groups.push({ dateKey, entries: [c] });
         }
+        const todayKey = (() => { const d = new Date(); d.setHours(0,0,0,0); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+        const latestCycleId = items[0]?.cycleId;
+        const latestIsToday = items[0] ? items[0].checkInDate.split("T")[0] === todayKey : false;
+        async function handleReverse(c: CheckInCycleDto) {
+          if (undoingCycleId != null) return;
+          setUndoingCycleId(c.cycleId);
+          // Optimistic local removal — refreshKey-driven refetch will reconcile.
+          setItems((prev) => prev.filter((x) => x.cycleId !== c.cycleId));
+          setTotalCount((prev) => Math.max(0, prev - 1));
+          try {
+            if (c.cycleType === "log") {
+              await onDeleteLogCycle?.(c.cycleId);
+            } else {
+              await onUndoCheckIn?.(c.cycleId);
+            }
+          } finally {
+            setUndoingCycleId(null);
+          }
+        }
         return (
           <div
             style={{
@@ -1352,6 +1429,13 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
                   {entries.map((c, idx) => {
                     const isEditing = editingCycleId === c.cycleId;
                     const isSaving = savingCycleId === c.cycleId;
+                    // Logs can be deleted any time (no side effects to reverse).
+                    // Check-ins can only be undone on the same day for the
+                    // latest cycle, since they roll back streak/dueDate/points.
+                    const canReverse = c.cycleType === "log"
+                      ? !!onDeleteLogCycle
+                      : !!onUndoCheckIn && latestIsToday && c.cycleId === latestCycleId;
+                    const isUndoing = undoingCycleId === c.cycleId;
                     return (
                       <div
                         key={c.cycleId}
@@ -1368,6 +1452,29 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
                         <span style={{ fontVariantNumeric: "tabular-nums" }}>
                           {fmtCycleTime(c.createdAt)}
                         </span>
+                        {canReverse && !isEditing && (
+                          <button
+                            onClick={() => handleReverse(c)}
+                            disabled={isUndoing}
+                            aria-label={c.cycleType === "log" ? "Delete this log entry" : "Undo this check-in"}
+                            title={c.cycleType === "log" ? "Delete this log entry" : "Undo this check-in"}
+                            className="cursor-pointer disabled:opacity-40"
+                            style={{
+                              marginLeft: "auto",
+                              background: "transparent",
+                              border: "1px solid var(--color-border-hairline)",
+                              borderRadius: 999,
+                              padding: "2px 7px",
+                              color: "var(--color-fg-subtle)",
+                              fontSize: 9,
+                              letterSpacing: "0.18em",
+                              textTransform: "uppercase",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {c.cycleType === "log" ? "Delete" : "Undo"}
+                          </button>
+                        )}
                         {isEditing ? (
                           <span className="inline-flex items-center gap-1">
                             <input

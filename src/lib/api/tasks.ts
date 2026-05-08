@@ -73,6 +73,9 @@ export interface CheckInCycleDto {
   checkInDate: string;
   counterValue: number | null;
   createdAt: string;
+  // "checkin" rows have full check-in side effects (points/streak/dueDate);
+  // "log" rows are counter-only and have no side effects.
+  cycleType?: "checkin" | "log";
 }
 
 export interface TaskFilterParams {
@@ -114,12 +117,26 @@ export interface CheckInResponse {
   bonusMultiplier: number;
   streakReset: boolean;
   nextDueDate: string;
+  cycleId: number;
 }
 
 export interface SkipCycleResponse {
   nextDueDate: string;
   streakReset: boolean;
   streakCount: number;
+}
+
+export interface UndoCheckInResponse {
+  newBalance: number;
+  recurringDailyTotal: number;
+  streakCount: number;
+  longestCount: number;
+  bonusMultiplier: number;
+  previousDueDate: string;
+  // Empty string means "no prior check-in" — client treats it as null so the
+  // task counts as never-checked-in and unlocks for another check-in.
+  previousLastCheckInDate: string;
+  pointsRefunded: number;
 }
 
 export const tasksApi = {
@@ -164,6 +181,12 @@ export const tasksApi = {
 
   logCounter: (id: string, counterValue: number) =>
     authedPost<CheckInCycleDto>(`/api/tasks/${id}/log-counter`, { counterValue }),
+
+  undoCheckIn: (taskId: string, cycleId: number) =>
+    authedPost<UndoCheckInResponse>(`/api/tasks/${taskId}/checkin/${cycleId}/undo`, {}),
+
+  deleteLogCycle: (taskId: string, cycleId: number) =>
+    authedDelete<void>(`/api/tasks/${taskId}/checkin-history/${cycleId}`),
 
   skipCycle: (id: string) =>
     authedPost<SkipCycleResponse>(`/api/tasks/${id}/skip-cycle`, {}),

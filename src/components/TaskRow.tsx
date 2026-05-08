@@ -43,13 +43,19 @@ interface TaskRowProps {
   onArchive?: (task: TaskDto) => void;
   onUnarchive?: (task: TaskDto) => void;
   onSubtasksChange?: (taskId: string, subtasks: Subtask[]) => void;
+  // Reverses today's check-in cycle. Only invoked from rows that show the
+  // inline Undo pill (recurring task whose latest cycle is today + cycleType=checkin).
+  onUndoCheckIn?: (task: TaskDto, cycleId: number) => void | Promise<unknown>;
+  // For recurring counter tasks, the swipe-left action panel surfaces Log
+  // instead of Check-in (counter tasks check in via the modal's slider).
+  onLog?: (task: TaskDto) => void;
 }
 
 function TaskRowImpl({
   task, activeFilter, advancing, pausing, slashingId,
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
-  onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange,
+  onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange, onUndoCheckIn, onLog,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
@@ -86,6 +92,21 @@ function TaskRowImpl({
   const isSubmitted = isFiling || (isCompleted && (task.submitted === true || submittedTaskIds.has(task.taskId) || !!task.pointsAwarded));
   const isSelectable = activeFilter === "completed" && isCompleted && !isSubmitted;
   const overdueRecurring = task.isRecurring && !isInProgress && !isCompleted && isOverdue(task.dueDate);
+
+  // The latest cycle is the head of recentCycles (server returns desc by date+id).
+  // We surface an inline Undo pill when it's today's "checkin" — and only when
+  // the parent wired up onUndoCheckIn (so this stays opt-in for callers).
+  const undoableCycle = (() => {
+    if (!task.isRecurring || !onUndoCheckIn) return null;
+    const latest = task.recentCycles?.[0];
+    if (!latest || latest.cycleType !== "checkin") return null;
+    const todayKey = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+    return latest.checkInDate.split("T")[0] === todayKey ? latest : null;
+  })();
+  const wasCheckedInToday = !!undoableCycle;
 
   const hasError = errorIds?.has(task.taskId) ?? false;
 
@@ -319,6 +340,25 @@ function TaskRowImpl({
         }}
       >
         {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
+          // Counter tasks: replace the Check-in swipe action with Log. Counter
+          // tasks check in via the modal's slider; the swipe action is for
+          // quick log entries throughout the day.
+          if (task.hasCounter && onLog) {
+            return (
+              <button
+                onClick={() => onLog(task)}
+                title="Log entry"
+                style={{ width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--color-surface-deep)", border: "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-active-highlight-bg)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-surface-deep)")}
+              >
+                <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+                  <line x1="5" y1="1.5" x2="5" y2="8.5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="1.5" y1="5" x2="8.5" y2="5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            );
+          }
           const eligible = canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
           return (
             <button
@@ -464,7 +504,7 @@ function TaskRowImpl({
         ref={innerRef}
         className={[
           "task-row-inner grid items-center pl-3 sm:pl-4 pr-0",
-          isGreyedOut ? "greyed" : "",
+          isGreyedOut || wasCheckedInToday ? "greyed" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
         style={{
@@ -475,9 +515,11 @@ function TaskRowImpl({
             ? "2px solid var(--color-active-highlight)"
             : canUndo
               ? "2px solid rgba(245,158,11,0.7)"
-              : overdueRecurring
-                ? "2px solid rgba(239,68,68,0.55)"
-                : undefined,
+              : wasCheckedInToday
+                ? "2px solid var(--color-active-highlight-alt)"
+                : overdueRecurring
+                  ? "2px solid rgba(239,68,68,0.55)"
+                  : undefined,
           background: isCompleted && !canUndo ? "var(--color-bg)" : undefined,
           cursor: "pointer",
         }}
@@ -602,6 +644,49 @@ function TaskRowImpl({
                   </span>
                 );
               })()}
+              {task.isRecurring && task.hasCounter && (() => {
+                const cycles = task.recentCycles ?? [];
+                if (cycles.length === 0) return null;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const days: { key: string; total: number }[] = [];
+                for (let i = 6; i >= 0; i--) {
+                  const d = new Date(today);
+                  d.setDate(today.getDate() - i);
+                  days.push({
+                    key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+                    total: 0,
+                  });
+                }
+                for (const c of cycles) {
+                  if (typeof c.counterValue !== "number") continue;
+                  const day = days.find((d) => d.key === c.checkInDate.split("T")[0]);
+                  if (day) day.total += c.counterValue;
+                }
+                if (!days.some((d) => d.total > 0)) return null;
+                const max = Math.max(1, ...days.map((d) => d.total));
+                const unit = task.counterUnit ? ` ${task.counterUnit}` : "";
+                const tooltip = `Last 7 days: ${days.map((d) => `${d.total}${unit}`).join(" · ")}`;
+                return (
+                  <span className="row-counter-spark" title={tooltip} aria-hidden style={{ gap: 1.5, height: 11, flexShrink: 0 }}>
+                    {days.map((d, i) => {
+                      const isLast = i === days.length - 1;
+                      return (
+                        <span
+                          key={d.key}
+                          style={{
+                            width: 3,
+                            height: `${Math.max(1.5, (d.total / max) * 11)}px`,
+                            background: isLast ? "var(--color-active-highlight-alt)" : "var(--color-fg-subtle)",
+                            opacity: d.total > 0 ? (isLast ? 1 : 0.7) : 0.25,
+                            borderRadius: 1,
+                          }}
+                        />
+                      );
+                    })}
+                  </span>
+                );
+              })()}
               {task.subtasks && task.subtasks.length > 0 && (() => {
                 const done = task.subtasks.filter((s) => s.completed).length;
                 const total = task.subtasks.length;
@@ -680,20 +765,51 @@ function TaskRowImpl({
         </div>
 
         <div className="flex items-center justify-center gap-1">
-          {(overdueRegular || overdueRecurring) && (
-            <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+          {wasCheckedInToday ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (undoableCycle) onUndoCheckIn?.(task, undoableCycle.cycleId);
+              }}
+              title="Undo check-in"
+              className="inline-flex items-center gap-1 cursor-pointer"
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                color: "var(--color-active-highlight-alt)",
+                background: "var(--color-active-highlight-alt-bg)",
+                border: "1px solid var(--color-active-highlight-alt-border, var(--color-border-hairline))",
+                borderRadius: 999,
+                padding: "2px 8px",
+                lineHeight: 1,
+              }}
+            >
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <polyline points="4,4.5 1.5,2 4,0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              Undo
+            </button>
+          ) : (
+            <>
+              {(overdueRegular || overdueRecurring) && (
+                <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+              )}
+              <span
+                className="text-[10px]"
+                style={{
+                  color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
+                  fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
+                }}
+              >
+                {task.dueDate
+                  ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : "—"}
+              </span>
+            </>
           )}
-          <span
-            className="text-[10px]"
-            style={{
-              color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
-              fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
-            }}
-          >
-            {task.dueDate
-              ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-              : "—"}
-          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
@@ -859,22 +975,36 @@ function TaskRowImpl({
 
       <div className="row-toolbar" onClick={stop}>
         {task.status === "pending" && task.isRecurring && !isInProgress && (
-          <button
-            onClick={eligibleCheckIn ? (e) => { e.stopPropagation(); onCheckIn(task); } : undefined}
-            disabled={isAdvancing || !eligibleCheckIn}
-            title={eligibleCheckIn ? "Check In" : "Not yet available"}
-          >
-            {eligibleCheckIn ? (
+          // Counter tasks: show Log on the desktop hover toolbar in place of
+          // Check-in (matches the swipe-left action on mobile).
+          task.hasCounter && onLog ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onLog(task); }}
+              title="Log entry"
+            >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <line x1="5" y1="1.5" x2="5" y2="8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <line x1="1.5" y1="5" x2="8.5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-            ) : (
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-              </svg>
-            )}
-          </button>
+            </button>
+          ) : (
+            <button
+              onClick={eligibleCheckIn ? (e) => { e.stopPropagation(); onCheckIn(task); } : undefined}
+              disabled={isAdvancing || !eligibleCheckIn}
+              title={eligibleCheckIn ? "Check In" : "Not yet available"}
+            >
+              {eligibleCheckIn ? (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <polyline points="1,5 4,8 9,2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <rect x="2.5" y="4.5" width="5" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+                  <path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                </svg>
+              )}
+            </button>
+          )
         )}
         {task.status === "pending" && !task.isRecurring && !isGreyedOut && (
           <button

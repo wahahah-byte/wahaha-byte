@@ -13,8 +13,8 @@ const SPRING_BACK_MS = 260;
 const COMMIT_GLIDE_MS = 320;       // ease-into-end after threshold crossed
 const DRAG_SMOOTH_MS = 80;         // tiny transition during drag — kills jitter without feeling laggy
 const COMMIT_FIRE_DELAY = COMMIT_GLIDE_MS - 40; // fire onConfirm just before the glide settles
-const THUMB_SIZE = 40;
-const TRACK_HEIGHT = 44;
+const THUMB_SIZE = 48;
+const TRACK_HEIGHT = 52;
 const TRACK_PAD = 2;              // inner padding so thumb doesn't touch the rim
 
 type Phase = "idle" | "dragging" | "committing" | "springing";
@@ -143,7 +143,7 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
         {label}
       </span>
 
-      {/* Thumb */}
+      {/* Thumb — layered gradient + inset highlights for a glossy 3D pill */}
       <div
         aria-hidden
         style={{
@@ -153,14 +153,24 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
           width: THUMB_SIZE,
           height: THUMB_SIZE,
           borderRadius: 999,
-          background: "var(--color-active-highlight-alt)",
+          background:
+            "linear-gradient(180deg, " +
+              "color-mix(in srgb, var(--color-active-highlight-alt) 78%, white) 0%, " +
+              "var(--color-active-highlight-alt) 52%, " +
+              "color-mix(in srgb, var(--color-active-highlight-alt) 84%, black) 100%)",
           color: "var(--color-on-active-highlight-alt)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           transform: `translateX(${offset}px)`,
           transition: thumbTransition,
-          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.28)",
+          boxShadow: [
+            "inset 0 1.5px 0.5px rgba(255, 255, 255, 0.55)",   // top sheen
+            "inset 0 -1.5px 0.5px rgba(0, 0, 0, 0.22)",        // bottom shading
+            "inset 0 0 0 1px rgba(0, 0, 0, 0.10)",             // crisp rim
+            "0 4px 10px rgba(0, 0, 0, 0.32)",                  // primary lift
+            "0 1px 2px rgba(0, 0, 0, 0.22)",                   // contact shadow
+          ].join(", "),
           willChange: "transform",
         }}
       >
