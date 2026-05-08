@@ -463,7 +463,7 @@ function TaskRowImpl({
       <div
         ref={innerRef}
         className={[
-          "task-row-inner grid items-center px-3 sm:px-4",
+          "task-row-inner grid items-center pl-3 pr-1 sm:pl-4 sm:pr-2",
           isGreyedOut ? "greyed" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
@@ -694,11 +694,11 @@ function TaskRowImpl({
           </span>
         </div>
 
-        <div className="flex items-center justify-center gap-1">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
           {isSubmitted ? (
             <div
               className={`flex items-center gap-1 px-1.5 py-0.5${recentlyFiledIds.has(task.taskId) ? " filed-badge-enter" : ""}`}
-              style={{ border: "1px solid var(--color-warning-border)", borderRadius: "2px", background: "var(--color-warning-bg)" }}
+              style={{ gridColumn: "1 / -1", justifySelf: "center", border: "1px solid var(--color-warning-border)", borderRadius: "2px", background: "var(--color-warning-bg)" }}
             >
               <svg width="12" height="10" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
                 {/* Pile of pixelated GP coins. Each disc is rendered as a single
@@ -739,7 +739,7 @@ function TaskRowImpl({
           ) : canUndo ? (
             <div
               className="flex items-center gap-1 px-1.5 py-0.5"
-              style={{ border: "1px solid rgba(245,158,11,0.35)", borderRadius: "2px", background: "rgba(245,158,11,0.06)" }}
+              style={{ gridColumn: "1 / -1", justifySelf: "center", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "2px", background: "rgba(245,158,11,0.06)" }}
             >
               <svg width="8" height="10" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
                 <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
@@ -752,14 +752,18 @@ function TaskRowImpl({
             </div>
           ) : (
             <>
-              <svg width="10" height="12" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
-                <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
-              </svg>
-              <span className="text-xs font-semibold" style={{ color: "var(--color-warning)" }}>
-                {task.pointValue.toLocaleString()}
-              </span>
-              <StreakBonusChip task={task} />
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <svg width="10" height="12" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+                  <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+                  <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
+                </svg>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                <span className="text-xs font-semibold" style={{ color: "var(--color-warning)" }}>
+                  {task.pointValue.toLocaleString()}
+                </span>
+                <StreakBonusChip task={task} />
+              </div>
             </>
           )}
         </div>
@@ -830,6 +834,21 @@ function TaskRowImpl({
           }}
         >
           +{recurringPopup} pts
+        </div>
+      )}
+
+      {recurringPopup !== undefined && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 26, pointerEvents: "none" }}>
+          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}>
+            <defs>
+              <linearGradient id={`checkin-grad-${task.taskId}`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" style={{ stopColor: "var(--color-surface-deep)" }} />
+                <stop offset="50%" stopColor="#4c1d95" />
+                <stop offset="100%" style={{ stopColor: "var(--color-surface-deep)" }} />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="100%" height="100%" fill="none" stroke={`url(#checkin-grad-${task.taskId})`} strokeWidth="1.25" strokeLinejoin="round" pathLength="1000" className="checkin-outline" />
+          </svg>
         </div>
       )}
 
@@ -949,7 +968,7 @@ function TaskRowImpl({
 
     {expanded && task.subtasks && task.subtasks.length > 0 && (
       <div
-        className="subtask-thread"
+        className="subtask-thread px-3 sm:px-4"
         onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
         title="Click to collapse"
         style={{
@@ -963,8 +982,6 @@ function TaskRowImpl({
                 : undefined,
           paddingTop: 6,
           paddingBottom: 14,
-          paddingLeft: 16,
-          paddingRight: 16,
           animation: "subtask-thread-in 0.18s cubic-bezier(0.2, 0, 0, 1)",
           cursor: "pointer",
           display: "flex",
@@ -976,6 +993,7 @@ function TaskRowImpl({
           <ThreadSubtaskRow
             key={s.subtaskId}
             subtask={s}
+            isFirst={i === 0}
             isLast={i === task.subtasks!.length - 1}
             onToggle={() => handleToggleSubtask(s)}
             onDelete={() => handleDeleteSubtask(s)}

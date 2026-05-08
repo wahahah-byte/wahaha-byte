@@ -122,7 +122,7 @@ export default function ArchivePage() {
 
   return (
     <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-      <div className="max-w-3xl w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden">
+      <div className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden" style={{ maxWidth: 420 }}>
         {!isAuthenticated && (
           <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
             <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>

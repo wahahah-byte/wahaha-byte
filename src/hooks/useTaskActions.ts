@@ -111,7 +111,7 @@ export function useTaskActions({
 
           if (awarded > 0) {
             setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
-            setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+            setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
             await new Promise((r) => setTimeout(r, 420));
           }
         }
@@ -173,11 +173,15 @@ export function useTaskActions({
     })();
     if (!isAuthenticated) {
       let nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
-      while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      while (parseLocalDate(nextDue).getTime() <= todayDate.getTime()) {
+        nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
+      }
       const prevCount = task.currentStreakCount ?? 0;
       const newCount = prevCount + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
-      setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+      setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
       const tier = tierForStreak(prevCount, newCount);
       if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
@@ -197,7 +201,7 @@ export function useTaskActions({
 
     if (awarded > 0) {
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
-      setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+      setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
     }
 
     const tier = tierForStreak(prevCount, data!.streakCount);

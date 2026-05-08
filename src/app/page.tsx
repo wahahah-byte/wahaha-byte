@@ -330,7 +330,8 @@ function Home() {
     <>
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden"
+          className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden"
+          style={{ maxWidth: 420 }}
         >
           {!isAuthenticated && (
             <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
@@ -339,7 +340,25 @@ function Home() {
             </div>
           )}
 
-          <div style={{ paddingTop: 12, background: "var(--color-bg)" }}>
+          <div style={{ paddingTop: 32, background: "var(--color-bg)" }}>
+            {(() => {
+              const label = FILTERS.find((f) => f.value === activeFilter)?.label ?? "Tasks";
+              return (
+                <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px]">
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.24em",
+                      textTransform: "uppercase",
+                      color: "var(--color-fg)",
+                    }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              );
+            })()}
             <div className="hidden sm:flex items-center mb-2" style={{ borderBottom: "1px solid var(--color-border-faint)" }}>
               <div className="flex items-center">
                 {FILTERS.map((f) => (
@@ -405,10 +424,10 @@ function Home() {
             </div>
 
             <div
-              className="grid text-[9px] tracking-widest uppercase pl-[14px] pr-4 py-2 select-none"
-              style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-subtle)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
+              className="grid text-[9px] tracking-widest uppercase mx-1 sm:mx-2.5 pl-3 pr-1 sm:pl-4 sm:pr-2 py-2 select-none"
+              style={{ gridTemplateColumns: "1fr 64px 80px", maxWidth: 420, color: "var(--color-fg-subtle)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
             >
-              <span>Name</span>
+              <span className="-ml-0.5 sm:-ml-1.5">Name</span>
               <span />
               <span />
               {activeFilter === "completed" && unsubmitted.length > 0 ? (

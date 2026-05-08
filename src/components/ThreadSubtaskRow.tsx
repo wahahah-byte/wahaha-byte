@@ -5,6 +5,7 @@ import type { Subtask } from "@/lib/api/tasks";
 
 type Props = {
   subtask: Subtask;
+  isFirst: boolean;
   isLast: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -14,8 +15,9 @@ const COMMIT_THRESHOLD = 80;
 const MAX_DRAG = 160;
 const ROW_HEIGHT = 36;
 const THREAD_GUTTER = 22;
+const GAP_ABOVE = 4;
 
-export default function ThreadSubtaskRow({ subtask, isLast, onToggle, onDelete }: Props) {
+export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, onDelete }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
 
@@ -64,9 +66,9 @@ export default function ThreadSubtaskRow({ subtask, isLast, onToggle, onDelete }
       style={{
         position: "relative",
         height: ROW_HEIGHT,
-        overflow: "hidden",
       }}
     >
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* Red delete action behind the row, revealed by the swipe */}
       <div
         aria-hidden
@@ -178,22 +180,34 @@ export default function ThreadSubtaskRow({ subtask, isLast, onToggle, onDelete }
           </svg>
         </button>
       </div>
+      </div>
 
-      {/* Static thread connector — rendered last so it paints on top of the
-          foreground row's background. Sits in the gutter (0..THREAD_GUTTER),
-          which doesn't visually overlap the row content (paddingLeft = THREAD_GUTTER). */}
-      <svg
-        aria-hidden
-        width={THREAD_GUTTER}
-        height={ROW_HEIGHT}
-        viewBox={`0 0 ${THREAD_GUTTER} ${ROW_HEIGHT}`}
-        style={{ position: "absolute", left: 0, top: 0, color: "var(--color-border-faint)", pointerEvents: "none" }}
-      >
-        {/* Vertical at x=8 lines up under the parent row's expanded chevron tip
-            (chevron sits at row x≈24; thread paddingLeft=16, so 16+8=24). */}
-        <line x1="8" y1="8" x2="8" y2={isLast ? ROW_HEIGHT / 2 : ROW_HEIGHT} stroke="currentColor" strokeWidth="1" />
-        <line x1="8" y1={ROW_HEIGHT / 2} x2="15" y2={ROW_HEIGHT / 2} stroke="currentColor" strokeWidth="1" />
-      </svg>
+      {/* Static thread connector — sits outside the swipe-clip wrapper so it
+          can extend above the row to bridge the parent's flex `gap`, keeping
+          the line continuous between consecutive subtasks. Sits in the gutter
+          (0..THREAD_GUTTER), which doesn't visually overlap the row content
+          (paddingLeft = THREAD_GUTTER). */}
+      {(() => {
+        const topOffset = isFirst ? 0 : -GAP_ABOVE;
+        const svgHeight = ROW_HEIGHT - topOffset;
+        const lineStart = isFirst ? 8 : 0;
+        const lineEnd = isLast ? ROW_HEIGHT - topOffset - ROW_HEIGHT / 2 : svgHeight;
+        const horizontalY = ROW_HEIGHT - topOffset - ROW_HEIGHT / 2;
+        return (
+          <svg
+            aria-hidden
+            width={THREAD_GUTTER}
+            height={svgHeight}
+            viewBox={`0 0 ${THREAD_GUTTER} ${svgHeight}`}
+            style={{ position: "absolute", left: 0, top: topOffset, color: "var(--color-border-faint)", pointerEvents: "none" }}
+          >
+            {/* Vertical at x=8 lines up under the parent row's expanded chevron tip
+                (chevron sits at row x≈24; thread paddingLeft=16, so 16+8=24). */}
+            <line x1="8" y1={lineStart} x2="8" y2={lineEnd} stroke="currentColor" strokeWidth="1" />
+            <line x1="8" y1={horizontalY} x2="15" y2={horizontalY} stroke="currentColor" strokeWidth="1" />
+          </svg>
+        );
+      })()}
     </div>
   );
 }
