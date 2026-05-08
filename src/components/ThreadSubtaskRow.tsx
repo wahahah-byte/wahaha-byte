@@ -201,10 +201,12 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
             viewBox={`0 0 ${THREAD_GUTTER} ${svgHeight}`}
             style={{ position: "absolute", left: 0, top: topOffset, color: "var(--color-border-faint)", pointerEvents: "none" }}
           >
-            {/* Vertical at x=8 lines up under the parent row's expanded chevron tip
-                (chevron sits at row x≈24; thread paddingLeft=16, so 16+8=24). */}
-            <line x1="8" y1={lineStart} x2="8" y2={lineEnd} stroke="currentColor" strokeWidth="1" />
-            <line x1="8" y1={horizontalY} x2="15" y2={horizontalY} stroke="currentColor" strokeWidth="1" />
+            {/* Vertical at x=16 lines up under the expanded chevron tip in the
+                CategoryIcon+chevron button: row pl (12/16) - btn ml (3) + icon (14)
+                + gap (2) + chevron half (2.5) = row_x 27.5/31.5; minus thread
+                paddingLeft (12/16) = 15.5 — rounded to 16. */}
+            <line x1="16" y1={lineStart} x2="16" y2={lineEnd} stroke="currentColor" strokeWidth="1" />
+            <line x1="16" y1={horizontalY} x2="22" y2={horizontalY} stroke="currentColor" strokeWidth="1" />
           </svg>
         );
       })()}

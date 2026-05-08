@@ -507,48 +507,50 @@ function TaskRowImpl({
               aria-expanded={expanded}
               className="flex-shrink-0"
               style={{
-                position: "relative",
-                width: 22, height: 22,
                 marginLeft: -3, marginRight: -3,
                 background: "transparent",
                 border: "none",
                 padding: 0,
                 cursor: "pointer",
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
+                gap: 2,
               }}
             >
+              {task.isRecurring ? (
+                <span
+                  style={{
+                    width: 14, height: 14,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)",
+                  }}
+                >
+                  <CategoryIcon category={task.category} size={14} />
+                </span>
+              ) : (
+                <span
+                  style={{
+                    width: 14, height: 14,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
+                </span>
+              )}
               <span
                 style={{
-                  position: "relative",
-                  width: 14, height: 14,
-                  display: "block",
+                  display: "inline-flex",
                   transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
                   transformOrigin: "50% 50%",
                   transition: "transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                  color: dot,
                 }}
               >
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "50%", top: "50%",
-                    width: 6, height: 6,
-                    marginLeft: -3, marginTop: -3,
-                    borderRadius: "50%",
-                    background: dot,
-                  }}
-                />
-                <svg
-                  width="5" height="7" viewBox="0 0 5 7" fill="none"
-                  style={{
-                    position: "absolute",
-                    left: "50%", top: "50%",
-                    marginLeft: 5,
-                    marginTop: -3.5,
-                    color: dot,
-                  }}
-                >
+                <svg width="5" height="7" viewBox="0 0 5 7" fill="none">
                   <polyline points="1,1 3.5,3.5 1,6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 </svg>
               </span>
@@ -697,15 +699,18 @@ function TaskRowImpl({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
           {isSubmitted ? (
             <div
-              className={`flex items-center gap-1 px-1.5 py-0.5${recentlyFiledIds.has(task.taskId) ? " filed-badge-enter" : ""}`}
-              style={{ gridColumn: "1 / -1", justifySelf: "center", border: "1px solid var(--color-warning-border)", borderRadius: "2px", background: "var(--color-warning-bg)" }}
+              className={`flex items-center gap-0.5${recentlyFiledIds.has(task.taskId) ? " filed-badge-enter" : ""}`}
+              style={{
+                gridColumn: "1 / -1",
+                justifySelf: "center",
+                border: "1px solid var(--color-warning-border)",
+                borderRadius: "2px",
+                background: "var(--color-warning-bg)",
+                padding: "1px 4px",
+              }}
             >
-              <svg width="12" height="10" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
-                {/* Pile of pixelated GP coins. Each disc is rendered as a single
-                    row, alternating bright (top edge highlight) and darker
-                    (front rim shadow) so the stacks read as multiple coins.
-                    Tall stack of 8 coins center-left, shorter stack of 4 coins
-                    to its right, plus two loose oval coins lying at the base. */}
+              <svg width="9" height="7" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
+                {/* Pile of pixelated GP coins, scaled down. */}
                 {/* Tall stack — bright top edges */}
                 <rect x="4" y="0" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
                 <rect x="4" y="2" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
@@ -716,23 +721,20 @@ function TaskRowImpl({
                 <rect x="4" y="3" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
                 <rect x="4" y="5" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
                 <rect x="4" y="7" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-
                 {/* Short stack — bright top edges */}
                 <rect x="9" y="4" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
                 <rect x="9" y="6" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
                 {/* Short stack — darker rim bodies */}
                 <rect x="9" y="5" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
                 <rect x="9" y="7" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-
-                {/* Loose coin A — front-left (smaller oval) */}
+                {/* Loose coin A — front-left */}
                 <rect x="1" y="8" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
                 <rect x="0" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-
-                {/* Loose coin B — front-right (larger oval) */}
+                {/* Loose coin B — front-right */}
                 <rect x="8" y="8" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
                 <rect x="7" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
               </svg>
-              <span style={{ color: "var(--color-warning)", opacity: 0.85, fontSize: "8px", letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 600 }}>
+              <span style={{ color: "var(--color-warning)", opacity: 0.85, fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600 }}>
                 Banked
               </span>
             </div>
