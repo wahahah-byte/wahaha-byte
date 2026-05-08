@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
-// In production we deploy to GitHub Pages at /wahaha-byte/. Dev runs at root.
-const isProd = process.env.NODE_ENV === "production";
-const basePath = isProd ? "/wahaha-byte" : "";
+// GitHub Actions sets NEXT_PUBLIC_BASE_PATH via actions/configure-pages with
+// static_site_generator: next, so CI builds get the right prefix automatically.
+// Dev runs and local prod builds fall back to empty (root-relative).
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const nextConfig: NextConfig = {
   output: "export",
