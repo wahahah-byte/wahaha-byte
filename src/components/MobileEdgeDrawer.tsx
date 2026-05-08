@@ -12,7 +12,6 @@ const ITEMS = [
 ] as const;
 
 const DRAWER_WIDTH = 70;       // wide enough to fit "Recurring" comfortably
-const EDGE_ZONE = 20;          // px from left edge where a closed drawer accepts a pull-open. Slightly overlaps the panel's left edge on mobile (gap is ~16px from px-3 shell + px-1 pager) so swipes stay easy to land.
 const COMMIT_FRACTION = 0.5;   // drag must cross this fraction of DRAWER_WIDTH to commit
 const AXIS_DEADZONE = 8;
 
@@ -42,6 +41,74 @@ export default function MobileEdgeDrawer() {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Document-level open gesture: when the drawer is closed, a horizontal swipe
+  // that starts in the LEFT HALF of the viewport (and not over the task list
+  // panel) opens the drawer. The exclusion lets task rows keep their own
+  // swipe-to-reveal-actions gesture without interference.
+  useEffect(() => {
+    if (open) return;
+    const dragXRef: { current: number | null } = { current: null };
+
+    function onStart(e: TouchEvent) {
+      if (e.touches.length > 1) return;
+      const t = e.touches[0];
+      if (t.clientX > window.innerWidth / 2) return;
+      const target = e.target as Element | null;
+      if (target?.closest(".task-list-panel")) return;
+      dragRef.current = {
+        startX: t.clientX, startY: t.clientY,
+        startedOpen: false, locked: null,
+      };
+      dragXRef.current = null;
+    }
+
+    function onMove(e: TouchEvent) {
+      const d = dragRef.current;
+      if (!d) return;
+      const t = e.touches[0];
+      const dx = t.clientX - d.startX;
+      const dy = t.clientY - d.startY;
+      if (d.locked === null) {
+        if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          d.locked = "h";
+        } else {
+          d.locked = "v";
+          dragRef.current = null;
+          return;
+        }
+      }
+      if (d.locked === "h") {
+        const targetX = Math.max(-DRAWER_WIDTH, Math.min(0, -DRAWER_WIDTH + dx));
+        dragXRef.current = targetX;
+        setDragX(targetX);
+      }
+    }
+
+    function onEnd() {
+      const d = dragRef.current;
+      if (!d) return;
+      dragRef.current = null;
+      const final = dragXRef.current;
+      dragXRef.current = null;
+      setDragX(null);
+      if (d.locked !== "h" || final === null) return;
+      const openIfPast = -DRAWER_WIDTH + DRAWER_WIDTH * COMMIT_FRACTION;
+      if (final > openIfPast) setOpen(true);
+    }
+
+    document.addEventListener("touchstart", onStart, { passive: true });
+    document.addEventListener("touchmove", onMove, { passive: true });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
+    return () => {
+      document.removeEventListener("touchstart", onStart);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("touchcancel", onEnd);
+    };
   }, [open]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -107,30 +174,6 @@ export default function MobileEdgeDrawer() {
 
   return createPortal(
     <>
-      {/* Invisible edge-grab zone. Stays mounted across the entire interaction
-          so the touch session that started on it survives state updates — if
-          this unmounts mid-drag the browser orphans the touch and React stops
-          getting move/end events. Backdrop (z-39) and drawer (z-40) overlay
-          it once the drawer opens, so it doesn't fight other taps. Top/bottom
-          insets keep it clear of the page header and bottom action bar. */}
-      <div
-        aria-hidden
-        className="sm:hidden"
-        style={{
-          position: "fixed",
-          top: 50,
-          bottom: "calc(78px + env(safe-area-inset-bottom, 0px))",
-          left: 0,
-          width: EDGE_ZONE,
-          zIndex: 38,
-          background: "transparent",
-        }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
-      />
-
       {/* Backdrop — rendered while open OR mid-drag, fades with progress.
           Tap closes; swiping left from here also closes (same drag handlers as the panel). */}
       {isActive && (
