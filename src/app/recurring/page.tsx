@@ -619,8 +619,8 @@ function Recurring() {
           </div>
 
           <div
-            className="grid text-[10px] tracking-widest uppercase mx-1 sm:mx-2.5 pl-3 sm:pl-4 py-2 select-none"
-            style={{ gridTemplateColumns: "1fr 64px 80px", maxWidth: 420, color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
+            className="grid text-[10px] tracking-widest uppercase mx-1 sm:mx-2.5 pl-3 sm:pl-4 pr-0 py-2 select-none"
+            style={{ gridTemplateColumns: "1fr 64px 60px", maxWidth: 420, color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
           >
             <span className="-ml-0.5 sm:-ml-1.5">Name</span>
             <span className="text-center">Next</span>

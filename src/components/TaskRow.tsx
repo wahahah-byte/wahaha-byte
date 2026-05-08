@@ -463,14 +463,14 @@ function TaskRowImpl({
       <div
         ref={innerRef}
         className={[
-          "task-row-inner grid items-center pl-3 pr-1 sm:pl-4 sm:pr-2",
+          "task-row-inner grid items-center pl-3 sm:pl-4 pr-0",
           isGreyedOut ? "greyed" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
         style={{
           position: "absolute",
           inset: 0,
-          gridTemplateColumns: "1fr 64px 80px",
+          gridTemplateColumns: "1fr 64px 60px",
           borderLeft: isInProgress
             ? "2px solid var(--color-active-highlight)"
             : canUndo
@@ -828,7 +828,7 @@ function TaskRowImpl({
         <div
           className="recurring-pts-popup"
           style={{
-            position: "absolute", right: "80px", top: "4px", zIndex: 30,
+            position: "absolute", right: "60px", top: "4px", zIndex: 30,
             color: "var(--color-active-highlight-alt)", fontSize: "12px", fontWeight: 700,
             letterSpacing: "0.06em", textShadow: "0 0 8px var(--color-active-highlight-alt-bg)",
           }}
