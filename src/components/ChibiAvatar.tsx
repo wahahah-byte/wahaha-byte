@@ -1,6 +1,7 @@
 "use client";
 
 import type { UserInventoryDto } from "@/lib/api/avatar";
+import { assetPath } from "@/lib/assetPath";
 
 // Z-order for stacking equipment layers above the base. Lower numbers render
 // behind, higher numbers in front. Covers both the current 6-slot backend enum
@@ -47,7 +48,7 @@ interface Props {
 export default function ChibiAvatar({
   equipped,
   height = 192,
-  basePath = "/avatars/base.png",
+  basePath = assetPath("/avatars/base.png"),
   pose = "idle",
   className,
 }: Props) {
@@ -91,7 +92,9 @@ export default function ChibiAvatar({
       {layered.map((inv) => (
         <img
           key={inv.inventoryId}
-          src={inv.avatarItem!.previewAssetUrl!}
+          // assetPath is a no-op for full https:// URLs (e.g. blob storage)
+          // and prepends the GitHub Pages base path for /-rooted public assets.
+          src={assetPath(inv.avatarItem!.previewAssetUrl!)}
           alt=""
           width={width}
           height={height}
