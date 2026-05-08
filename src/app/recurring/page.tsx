@@ -15,6 +15,7 @@ import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 import MobileActionBarRecurring from "@/components/MobileActionBarRecurring";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
+import TierUpBanner from "@/components/TierUpBanner";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 const MOCK_RECURRING: TaskDto[] = [
@@ -87,7 +88,7 @@ function Recurring() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submittedTaskIds] = useState<Set<string>>(new Set());
 
-  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip } =
+  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -395,7 +396,7 @@ function Recurring() {
   return (
     <>
       <div className="recurring-scope task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-        <div className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad">
+        <div className="max-w-3xl w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad">
           {!isAuthenticated && (
             <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
               <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>
@@ -649,12 +650,10 @@ function Recurring() {
                       <div
                         key={f.value}
                         ref={isActivePage ? setActiveScrollEl : null}
-                        className="has-mobile-bottom-pad"
+                        className="has-mobile-bottom-pad px-1 sm:px-2.5"
                         style={{
                           flex: `0 0 ${100 / RECURRING_FILTERS.length}%`,
                           minWidth: 0,
-                          paddingLeft: 10,
-                          paddingRight: 10,
                           boxSizing: "border-box",
                           height: "100%",
                           overflowY: "auto",
@@ -752,6 +751,8 @@ function Recurring() {
           onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
         />
       )}
+
+      <TierUpBanner message={tierUp} onDone={dismissTierUp} />
     </>
   );
 }

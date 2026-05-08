@@ -4,10 +4,11 @@ import { memo, useEffect, useRef, useState } from "react";
 import { TaskDto, Subtask } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, getCyclesOverdue } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
+import CheckInBurstEffect from "@/components/CheckInBurstEffect";
 import { useTheme } from "@/context/ThemeContext";
 
 // iOS-style rubber-band damping: maps any |x| asymptotically to RUBBER_C.
@@ -462,7 +463,7 @@ function TaskRowImpl({
       <div
         ref={innerRef}
         className={[
-          "task-row-inner grid items-center px-4",
+          "task-row-inner grid items-center px-3 sm:px-4",
           isGreyedOut ? "greyed" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
@@ -575,33 +576,9 @@ function TaskRowImpl({
                 textDecoration: isCompleted ? "line-through" : "none",
               }}
             >
-              <span className="truncate">{task.title}</span>
-              {task.subtasks && task.subtasks.length > 0 && (() => {
-                const done = task.subtasks.filter((s) => s.completed).length;
-                const total = task.subtasks.length;
-                const allDone = done === total;
-                return (
-                  <span
-                    title={`${done} of ${total} subtasks done`}
-                    style={{
-                      flexShrink: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      fontSize: "9px",
-                      letterSpacing: "0.08em",
-                      color: allDone ? "var(--color-success)" : "var(--color-fg-subtle)",
-                      border: `1px solid ${allDone ? "rgba(74,222,128,0.35)" : "var(--color-border-faint)"}`,
-                      borderRadius: "2px",
-                      padding: "1px 5px",
-                      lineHeight: 1,
-                      textDecoration: "none",
-                      background: "transparent",
-                    }}
-                  >
-                    ☐ {done}/{total}
-                  </span>
-                );
-              })()}
+              <span className="truncate" title={task.title}>
+                {task.title.length > 18 ? `${task.title.slice(0, 17)}…` : task.title}
+              </span>
             </p>
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
               {task.category && (() => {
@@ -623,12 +600,28 @@ function TaskRowImpl({
                   </span>
                 );
               })()}
-              {task.status === "pending" && !task.isRecurring && penalizedTaskIds?.has(task.taskId) && (
-                <>
-                  <span style={{ color: "rgba(239,68,68,0.35)", fontSize: "8px", flexShrink: 0 }}>·</span>
-                  <span style={{ color: "rgba(239,68,68,0.65)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}>↩ overdue reset</span>
-                </>
-              )}
+              {task.subtasks && task.subtasks.length > 0 && (() => {
+                const done = task.subtasks.filter((s) => s.completed).length;
+                const total = task.subtasks.length;
+                if (done === 0) return null;
+                const allDone = done === total;
+                return (
+                  <span
+                    title={`${done} of ${total} subtasks done`}
+                    style={{
+                      color: allDone ? "var(--color-success)" : "var(--color-fg-subtle)",
+                      fontSize: "8px",
+                      letterSpacing: "0.1em",
+                      flexShrink: 0,
+                      fontVariantNumeric: "tabular-nums",
+                      fontWeight: allDone ? 600 : 400,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {done}/{total}
+                  </span>
+                );
+              })()}
               {canUndo && (
                 <>
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
@@ -639,58 +632,42 @@ function TaskRowImpl({
                 </>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                const overdue = isOverdue(task.dueDate);
-                const isLocked = !overdue && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
-                const cyclesOverdue = overdue ? getCyclesOverdue(task.dueDate, task.recurrenceRule) : 0;
-                const isPenalized = cyclesOverdue >= 3;
-                const unlockInfo = isLocked && !overdue ? getUnlockInfo(task.dueDate) : null;
+                // Overdue state is now signalled by the red date column —
+                // skip the recurring badge entirely so the row stays uncluttered.
+                if (isOverdue(task.dueDate)) return null;
+                const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+                const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
                 const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
                   : task.recurrenceRule === "biweekly" ? "Biweekly"
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
-                const baseColor = overdue ? "rgba(239,68,68,0.85)" : isLocked ? "rgba(245,158,11,0.65)" : "var(--color-active-highlight-alt)";
                 const streakCount = task.currentStreakCount ?? 0;
-                const showUnlockChip = !overdue && isLocked && !!unlockInfo;
+                const unlockText = unlockInfo
+                  ? (task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
+                    ? unlockInfo.date
+                    : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`
+                  : null;
+                const tooltip = unlockText ? `${ruleLabel} · unlocks ${unlockText}` : ruleLabel;
                 return (
                   <>
-                    {!showUnlockChip && (
-                      <>
-                        <span
-                          style={{ color: baseColor, fontSize: overdue ? "10px" : "9px", lineHeight: 1, flexShrink: 0, fontWeight: overdue ? 700 : 400 }}
-                          title={
-                            overdue
-                              ? (isPenalized
-                                  ? `Overdue ${cyclesOverdue} cycle${cyclesOverdue === 1 ? "" : "s"}${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`
-                                  : `Overdue${streakCount >= 3 ? ` · streak ${streakCount} resets` : ""}`)
-                              : undefined
-                          }
-                        >
-                          {overdue ? "⚠" : "↻"}
-                        </span>
-                        <span style={{ color: baseColor, fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>
-                          {ruleLabel}
-                        </span>
-                      </>
-                    )}
-                    {showUnlockChip && (
-                      <>
-                        <svg width="7" height="8" viewBox="0 0 10 12" fill="none" style={{ flexShrink: 0 }} aria-label={`Recurring · ${ruleLabel}`}>
+                    {isLocked && unlockInfo ? (
+                      <span title={tooltip} aria-label={tooltip} style={{ display: "inline-flex", flexShrink: 0, lineHeight: 0 }}>
+                        <svg width="7" height="8" viewBox="0 0 10 12" fill="none">
                           <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" fill="none"/>
                           <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
                         </svg>
-                        <span
-                          style={{ color: "rgba(245,158,11,0.6)", fontSize: "8px", letterSpacing: "0.15em", textTransform: "uppercase", flexShrink: 0 }}
-                          title={`${ruleLabel} · unlocks ${(task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly") ? unlockInfo!.date : unlockInfo!.days === 1 ? "tomorrow" : `in ${unlockInfo!.days} days`}`}
-                        >
-                          {(task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
-                            ? unlockInfo!.date
-                            : unlockInfo!.days === 1 ? "tomorrow" : `in ${unlockInfo!.days} days`}
-                        </span>
-                      </>
+                      </span>
+                    ) : (
+                      <span
+                        style={{ color: "var(--color-active-highlight-alt)", fontSize: "10px", lineHeight: 1, flexShrink: 0 }}
+                        title={tooltip}
+                      >
+                        ↻
+                      </span>
                     )}
-                    {!overdue && streakCount >= 3 && (
-                      <span style={{ color: baseColor, fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
-                        · 🔥 {streakCount}
+                    {streakCount >= 3 && (
+                      <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
+                        🔥 {streakCount}
                       </span>
                     )}
                   </>
@@ -700,8 +677,17 @@ function TaskRowImpl({
           </div>
         </div>
 
-        <div className="flex items-center justify-center">
-          <span className="text-[10px]" style={{ color: "var(--color-fg-muted)" }}>
+        <div className="flex items-center justify-center gap-1">
+          {(overdueRegular || overdueRecurring) && (
+            <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+          )}
+          <span
+            className="text-[10px]"
+            style={{
+              color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
+              fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
+            }}
+          >
             {task.dueDate
               ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
               : "—"}
@@ -834,7 +820,7 @@ function TaskRowImpl({
         </div>
       )}
 
-      {recurringPopup !== undefined && isInProgress && (
+      {recurringPopup !== undefined && (
         <div
           className="recurring-pts-popup"
           style={{
@@ -846,6 +832,9 @@ function TaskRowImpl({
           +{recurringPopup} pts
         </div>
       )}
+
+      <CheckInBurstEffect active={recurringPopup !== undefined} />
+
 
       <div className="row-toolbar" onClick={stop}>
         {task.status === "pending" && task.isRecurring && !isInProgress && (

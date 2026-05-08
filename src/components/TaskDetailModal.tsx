@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
 import SubtaskRow from "@/components/SubtaskRow";
+import SlideToCheckIn from "@/components/SlideToCheckIn";
+import DetailPager from "@/components/DetailPager";
+import ChibiAvatar from "@/components/ChibiAvatar";
+import { buildMockEquipped } from "@/lib/mockAvatar";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
@@ -269,23 +274,125 @@ export default function TaskDetailModal({
 
   const priorityDot = isEditing ? (PRIORITY_DOT[editPriority] ?? "var(--color-fg-muted)") : dot;
 
-  return (
+  const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const sheetDragRef = useRef<{ startY: number } | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Lock background scroll while the sheet is open on mobile (matches DatePicker pattern).
+  useEffect(() => {
+    if (!isMobile) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [isMobile]);
+
+  const handleHandleTouchStart = useCallback((e: React.TouchEvent) => {
+    sheetDragRef.current = { startY: e.touches[0].clientY };
+    setSheetDragY(0);
+  }, []);
+  const handleHandleTouchMove = useCallback((e: React.TouchEvent) => {
+    const d = sheetDragRef.current;
+    if (!d) return;
+    const dy = e.touches[0].clientY - d.startY;
+    setSheetDragY(dy > 0 ? dy : 0);
+  }, []);
+  const handleHandleTouchEnd = useCallback(() => {
+    const d = sheetDragRef.current;
+    sheetDragRef.current = null;
+    if (!d) return;
+    if (sheetDragY > 110) {
+      // Past dismiss threshold — slide off-screen, then close.
+      setSheetDragY(window.innerHeight);
+      setTimeout(onClose, 180);
+    } else {
+      setSheetDragY(0);
+    }
+  }, [sheetDragY, onClose]);
+
+  if (!mounted) return null;
+
+  const sheetWrapperClass = isMobile
+    ? "fixed left-0 right-0 flex flex-col"
+    : "w-full max-w-md sm:max-w-lg flex flex-col relative";
+
+  const sheetWrapperStyle: React.CSSProperties = isMobile
+    ? {
+        bottom: 0,
+        zIndex: 61,
+        background: "var(--color-panel)",
+        borderTop: "1px solid var(--color-border)",
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.4)",
+        maxHeight: "92vh",
+        padding: "0 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+        animation: sheetDragY === 0 ? "detail-sheet-in 0.24s cubic-bezier(0.2, 0, 0, 1)" : undefined,
+        transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
+        transition: sheetDragY === 0 ? "transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+      }
+    : {
+        background: "var(--color-panel)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "6px",
+        boxShadow: "var(--shadow-popover)",
+        padding: "20px 20px 14px",
+      };
+
+  const overlayClass = isMobile
+    ? "fixed inset-0"
+    : "fixed inset-0 z-50 flex items-center justify-center px-4";
+
+  const overlayStyle: React.CSSProperties = isMobile
+    ? { background: "var(--color-modal-overlay)", zIndex: 60, animation: "detail-overlay-in 0.18s ease-out" }
+    : { background: "var(--color-modal-overlay)" };
+
+  const tree = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "var(--color-modal-overlay)" }}
+      className={overlayClass}
+      style={overlayStyle}
       onClick={isEditing ? undefined : onClose}
     >
       <div
-        className="w-full max-w-md sm:max-w-lg flex flex-col relative"
-        style={{
-          background: "var(--color-panel)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "6px",
-          boxShadow: "var(--shadow-popover)",
-          padding: "20px 20px 14px",
-        }}
+        className={sheetWrapperClass}
+        style={sheetWrapperStyle}
         onClick={(e) => e.stopPropagation()}
       >
+        {isMobile && (
+          <div
+            onTouchStart={handleHandleTouchStart}
+            onTouchMove={handleHandleTouchMove}
+            onTouchEnd={handleHandleTouchEnd}
+            onTouchCancel={handleHandleTouchEnd}
+            style={{
+              flexShrink: 0,
+              padding: "10px 0 6px",
+              display: "flex",
+              justifyContent: "center",
+              cursor: "grab",
+              touchAction: "none",
+            }}
+          >
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: "var(--color-border)" }} />
+          </div>
+        )}
+        <div
+          style={isMobile
+            ? { overflowY: "auto", padding: "4px 4px 4px", flex: 1, position: "relative" }
+            : undefined
+          }
+        >
         <button
           onClick={isEditing ? () => setIsEditing(false) : onClose}
           aria-label="Close"
@@ -595,16 +702,44 @@ export default function TaskDetailModal({
               </p>
             )}
 
-            {task.isRecurring && (task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") && (
-              <HeatmapStrip
-                rule={task.recurrenceRule}
-                hasCounter={task.hasCounter ?? false}
-                cycles={task.recentCycles ?? []}
+            {task.isRecurring && ((task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") || task.hasCounter) && (
+              <DetailPager
+                height={236}
+                labels={["Stage", "Stats"]}
+                cards={[
+                  {
+                    key: "stage",
+                    content: (
+                      <div className="flex-1 flex items-center justify-center">
+                        <ChibiAvatar equipped={buildMockEquipped()} height={192} />
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "stats",
+                    content: (
+                      <div className="flex flex-col gap-3" style={{ overflowY: "auto", flex: 1 }}>
+                        {(task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") && (
+                          <HeatmapStrip
+                            rule={task.recurrenceRule}
+                            hasCounter={task.hasCounter ?? false}
+                            cycles={task.recentCycles ?? []}
+                          />
+                        )}
+                        {task.hasCounter && (
+                          <CounterHistory
+                            taskId={task.taskId}
+                            unit={task.counterUnit ?? null}
+                            isAuthenticated={isAuthenticated}
+                            refreshKey={historyRefreshKey ?? 0}
+                            seed={task.recentCycles ?? null}
+                          />
+                        )}
+                      </div>
+                    ),
+                  },
+                ]}
               />
-            )}
-
-            {task.isRecurring && task.hasCounter && (
-              <CounterHistory taskId={task.taskId} unit={task.counterUnit ?? null} isAuthenticated={isAuthenticated} refreshKey={historyRefreshKey ?? 0} seed={task.recentCycles ?? null} />
             )}
 
             {/* Subtasks — hidden entirely when completed and there's nothing to read */}
@@ -719,7 +854,7 @@ export default function TaskDetailModal({
                 />
               )}
 
-              {task.status === "pending" && task.isRecurring && onCheckIn && (
+              {task.status === "pending" && task.isRecurring && onCheckIn && !isMobile && (
                 <ActionBtn
                   onClick={onCheckIn}
                   disabled={isActing}
@@ -866,9 +1001,33 @@ export default function TaskDetailModal({
             </span>
           </div>
         )}
+        </div>
+
+        {/* Pinned slider zone (mobile only) — sits outside the scroll container
+            so it stays at the user's thumb regardless of how much content is
+            above it. Only renders for recurring tasks where check-in is unlocked. */}
+        {isMobile && !isEditing && task.status === "pending" && task.isRecurring && onCheckIn && (
+          <div
+            style={{
+              flexShrink: 0,
+              paddingTop: 12,
+              marginTop: 6,
+              borderTop: "1px solid var(--color-border-hairline)",
+            }}
+          >
+            <SlideToCheckIn
+              label="Slide to check in"
+              disabled={isActing}
+              onConfirm={onCheckIn}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
+
+  // Mobile sheet renders into <body> so it sits above page-level layout.
+  return isMobile ? createPortal(tree, document.body) : tree;
 }
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {

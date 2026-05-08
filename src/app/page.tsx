@@ -14,6 +14,7 @@ import TaskListControls from "@/components/TaskListControls";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 import MobileActionBar from "@/components/MobileActionBar";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
+import TierUpBanner from "@/components/TierUpBanner";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
@@ -69,7 +70,7 @@ function Home() {
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
   } = submission;
 
-  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive } =
+  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -329,7 +330,7 @@ function Home() {
     <>
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
-          className="max-w-3xl w-full mx-auto px-4 flex flex-col flex-1 overflow-hidden"
+          className="max-w-3xl w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden"
         >
           {!isAuthenticated && (
             <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
@@ -470,14 +471,14 @@ function Home() {
                       <div
                         key={f.value}
                         ref={isActivePage ? setActiveScrollEl : null}
-                        className={`has-mobile-bottom-pad${submitBarVisible ? " sm:pb-24" : ""}`}
+                        className={`has-mobile-bottom-pad px-1 sm:px-2.5${submitBarVisible ? " sm:pb-24" : ""}`}
                         style={{
                           flex: `0 0 ${100 / FILTERS.length}%`,
                           minWidth: 0,
                           // Inset each page so adjacent pages have visible breathing
                           // room when swiping between filters (iOS-homescreen feel).
-                          paddingLeft: 10,
-                          paddingRight: 10,
+                          // Horizontal padding handled via Tailwind so it shrinks
+                          // on mobile (px-1 = 4px) and keeps the desktop feel (px-2.5 = 10px).
                           boxSizing: "border-box",
                           height: "100%",
                           overflowY: "auto",
@@ -641,6 +642,8 @@ function Home() {
           onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
         />
       )}
+
+      <TierUpBanner message={tierUp} onDone={dismissTierUp} />
     </>
   );
 }

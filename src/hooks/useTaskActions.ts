@@ -6,6 +6,12 @@ import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
 import { getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
+import { tierForStreak, type TierUpMessage } from "@/components/TierUpBanner";
+
+function vibrate(pattern: number | number[]) {
+  if (typeof navigator === "undefined" || !("vibrate" in navigator)) return;
+  try { navigator.vibrate(pattern); } catch { /* iOS Safari throws on some PWAs */ }
+}
 
 // useEvent-style helper: returns a stable callback that always invokes the
 // latest handler implementation. Lets us hand stable refs to memoized children
@@ -43,6 +49,8 @@ export function useTaskActions({
   const [pausing, setPausing] = useState<string | null>(null);
   const [slashingId, setSlashingId] = useState<string | null>(null);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
+  const [tierUp, setTierUp] = useState<TierUpMessage | null>(null);
+  const dismissTierUp = useCallback(() => setTierUp(null), []);
 
   const handleAdvance = useEvent(async function handleAdvance(task: TaskDto) {
     if (advancing === task.taskId) return;
@@ -166,9 +174,12 @@ export function useTaskActions({
     if (!isAuthenticated) {
       let nextDue = getNextDueDate(task.dueDate, task.recurrenceRule!);
       while (isOverdue(nextDue)) nextDue = getNextDueDate(nextDue, task.recurrenceRule!);
-      const newCount = (task.currentStreakCount ?? 0) + 1;
+      const prevCount = task.currentStreakCount ?? 0;
+      const newCount = prevCount + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
+      const tier = tierForStreak(prevCount, newCount);
+      if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
         ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0) }
         : t
@@ -176,6 +187,7 @@ export function useTaskActions({
       setAdvancing(null);
       return;
     }
+    const prevCount = task.currentStreakCount ?? 0;
     const { data, error } = await tasksApi.checkIn(task.taskId, counterValue);
     if (error) { setAdvancing(null); setError(error); return; }
     const awarded = data!.pointsAwarded;
@@ -187,6 +199,9 @@ export function useTaskActions({
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, awarded));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1150);
     }
+
+    const tier = tierForStreak(prevCount, data!.streakCount);
+    if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
 
     if (setSuccess && awarded > 0 && data!.bonusMultiplier > 1) {
       const mult = Number.isInteger(data!.bonusMultiplier) ? data!.bonusMultiplier.toFixed(0) : data!.bonusMultiplier.toFixed(1);
@@ -308,5 +323,5 @@ export function useTaskActions({
     }
   });
 
-  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive };
+  return { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handlePause, handleDelete, handleSkip, handleArchive };
 }

@@ -12,7 +12,7 @@ const ITEMS = [
 ] as const;
 
 const DRAWER_WIDTH = 70;       // wide enough to fit "Recurring" comfortably
-const EDGE_ZONE = 26;          // px from left edge where a closed drawer accepts a pull-open — matches the empty gap between screen edge and task list panel (px-4 shell + 10px pager page padding)
+const EDGE_ZONE = 20;          // px from left edge where a closed drawer accepts a pull-open. Slightly overlaps the panel's left edge on mobile (gap is ~16px from px-3 shell + px-1 pager) so swipes stay easy to land.
 const COMMIT_FRACTION = 0.5;   // drag must cross this fraction of DRAWER_WIDTH to commit
 const AXIS_DEADZONE = 8;
 
