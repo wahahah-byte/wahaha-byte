@@ -1,6 +1,48 @@
-import { TaskDto } from "@/lib/api/tasks";
+import { TaskDto, CheckInCycleDto } from "@/lib/api/tasks";
 
-export const MOCK_TASKS: TaskDto[] = [
+// Walk back from today and generate plausible cycle history so demo tasks
+// have a populated heatmap + counter history without a backend call.
+// Honours the recurrence rule (skips Sat/Sun for "weekdays") and caps at 14
+// cycles since the embedded slice is bounded that way in production.
+function generateMockCycles(t: TaskDto): CheckInCycleDto[] {
+  if (!t.isRecurring) return [];
+  if (t.recurrenceRule !== "daily" && t.recurrenceRule !== "weekdays") return [];
+  const streak = t.currentStreakCount ?? 0;
+  if (streak <= 0) return [];
+
+  const target = Math.min(streak, 14);
+  const cycles: CheckInCycleDto[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cursor = new Date(today);
+
+  while (cycles.length < target) {
+    const dow = cursor.getDay();
+    const skip = t.recurrenceRule === "weekdays" && (dow === 0 || dow === 6);
+    if (!skip) {
+      const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+      // Deterministic-ish pseudo-counter so the demo heatmap shading varies
+      // realistically. Matches the unit (e.g. "words" → 22-44 per day).
+      const counterValue = t.hasCounter ? 22 + ((cycles.length * 11) % 23) : null;
+      cycles.push({
+        cycleId: cycles.length + 1,
+        taskId: t.taskId,
+        checkInDate: `${dateKey}T12:00:00.000Z`,
+        counterValue,
+        createdAt: `${dateKey}T12:00:00.000Z`,
+      });
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return cycles;
+}
+
+export function withMockCycles(t: TaskDto): TaskDto {
+  const cycles = generateMockCycles(t);
+  return cycles.length ? { ...t, recentCycles: cycles } : t;
+}
+
+const RAW_MOCK_TASKS: TaskDto[] = [
   { taskId: "d1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 15, dueDate: "2026-05-05", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
   { taskId: "d2", userId: "demo", title: "Read 30 minutes", description: null, category: "Learning", priority: "medium", status: "pending", pointValue: 10, dueDate: "2026-05-05", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekdays", submitted: false, currentStreakCount: 8, longestStreakCount: 21 },
   { taskId: "d3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 20, dueDate: "2026-05-08", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false, currentStreakCount: 5, longestStreakCount: 5 },
@@ -27,3 +69,5 @@ export const MOCK_TASKS: TaskDto[] = [
   { taskId: "d11", userId: "demo", title: "Renew domain registration", description: null, category: "Admin", priority: "low", status: "completed", pointValue: 5, dueDate: "2026-01-20", createdAt: "2026-01-15T00:00:00Z", completedAt: "2026-01-19T09:00:00Z", isRecurring: false, recurrenceRule: null, submitted: true, pointsAwarded: true, isArchived: true },
   { taskId: "d12", userId: "demo", title: "New Year retro", description: "Reflect on last year and set goals", category: "Productivity", priority: "high", status: "completed", pointValue: 25, dueDate: "2026-01-05", createdAt: "2026-01-01T00:00:00Z", completedAt: "2026-01-04T20:00:00Z", isRecurring: false, recurrenceRule: null, submitted: true, pointsAwarded: true, isArchived: true },
 ];
+
+export const MOCK_TASKS: TaskDto[] = RAW_MOCK_TASKS.map(withMockCycles);

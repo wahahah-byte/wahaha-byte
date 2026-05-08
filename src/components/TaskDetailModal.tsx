@@ -726,7 +726,7 @@ export default function TaskDetailModal({
                             cycles={task.recentCycles ?? []}
                           />
                         )}
-                        {task.hasCounter && (
+                        {task.hasCounter ? (
                           <CounterHistory
                             taskId={task.taskId}
                             unit={task.counterUnit ?? null}
@@ -734,6 +734,36 @@ export default function TaskDetailModal({
                             refreshKey={historyRefreshKey ?? 0}
                             seed={task.recentCycles ?? null}
                           />
+                        ) : (
+                          // Recurring task without a counter — explain what would
+                          // live in this slot so the bottom of the Stats card
+                          // doesn't look unintentionally empty.
+                          <div className="flex flex-col gap-1.5">
+                            <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                              Log
+                            </span>
+                            <div
+                              style={{
+                                borderRadius: 6,
+                                background: "var(--color-surface-deep)",
+                                boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
+                                padding: "14px 12px",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 4,
+                                textAlign: "center",
+                              }}
+                            >
+                              <span style={{ color: "var(--color-fg-muted)", fontSize: 11, letterSpacing: "0.05em" }}>
+                                Log history will appear here
+                              </span>
+                              <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, letterSpacing: "0.02em" }}>
+                                Add a counter unit in Edit to start logging values per check-in.
+                              </span>
+                            </div>
+                          </div>
                         )}
                       </div>
                     ),
@@ -1182,6 +1212,10 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
   }
 
   function startEdit(c: CheckInCycleDto) {
+    // Editing requires an API call to persist the new value — silently
+    // refuse if the session ever drops to unauthenticated so the user
+    // doesn't get a confusing failure on save.
+    if (!isAuthenticated) return;
     setEditingCycleId(c.cycleId);
     setEditValue(c.counterValue == null ? "" : String(c.counterValue));
     setError(null);
@@ -1216,13 +1250,46 @@ function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed }: { t
     cancelEdit();
   }
 
+  // Demo mode (no auth) — show a sign-in nudge in place of the log list. The
+  // heatmap above still renders the seeded cycles so the modal isn't barren.
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col gap-1.5">
-        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-          History
-        </span>
-        <p className="text-xs" style={{ color: "var(--color-fg-subtle)" }}>Sign in to see counter history.</p>
+        <div className="flex items-center justify-between">
+          <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+            History{unit ? ` · ${unit}` : ""}
+          </span>
+        </div>
+        <div
+          style={{
+            borderRadius: 6,
+            background: "var(--color-surface-deep)",
+            boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
+            padding: "14px 12px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            textAlign: "center",
+          }}
+        >
+          <span style={{ color: "var(--color-fg-muted)", fontSize: 11, letterSpacing: "0.05em" }}>
+            Sign in to log and review counter history
+          </span>
+          <a
+            href="/login"
+            className="text-[10px] tracking-widest uppercase"
+            style={{
+              color: "var(--color-active-highlight)",
+              fontWeight: 600,
+              textDecoration: "none",
+              letterSpacing: "0.18em",
+            }}
+          >
+            Sign in →
+          </a>
+        </div>
       </div>
     );
   }

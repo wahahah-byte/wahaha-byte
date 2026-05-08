@@ -17,8 +17,9 @@ import MobileActionBarRecurring from "@/components/MobileActionBarRecurring";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import TierUpBanner from "@/components/TierUpBanner";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { withMockCycles } from "@/lib/mockTasks";
 
-const MOCK_RECURRING: TaskDto[] = [
+const MOCK_RECURRING: TaskDto[] = ([
   { taskId: "r1", userId: "demo", title: "Morning workout", description: "30 min cardio or strength training", category: "Fitness", priority: "high", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 12, longestStreakCount: 15 },
   { taskId: "r2", userId: "demo", title: "Read 30 minutes", description: null, category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekdays", submitted: false, currentStreakCount: 8, longestStreakCount: 21 },
   { taskId: "r3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 5, dueDate: "2026-05-08", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false, currentStreakCount: 5, longestStreakCount: 5 },
@@ -28,7 +29,7 @@ const MOCK_RECURRING: TaskDto[] = [
   { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22, hasCounter: true, counterUnit: "words" },
   { taskId: "r7", userId: "demo", title: "Floss", description: "One more day to 2.0x", category: "Wellness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-05T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 29, longestStreakCount: 29 },
   { taskId: "r8", userId: "demo", title: "5-min stretch", description: null, category: "Fitness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-29T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 6, longestStreakCount: 9 },
-];
+] as TaskDto[]).map(withMockCycles);
 
 const EMPTY_SET = new Set<string>();
 
