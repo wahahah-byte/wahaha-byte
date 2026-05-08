@@ -184,18 +184,18 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
       ],
     },
   },
-  // First PNG-backed item — the asset lives in /public/avatars/items/hat.png.
+  // First blob-backed item — asset lives in Azure Blob Storage.
   // Slot is HEAD (current backend enum); when the granular HAT slot ships,
   // change this to "HAT" — the SLOT_Z map already covers both.
   {
     itemId: 2001,
-    name: "Hat",
+    name: "Alien Neo Helmet",
     category: "headwear",
     slot: "HEAD",
-    rarity: "COMMON",
-    cost: 50,
-    description: "A pointed hat.",
-    previewAssetUrl: "/avatars/items/hat.png",
+    rarity: "UNCOMMON",
+    cost: 75,
+    description: "A futuristic alien helmet.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hat_alien_neo.png",
     isAvailable: true,
   },
 ];
