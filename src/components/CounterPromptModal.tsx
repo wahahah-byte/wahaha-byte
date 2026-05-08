@@ -61,6 +61,7 @@ export default function CounterPromptModal({ taskTitle, unit, mode = "checkin", 
 
   return (
     <div
+      data-edge-drawer-block
       className="fixed inset-0 z-[60] flex items-center justify-center px-4"
       style={{ background: "var(--color-modal-overlay)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}

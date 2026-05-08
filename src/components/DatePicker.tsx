@@ -326,12 +326,14 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
       {showCalendar && isMobile && typeof document !== "undefined" && createPortal(
         <>
           <div
+            data-edge-drawer-block
             className="fixed inset-0"
             style={{ background: "rgba(0, 0, 0, 0.5)", zIndex: 60 }}
             onClick={() => { setShowCalendar(false); setShowYearSelect(false); }}
           />
           <div
             ref={sheetRef}
+            data-edge-drawer-block
             className="fixed left-0 right-0 p-3"
             style={{
               bottom: 0,

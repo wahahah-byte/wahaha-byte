@@ -11,6 +11,7 @@ interface CapWarningModalProps {
 export default function CapWarningModal({ selectedPts, willAward, remaining, onClose, onConfirm }: CapWarningModalProps) {
   return (
     <div
+      data-edge-drawer-block
       className="fixed inset-0 z-[60] flex items-center justify-center px-4"
       style={{ background: "rgba(0,0,0,0.65)" }}
       onClick={onClose}

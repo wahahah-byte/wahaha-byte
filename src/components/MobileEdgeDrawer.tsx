@@ -57,6 +57,17 @@ export default function MobileEdgeDrawer() {
       if (t.clientX > window.innerWidth / 2) return;
       const target = e.target as Element | null;
       if (target?.closest(".task-list-panel")) return;
+      // Bottom action bar, filter tray + handle, and any open modal mark
+      // themselves with this attribute so their gestures aren't hijacked.
+      if (target?.closest("[data-edge-drawer-block]")) return;
+      // Some elements (the FilterTray handle pill) are visually narrow but
+      // sit in a row a user is likely reaching for — block the entire
+      // horizontal band at that Y.
+      const rowBlockers = document.querySelectorAll("[data-edge-drawer-block-row]");
+      for (let i = 0; i < rowBlockers.length; i++) {
+        const r = rowBlockers[i].getBoundingClientRect();
+        if (t.clientY >= r.top && t.clientY <= r.bottom) return;
+      }
       dragRef.current = {
         startX: t.clientX, startY: t.clientY,
         startedOpen: false, locked: null,

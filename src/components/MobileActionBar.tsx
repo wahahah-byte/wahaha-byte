@@ -47,6 +47,7 @@ export default function MobileActionBar({
     <>
       {!submitMode && (
         <div
+          data-edge-drawer-block
           className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
           style={{
             bottom: "env(safe-area-inset-bottom, 0px)",

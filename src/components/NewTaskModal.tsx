@@ -93,6 +93,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
   return (
     <div
+      data-edge-drawer-block
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: "var(--color-modal-overlay)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}

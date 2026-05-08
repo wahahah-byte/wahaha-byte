@@ -233,6 +233,8 @@ export default function FilterTray({
       <button
         ref={handleRef}
         type="button"
+        data-edge-drawer-block
+        data-edge-drawer-block-row
         onClick={onHandleClick}
         onTouchStart={onHandleTouchStart}
         onTouchMove={onHandleTouchMove}
@@ -297,6 +299,7 @@ export default function FilterTray({
 
       <div
         ref={trayElementRef}
+        data-edge-drawer-block
         className="fixed left-0 right-0 sm:hidden overflow-hidden"
         style={{
           bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom, 0px))`,

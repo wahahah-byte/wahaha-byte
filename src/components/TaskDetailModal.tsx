@@ -360,6 +360,7 @@ export default function TaskDetailModal({
 
   const tree = (
     <div
+      data-edge-drawer-block
       className={overlayClass}
       style={overlayStyle}
       onClick={isEditing ? undefined : onClose}
