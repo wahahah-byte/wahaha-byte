@@ -703,40 +703,44 @@ function TaskRowImpl({
               style={{
                 gridColumn: "1 / -1",
                 justifySelf: "center",
-                border: "1px solid var(--color-warning-border)",
-                borderRadius: "2px",
-                background: "var(--color-warning-bg)",
                 padding: "1px 4px",
               }}
             >
-              <svg width="9" height="7" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
-                {/* Pile of pixelated GP coins, scaled down. */}
-                {/* Tall stack — bright top edges */}
-                <rect x="4" y="0" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="4" y="2" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="4" y="4" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="4" y="6" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                {/* Tall stack — darker rim bodies */}
-                <rect x="4" y="1" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                <rect x="4" y="3" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                <rect x="4" y="5" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                <rect x="4" y="7" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                {/* Short stack — bright top edges */}
-                <rect x="9" y="4" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="9" y="6" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                {/* Short stack — darker rim bodies */}
-                <rect x="9" y="5" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                <rect x="9" y="7" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
-                {/* Loose coin A — front-left */}
-                <rect x="1" y="8" width="3" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="0" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+              <svg width="15" height="12" viewBox="0 0 12 10" fill="none">
+                {/* Pile of GP coins, viewed from a slight angle. The topmost coin
+                    of each stack shows its top face as an ellipse; sides of the
+                    stack below are alternating bright/dark rows for the rims. */}
+
+                {/* Tall stack — top face (3D oval, slightly brighter front lip) */}
+                <ellipse cx="6" cy="0.55" rx="2" ry="0.55" fill="var(--color-warning)" opacity="0.95" />
+                <path d="M 4,0.55 A 2,0.55 0 0 0 8,0.55" stroke="var(--color-warning)" strokeWidth="0.25" fill="none" opacity="1" />
+                {/* Tall stack — side rims (dark) and coin edges (bright) below the top */}
+                <rect x="4" y="1.1" width="4" height="0.9" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="4" y="2" width="4" height="1" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="4" y="3" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="4" y="4" width="4" height="1" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="4" y="5" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="4" y="6" width="4" height="1" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="4" y="7" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
+
+                {/* Short stack — top face (3D oval) */}
+                <ellipse cx="10.5" cy="4.55" rx="1.5" ry="0.5" fill="var(--color-warning)" opacity="0.95" />
+                <path d="M 9,4.55 A 1.5,0.5 0 0 0 12,4.55" stroke="var(--color-warning)" strokeWidth="0.22" fill="none" opacity="1" />
+                {/* Short stack — side stripes */}
+                <rect x="9" y="5.1" width="3" height="0.9" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="9" y="6" width="3" height="1" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="9" y="7" width="3" height="1" fill="var(--color-warning)" opacity="0.5" />
+
+                {/* Loose coin A — front-left (oval-shaped base, viewed at angle) */}
+                <ellipse cx="2.5" cy="8.4" rx="1.5" ry="0.4" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="1" y="8.5" width="3" height="0.5" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="0.5" y="9" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
+
                 {/* Loose coin B — front-right */}
-                <rect x="8" y="8" width="4" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-                <rect x="7" y="9" width="5" height="1" style={{ fill: "var(--color-warning)" }} opacity="0.5" />
+                <ellipse cx="9.5" cy="8.4" rx="2" ry="0.45" fill="var(--color-warning)" opacity="0.95" />
+                <rect x="7.5" y="8.5" width="4" height="0.5" fill="var(--color-warning)" opacity="0.5" />
+                <rect x="7" y="9" width="5" height="1" fill="var(--color-warning)" opacity="0.5" />
               </svg>
-              <span style={{ color: "var(--color-warning)", opacity: 0.85, fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600 }}>
-                Banked
-              </span>
             </div>
           ) : canUndo ? (
             <div
