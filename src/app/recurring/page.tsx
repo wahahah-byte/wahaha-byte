@@ -172,7 +172,7 @@ function Recurring() {
     handleCheckIn(t);
   }, [handleCheckIn]);
 
-  const { logPromptTask, requestLog, cancelLog, submitLog, quickLog } = useLogCounter({
+  const { logPromptTask, requestLog, cancelLog, submitLog, flushQuickLog } = useLogCounter({
     isAuthenticated, setTasks, setDetailTask, setError,
   });
 
@@ -386,7 +386,7 @@ function Recurring() {
         isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
         onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
         checkInBlocked={!canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
-        onQuickLog={dt.hasCounter ? (delta) => quickLog(dt, delta) : undefined}
+        onFlushQuickLog={dt.hasCounter ? flushQuickLog : undefined}
         onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
         onSave={handleSaveTask}
         onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}

@@ -60,5 +60,14 @@ export function useLogCounter({ isAuthenticated, setTasks, setDetailTask, setErr
 
   const quickLog = useCallback((t: TaskDto, delta: number) => writeCycle(t.taskId, delta), [writeCycle]);
 
-  return { logPromptTask, requestLog, cancelLog, submitLog, quickLog };
+  // Stable-identity flush: takes taskId explicitly so the detail modal can
+  // safely call it from a useEffect cleanup without closure-capturing a stale
+  // task. Used to commit the buffered +/- delta as a single API call when the
+  // modal closes or switches to a different task.
+  const flushQuickLog = useCallback((taskId: string, delta: number) => {
+    if (delta === 0) return;
+    return writeCycle(taskId, delta);
+  }, [writeCycle]);
+
+  return { logPromptTask, requestLog, cancelLog, submitLog, quickLog, flushQuickLog };
 }

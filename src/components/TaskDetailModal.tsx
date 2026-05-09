@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
@@ -48,9 +48,11 @@ interface Props {
   onPause?: () => void;
   onUndo?: () => void;
   onDelete?: () => void;
-  // Quick-log a positive or negative delta to the counter for today.
-  // No prompt — used by the +/- buttons under the avatar.
-  onQuickLog?: (delta: number) => void | Promise<void>;
+  // Quick-log buffered delta flush. The +/- buttons under the avatar mutate a
+  // local buffer instead of calling on each tap; the flush fires once when the
+  // modal closes or switches tasks. Signature takes taskId explicitly so the
+  // useEffect cleanup can route to the right task without a stale closure.
+  onFlushQuickLog?: (taskId: string, delta: number) => void;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
   isActing?: boolean;
@@ -129,7 +131,7 @@ function ActionBtn({
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
-  onQuickLog,
+  onFlushQuickLog,
   onSave, onSubtasksChange,
   isActing, canUndo, initialEditMode, mustReschedule, inline,
 }: Props) {
@@ -326,7 +328,66 @@ export default function TaskDetailModal({
   const [sheetDragY, setSheetDragY] = useState(0);
   const sheetDragRef = useRef<{ startY: number } | null>(null);
 
+  // Extra check-in history for the heatmap. The embedded `task.recentCycles`
+  // slice is bounded (~14 entries) and only covers the last couple of weeks,
+  // so we lazily pull a wider window from /checkin-history when the modal
+  // opens for a daily/weekdays task. Mock mode (no auth token) skips the
+  // fetch and the heatmap falls back to the embedded slice.
+  const [heatmapHistory, setHeatmapHistory] = useState<CheckInCycleDto[] | null>(null);
+
+  // Buffered delta from the +/- stepper. Resets when the modal switches tasks
+  // and flushes (one API call) on unmount or task change. Mirror in a ref so
+  // the cleanup function reads the latest value without re-binding the effect.
+  const [pendingLog, setPendingLog] = useState(0);
+  const pendingLogRef = useRef(0);
+  useEffect(() => { pendingLogRef.current = pendingLog; }, [pendingLog]);
+  // flushRef holds the latest onFlushQuickLog so the cleanup can call it
+  // without listing the prop in deps (which would re-run cleanup every render).
+  const flushRef = useRef(onFlushQuickLog);
+  useEffect(() => { flushRef.current = onFlushQuickLog; });
+
+  useEffect(() => {
+    // Fresh task = fresh buffer.
+    setPendingLog(0);
+    pendingLogRef.current = 0;
+    const taskId = task.taskId;
+    return () => {
+      const delta = pendingLogRef.current;
+      if (delta !== 0) flushRef.current?.(taskId, delta);
+      pendingLogRef.current = 0;
+    };
+  }, [task.taskId]);
+
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!task.isRecurring) return;
+    if (task.recurrenceRule !== "daily" && task.recurrenceRule !== "weekdays") return;
+    if (typeof window === "undefined") return;
+    if (!localStorage.getItem("auth_token")) return;
+    let cancelled = false;
+    (async () => {
+      // 12 weeks ≈ 84 days; round up to leave headroom for any paging quirks.
+      const result = await tasksApi.getCheckInHistory(task.taskId, 1, 100);
+      if (cancelled || result.error) return;
+      setHeatmapHistory(result.data!.data);
+    })();
+    return () => { cancelled = true; };
+  }, [task.taskId, task.isRecurring, task.recurrenceRule]);
+
+  // Merge fetched history with the embedded slice so optimistic updates from
+  // a just-completed check-in (which mutate task.recentCycles via the parent
+  // store) stay visible without re-fetching. Local entries win on duplicate
+  // cycleIds — they reflect any in-flight edits the server hasn't acked yet.
+  const heatmapCycles = useMemo(() => {
+    const fetched = heatmapHistory ?? [];
+    const local = task.recentCycles ?? [];
+    if (fetched.length === 0) return local;
+    const byId = new Map<number, CheckInCycleDto>();
+    for (const c of fetched) byId.set(c.cycleId, c);
+    for (const c of local) byId.set(c.cycleId, c);
+    return Array.from(byId.values());
+  }, [heatmapHistory, task.recentCycles]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -781,26 +842,34 @@ export default function TaskDetailModal({
                           if (!task.hasCounter) return null;
                           const today = new Date(); today.setHours(0, 0, 0, 0);
                           const todayKey = dateKey(today);
-                          let sum = 0; let count = 0;
+                          let cycleSum = 0; let count = 0;
                           for (const c of task.recentCycles ?? []) {
                             if (c.checkInDate.split("T")[0] === todayKey && typeof c.counterValue === "number") {
-                              sum += c.counterValue; count++;
+                              cycleSum += c.counterValue; count++;
                             }
                           }
+                          // Display reflects buffered +/- taps so the user sees their
+                          // intent immediately; the actual API call happens on flush.
+                          const sum = cycleSum + pendingLog;
                           const goal = task.counterGoal ?? null;
-                          if (count === 0 && goal == null && !onQuickLog) return null;
+                          if (count === 0 && pendingLog === 0 && goal == null && !onFlushQuickLog) return null;
                           const unit = task.counterUnit ? ` ${task.counterUnit}` : "";
                           const reached = goal != null && sum >= goal;
                           const innerText = goal != null
                             ? `${sum.toLocaleString()} / ${goal.toLocaleString()}${unit}`
                             : `${sum.toLocaleString()}${unit}`;
                           const labelStyle = { fontSize: 11, color: "var(--color-fg)", fontWeight: 600, fontVariantNumeric: "tabular-nums" as const, display: "inline-flex", alignItems: "center", gap: 6 };
-                          const quantity = onQuickLog && task.status === "pending" ? (
+                          // lastCheckInDate is only written by handleCheckIn — never by
+                          // logCounter — so it's a clean signal that today's check-in is
+                          // committed. Hide the +/- once that's true to keep the slider
+                          // as the unambiguous "complete the day" affordance.
+                          const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;
+                          const quantity = onFlushQuickLog && task.status === "pending" && !checkedInToday ? (
                             <span className="goal-stepper" aria-label="Quick log" style={{ height: 20, verticalAlign: "middle" }}>
                               <button
                                 type="button"
                                 className="goal-stepper-btn"
-                                onClick={() => onQuickLog(-1)}
+                                onClick={() => setPendingLog((p) => p - 1)}
                                 disabled={sum <= 0}
                                 aria-label="Log -1"
                               >
@@ -826,7 +895,7 @@ export default function TaskDetailModal({
                               <button
                                 type="button"
                                 className="goal-stepper-btn"
-                                onClick={() => onQuickLog(1)}
+                                onClick={() => setPendingLog((p) => p + 1)}
                                 aria-label="Log +1"
                               >
                                 +
@@ -835,7 +904,7 @@ export default function TaskDetailModal({
                           ) : (
                             <span>{innerText}{reached && <span style={{ marginLeft: 6, color: "var(--color-success)" }}>✓</span>}</span>
                           );
-                          if (count === 0 && goal == null && !onQuickLog) return null;
+                          if (count === 0 && pendingLog === 0 && goal == null && !onFlushQuickLog) return null;
                           if (goal == null) {
                             return (
                               <span style={labelStyle}>
@@ -874,7 +943,7 @@ export default function TaskDetailModal({
                         <HeatmapStrip
                           rule={task.recurrenceRule}
                           hasCounter={task.hasCounter ?? false}
-                          cycles={task.recentCycles ?? []}
+                          cycles={heatmapCycles}
                         />
                       </div>
                     ),
@@ -1213,86 +1282,233 @@ function Field({ label, children, className }: { label: string; children: React.
 }
 
 const HISTORY_PAGE_SIZE = 30;
-const HEATMAP_DAYS = 14;
+const HEATMAP_WEEKS = 12;
+const CELL_SIZE = 14;
+const CELL_GAP = 3;
+const LABEL_COL = 22;
+// Empty / 4 filled levels — driven via opacity on the highlight color.
+const LEVEL_OPACITY = [0, 0.30, 0.55, 0.80, 1.0];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[] }) {
-  // Build the last N expected check-in dates walking backwards from today.
-  // For "weekdays" we skip Sat/Sun so each cell represents an actual opportunity,
-  // not a calendar day where missing it would be misleading.
+  // GitHub-style 7×N grid: rows are days-of-week (Sun..Sat), columns are weeks
+  // oldest-on-left. Today always sits in the rightmost column at row=todayDow;
+  // any cells in that column past today render invisibly so the grid keeps shape.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const expected: string[] = [];
-  const cursor = new Date(today);
-  while (expected.length < HEATMAP_DAYS) {
-    const dow = cursor.getDay();
-    if (rule !== "weekdays" || (dow !== 0 && dow !== 6)) {
-      expected.push(dateKey(cursor));
-    }
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  expected.reverse();
   const todayKey = dateKey(today);
+  const todayDow = today.getDay(); // 0=Sun..6=Sat
+
+  const start = new Date(today);
+  start.setDate(start.getDate() - todayDow - (HEATMAP_WEEKS - 1) * 7);
+
+  type Cell = { date: Date; key: string; dow: number; isFuture: boolean; isWeekend: boolean };
+  const columns: Cell[][] = [];
+  for (let c = 0; c < HEATMAP_WEEKS; c++) {
+    const col: Cell[] = [];
+    for (let r = 0; r < 7; r++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + c * 7 + r);
+      col.push({
+        date: d,
+        key: dateKey(d),
+        dow: r,
+        isFuture: d.getTime() > today.getTime(),
+        isWeekend: r === 0 || r === 6,
+      });
+    }
+    columns.push(col);
+  }
 
   const cycleByDate = new Map(cycles.map((c) => [c.checkInDate.split("T")[0], c]));
-  // Only used to scale opacity when hasCounter — clamp to 1 so a single zero-only
-  // task still renders solid cells.
   const maxValue = Math.max(
     1,
     ...cycles.map((c) => (typeof c.counterValue === "number" ? c.counterValue : 0)),
   );
 
-  const checkedCount = expected.reduce((n, k) => (cycleByDate.has(k) ? n + 1 : n), 0);
+  function levelFor(cell: Cell): number {
+    const cycle = cycleByDate.get(cell.key);
+    if (!cycle) return 0;
+    if (!hasCounter) return 4;
+    const v = typeof cycle.counterValue === "number" ? cycle.counterValue : 0;
+    if (v <= 0) return 1;
+    const ratio = v / maxValue;
+    if (ratio < 0.34) return 1;
+    if (ratio < 0.67) return 2;
+    if (ratio < 1.0) return 3;
+    return 4;
+  }
+
+  // Tally over the visible window. For "weekdays" tasks, weekends aren't
+  // expected check-in days so they shouldn't count against the denominator.
+  const visibleCells = columns.flat().filter((c) => !c.isFuture);
+  const totalExpected = rule === "weekdays"
+    ? visibleCells.filter((c) => !c.isWeekend).length
+    : visibleCells.length;
+  const checkedCount = visibleCells.reduce((n, c) => (cycleByDate.has(c.key) ? n + 1 : n), 0);
+
+  // Month label per column — only shown when the month changes from the column to its left.
+  const monthLabels: (string | null)[] = columns.map((col, ci) => {
+    const m = col[0].date.getMonth();
+    if (ci === 0) return MONTHS_SHORT[m];
+    return m !== columns[ci - 1][0].date.getMonth() ? MONTHS_SHORT[m] : null;
+  });
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-          Last {HEATMAP_DAYS} {rule === "weekdays" ? "weekdays" : "days"}
+          Last {HEATMAP_WEEKS} weeks
         </span>
         <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>
-          {checkedCount}/{HEATMAP_DAYS}
+          {checkedCount}/{totalExpected}
         </span>
       </div>
-      <div className="flex" style={{ gap: 2 }}>
-        {expected.map((k) => {
-          const cycle = cycleByDate.get(k);
-          const isToday = k === todayKey;
-          const checked = !!cycle;
-          const value = typeof cycle?.counterValue === "number" ? cycle!.counterValue : null;
-          const intensity = checked && hasCounter && value != null && value > 0
-            ? 0.4 + 0.6 * (value / maxValue)
-            : checked ? 1 : 1;
-          const tooltip = `${fmtCycleDate(k)}${
-            checked
-              ? hasCounter
-                ? value != null ? ` · ${value.toLocaleString()}` : " · checked in"
-                : " · checked in"
-              : " · no check-in"
-          }`;
-          return (
+
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div
+          role="img"
+          aria-label={`Check-in heatmap for the last ${HEATMAP_WEEKS} weeks: ${checkedCount} of ${totalExpected}`}
+          style={{
+            display: "grid",
+            gridTemplateColumns: `${LABEL_COL}px repeat(${HEATMAP_WEEKS}, ${CELL_SIZE}px)`,
+            gridTemplateRows: `10px repeat(7, ${CELL_SIZE}px)`,
+            columnGap: CELL_GAP,
+            rowGap: CELL_GAP,
+          }}
+        >
+          {/* Top-left corner spacer */}
+          <div style={{ gridColumn: 1, gridRow: 1 }} />
+
+          {/* Month labels along the top. Allow overflow so a label can extend past
+              its single-column track without clipping the next column's start. */}
+          {monthLabels.map((m, c) => (
             <div
-              key={k}
-              title={tooltip}
+              key={`m-${c}`}
               style={{
-                flex: 1,
-                minWidth: 0,
-                height: 18,
+                gridColumn: c + 2,
+                gridRow: 1,
+                fontSize: 8,
+                color: "var(--color-fg-subtle)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                lineHeight: "10px",
+                whiteSpace: "nowrap",
+                overflow: "visible",
+              }}
+            >
+              {m ?? ""}
+            </div>
+          ))}
+
+          {/* Day-of-week labels (Mon/Wed/Fri only — matches GitHub's compact style) */}
+          {[0, 1, 2, 3, 4, 5, 6].map((r) => (
+            <div
+              key={`d-${r}`}
+              style={{
+                gridColumn: 1,
+                gridRow: r + 2,
+                fontSize: 8,
+                color: "var(--color-fg-subtle)",
+                letterSpacing: "0.05em",
+                lineHeight: `${CELL_SIZE}px`,
+                textAlign: "right",
+                paddingRight: 2,
+              }}
+            >
+              {r === 1 ? "Mon" : r === 3 ? "Wed" : r === 5 ? "Fri" : ""}
+            </div>
+          ))}
+
+          {/* Cells: 7 rows × HEATMAP_WEEKS cols */}
+          {columns.flatMap((col, c) =>
+            col.map((cell, r) => {
+              if (cell.isFuture) {
+                return (
+                  <div
+                    key={cell.key}
+                    style={{ gridColumn: c + 2, gridRow: r + 2, visibility: "hidden" }}
+                  />
+                );
+              }
+              const isWeekendOff = rule === "weekdays" && cell.isWeekend;
+              const cycle = cycleByDate.get(cell.key);
+              const checked = !!cycle;
+              const level = levelFor(cell);
+              const isToday = cell.key === todayKey;
+              const value = typeof cycle?.counterValue === "number" ? cycle!.counterValue : null;
+              const tooltip = isWeekendOff && !checked
+                ? `${fmtCycleDate(cell.key)} · off-day`
+                : `${fmtCycleDate(cell.key)}${
+                    checked
+                      ? hasCounter
+                        ? value != null ? ` · ${value.toLocaleString()}` : " · checked in"
+                        : " · checked in"
+                      : " · no check-in"
+                  }`;
+              return (
+                <div
+                  key={cell.key}
+                  title={tooltip}
+                  style={{
+                    gridColumn: c + 2,
+                    gridRow: r + 2,
+                    borderRadius: 2,
+                    background: checked
+                      ? "var(--color-active-highlight-alt)"
+                      : isWeekendOff
+                        ? "transparent"
+                        : "var(--color-border-soft)",
+                    opacity: checked ? LEVEL_OPACITY[level] : 1,
+                    border: isWeekendOff && !checked
+                      ? "1px dashed var(--color-border-faint)"
+                      : undefined,
+                    // Inset ring on today so the highlight stays inside the cell —
+                    // an outset outline gets clipped by DetailPager's overflow: hidden.
+                    boxShadow: isToday
+                      ? "inset 0 0 0 1.5px var(--color-active-highlight)"
+                      : undefined,
+                  }}
+                />
+              );
+            }),
+          )}
+        </div>
+      </div>
+
+      {/* Legend — meaningful only when intensity varies (counter tasks). */}
+      {hasCounter && (
+        <div
+          className="flex items-center self-end"
+          style={{
+            gap: 4,
+            fontSize: 8,
+            color: "var(--color-fg-subtle)",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span>Less</span>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--color-border-soft)" }} />
+          {[1, 2, 3, 4].map((lvl) => (
+            <span
+              key={lvl}
+              style={{
+                width: 10,
+                height: 10,
                 borderRadius: 2,
-                background: checked ? "var(--color-active-highlight-alt)" : "var(--color-border-soft)",
-                opacity: checked ? intensity : 1,
-                // Inset ring so the today highlight stays inside the cell's bounds —
-                // an outset outline gets clipped by DetailPager's overflow: hidden
-                // since today is always the rightmost cell.
-                boxShadow: isToday ? "inset 0 0 0 1.5px var(--color-active-highlight)" : undefined,
+                background: "var(--color-active-highlight-alt)",
+                opacity: LEVEL_OPACITY[lvl],
               }}
             />
-          );
-        })}
-      </div>
+          ))}
+          <span>More</span>
+        </div>
+      )}
     </div>
   );
 }

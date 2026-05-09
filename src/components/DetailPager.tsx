@@ -114,28 +114,43 @@ export default function DetailPager({ cards, height = 220, labels }: Props) {
         </div>
       </div>
 
-      <div className="flex justify-center gap-1.5" aria-hidden>
+      {/* Labeled tab strip — replaces the old dot indicator so the targets
+          are big enough to click on desktop while still giving mobile a
+          visible "where am I" cue alongside swipe. */}
+      <div
+        className="flex justify-center"
+        role="tablist"
+        style={{ gap: 4, borderBottom: "1px solid var(--color-border-faint)" }}
+      >
         {cards.map((_, i) => {
           const isActive = i === active;
+          const label = labels?.[i] ?? `Card ${i + 1}`;
           return (
             <button
               key={i}
               type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-label={label}
               onClick={() => setActive(i)}
-              tabIndex={-1}
-              aria-label={labels?.[i] ?? `Card ${i + 1}`}
+              className="cursor-pointer transition-colors"
               style={{
-                width: isActive ? 16 : 5,
-                height: 5,
-                borderRadius: 999,
-                background: isActive ? "var(--color-active-highlight-alt)" : "var(--color-border-faint)",
+                background: "transparent",
                 border: "none",
-                padding: 0,
-                cursor: "pointer",
-                opacity: isActive ? 1 : 0.6,
-                transition: "width 0.22s, background 0.18s, opacity 0.18s",
+                padding: "6px 14px",
+                fontSize: 9,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                fontWeight: isActive ? 600 : 500,
+                color: isActive ? "var(--color-active-highlight-alt)" : "var(--color-fg-subtle)",
+                borderBottom: `2px solid ${isActive ? "var(--color-active-highlight-alt)" : "transparent"}`,
+                marginBottom: -1,
               }}
-            />
+              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = "var(--color-fg-muted)"; }}
+              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "var(--color-fg-subtle)"; }}
+            >
+              {label}
+            </button>
           );
         })}
       </div>

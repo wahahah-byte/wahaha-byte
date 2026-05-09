@@ -121,7 +121,7 @@ function Home() {
     handleCheckIn(t);
   }, [handleCheckIn]);
 
-  const { logPromptTask, requestLog, cancelLog, submitLog, quickLog } = useLogCounter({
+  const { logPromptTask, requestLog, cancelLog, submitLog, flushQuickLog } = useLogCounter({
     isAuthenticated, setTasks, setDetailTask, setError,
   });
 
@@ -334,7 +334,7 @@ function Home() {
         isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
         onStart={dt.status === "pending" && !dt.isRecurring ? () => { closeDetail(); handleAdvance(dt); } : undefined}
         onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
-        onQuickLog={dt.isRecurring && dt.hasCounter ? (delta) => quickLog(dt, delta) : undefined}
+        onFlushQuickLog={dt.isRecurring && dt.hasCounter ? flushQuickLog : undefined}
         checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
         onPause={dt.status === "in_progress" ? () => { closeDetail(); handlePause(dt); } : undefined}
         onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
