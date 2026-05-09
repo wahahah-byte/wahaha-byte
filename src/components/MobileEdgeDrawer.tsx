@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 
 const ITEMS = [
   { href: "/", label: "Tasks" },
-  { href: "/recurring", label: "Recurring" },
+  { href: "/recurring", label: "Routines" },
   { href: "/archive", label: "Archive" },
 ] as const;
 
@@ -266,7 +266,7 @@ export default function MobileEdgeDrawer() {
                 transition: "background 0.18s, color 0.18s",
               }}
             >
-              {item.label === "Tasks" ? <TasksIcon /> : item.label === "Recurring" ? <RecurringIcon /> : <ArchiveIcon />}
+              {item.label === "Tasks" ? <TasksIcon /> : item.label === "Routines" ? <RecurringIcon /> : <ArchiveIcon />}
               <span style={{ fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
                 {item.label}
               </span>

@@ -67,10 +67,12 @@ export default function RootLayout({
                 Wahaha Byte
               </span>
             </div>
-            <HeaderNav />
+            <div className="hide-on-desktop flex items-center">
+              <HeaderNav />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hide-on-desktop flex items-center gap-2 sm:gap-3">
             <AuthHeader />
           </div>
         </header>

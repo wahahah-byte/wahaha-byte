@@ -664,26 +664,46 @@ function TaskRowImpl({
                   if (day) day.total += c.counterValue;
                 }
                 if (!days.some((d) => d.total > 0)) return null;
-                const max = Math.max(1, ...days.map((d) => d.total));
+                const goal = task.counterGoal ?? null;
+                const max = Math.max(1, goal ?? 0, ...days.map((d) => d.total));
                 const unit = task.counterUnit ? ` ${task.counterUnit}` : "";
-                const tooltip = `Last 7 days: ${days.map((d) => `${d.total}${unit}`).join(" · ")}`;
+                const tooltip = goal != null
+                  ? `Last 7 days (goal ${goal}${unit}): ${days.map((d) => `${d.total}${unit}${d.total >= goal ? " ✓" : ""}`).join(" · ")}`
+                  : `Last 7 days: ${days.map((d) => `${d.total}${unit}`).join(" · ")}`;
                 return (
-                  <span className="row-counter-spark" title={tooltip} aria-hidden style={{ gap: 1.5, height: 11, flexShrink: 0 }}>
+                  <span className="row-counter-spark" title={tooltip} aria-hidden style={{ gap: 1.5, height: 11, flexShrink: 0, position: "relative" }}>
                     {days.map((d, i) => {
                       const isLast = i === days.length - 1;
+                      const hitGoal = goal != null && d.total >= goal;
                       return (
                         <span
                           key={d.key}
                           style={{
                             width: 3,
                             height: `${Math.max(1.5, (d.total / max) * 11)}px`,
-                            background: isLast ? "var(--color-active-highlight-alt)" : "var(--color-fg-subtle)",
-                            opacity: d.total > 0 ? (isLast ? 1 : 0.7) : 0.25,
+                            background: hitGoal
+                              ? "var(--color-success)"
+                              : isLast ? "var(--color-active-highlight-alt)" : "var(--color-fg-subtle)",
+                            opacity: d.total > 0 ? (hitGoal || isLast ? 1 : 0.7) : 0.25,
                             borderRadius: 1,
                           }}
                         />
                       );
                     })}
+                    {goal != null && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: `${Math.min(11, (goal / max) * 11)}px`,
+                          height: 1,
+                          background: "var(--color-success)",
+                          opacity: 0.4,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    )}
                   </span>
                 );
               })()}

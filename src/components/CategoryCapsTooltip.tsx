@@ -126,11 +126,11 @@ function RegularCapsContent() {
 function RecurringCapsContent() {
   return (
     <>
-      <SectionHeader>Recurring caps</SectionHeader>
+      <SectionHeader>Routine caps</SectionHeader>
       <Row left="Per check-in" right="1–5 pts" />
       <Divider />
       <Row left="Per category / day" right={`${PER_CATEGORY_RECURRING_DAILY_CAP} pts`} />
-      <Row left="Total recurring / day" right={`${RECURRING_CAP} pts`} />
+      <Row left="Total routines / day" right={`${RECURRING_CAP} pts`} />
     </>
   );
 }

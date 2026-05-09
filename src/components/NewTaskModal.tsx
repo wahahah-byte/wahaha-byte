@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { tasksApi, TaskDto, CreateTaskRequest } from "@/lib/api/tasks";
 import DatePicker from "@/components/DatePicker";
+import GoalStepper from "@/components/GoalStepper";
 import { CATEGORIES, COUNTER_UNITS, maxPointsFor } from "@/lib/constants";
 
 const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
@@ -43,6 +44,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
   const [hasCounter, setHasCounter] = useState(false);
   const [counterUnit, setCounterUnit] = useState<string>("");
+  const [counterGoal, setCounterGoal] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +86,9 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
       recurrenceRule: isRecurring ? recurrenceRule : undefined,
       hasCounter: isRecurring ? hasCounter : false,
       counterUnit: isRecurring && hasCounter && counterUnit ? counterUnit : null,
+      counterGoal: isRecurring && hasCounter && counterGoal.trim() && Number(counterGoal) > 0
+        ? Number(counterGoal)
+        : null,
     };
     const { data, error: apiError } = await tasksApi.create(dto);
     setSubmitting(false);
@@ -304,6 +309,19 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                       onChange={setCounterUnit}
                       options={[{ value: "", label: "(no unit)" }, ...COUNTER_UNITS.map((u) => ({ value: u, label: u }))]}
                     />
+                  )}
+                  {hasCounter && (
+                    <div className="flex items-center gap-1.5">
+                      <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                        Goal
+                      </span>
+                      <GoalStepper value={counterGoal} onChange={setCounterGoal} />
+                      {counterUnit && counterGoal.trim() && (
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>
+                          {counterUnit} / {isRecurring && recurrenceRule === "weekly" ? "wk" : isRecurring && recurrenceRule === "monthly" ? "mo" : "day"}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </Field>

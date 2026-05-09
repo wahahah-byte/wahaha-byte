@@ -252,7 +252,9 @@ export default function ArchivePage() {
       <DesktopSidebar
         navItems={[
           { href: "/", label: "Today", icon: <NavIconList /> },
-          { href: "/recurring", label: "Recurring", icon: <NavIconRepeat /> },
+          { href: "/recurring", label: "Routines", icon: <NavIconRepeat /> },
+        ]}
+        footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive />, active: true },
         ]}
       />

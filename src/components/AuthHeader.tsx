@@ -8,7 +8,11 @@ import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function AuthHeader() {
+interface Props {
+  variant?: "header" | "sidebar";
+}
+
+export default function AuthHeader({ variant = "header" }: Props = {}) {
   const [isMounted, setIsMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,56 +43,49 @@ export default function AuthHeader() {
   // Authenticated users get the toggle inside the avatar dropdown instead.
   if (!isMounted || !hasToken) return <ThemeToggle />;
 
-  return (
-    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-      {username && (
-        <span style={{ color: "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-          {username}
-        </span>
-      )}
+  const balanceChip = balance !== null && (
+    <div className="flex items-center gap-1.5 shrink-0" data-coin-target="balance">
+      <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+        <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
+        <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
+      </svg>
+      <span style={{ color: "var(--color-warning)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+        {balance.toLocaleString()}
+      </span>
+    </div>
+  );
 
-      {unsubmittedPoints > 0 && (
-        <div className="flex items-center gap-1.5 shrink-0" title={`${unsubmittedPoints} unsubmitted pts`}>
-          <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
-            <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
-            <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.5" />
-          </svg>
-          <span style={{ color: "var(--color-warning)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-            +{unsubmittedPoints.toLocaleString()}
-          </span>
-        </div>
-      )}
+  const unsubmittedChip = unsubmittedPoints > 0 && (
+    <div className="flex items-center gap-1.5 shrink-0" title={`${unsubmittedPoints} unsubmitted pts`}>
+      <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
+        <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.85" />
+        <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.5" />
+      </svg>
+      <span style={{ color: "var(--color-warning)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+        +{unsubmittedPoints.toLocaleString()}
+      </span>
+    </div>
+  );
 
-      {balance !== null && (
-        <div className="flex items-center gap-1.5 shrink-0" data-coin-target="balance">
-          <svg width="9" height="11" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
-            <path d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z" style={{ fill: "var(--color-warning)" }} opacity="0.95" />
-            <rect x="4" y="5" width="2" height="2" style={{ fill: "var(--color-bg)" }} opacity="0.4" />
-          </svg>
-          <span style={{ color: "var(--color-warning)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
-            {balance.toLocaleString()}
-          </span>
-        </div>
-      )}
+  const avatarBtn = (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setMenuOpen((o) => !o)}
+        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+        style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+        </svg>
+      </button>
 
-      <div className="relative shrink-0">
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
-          style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
-          </svg>
-        </button>
-
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div
-              className="absolute right-0 mt-2 z-20 min-w-[160px] overflow-hidden"
-              style={{
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+          <div
+            className={`absolute ${variant === "sidebar" ? "left-0" : "right-0"} mt-2 z-20 min-w-[160px] overflow-hidden`}
+            style={{
                 background: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
                 borderRadius: "4px",
@@ -128,7 +125,7 @@ export default function AuthHeader() {
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                          Recurring
+                          Routines
                         </span>
                         <span style={{ color: recCapped ? "var(--color-success)" : "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.05em", fontWeight: 600 }}>
                           {recSubmitted} / {RECURRING_CAP}
@@ -179,7 +176,36 @@ export default function AuthHeader() {
             </div>
           </>
         )}
+    </div>
+  );
+
+  if (variant === "sidebar") {
+    return (
+      <div className="desktop-sidebar-user">
+        {avatarBtn}
+        {username && (
+          <span className="desktop-sidebar-user-name">{username}</span>
+        )}
+        {(balanceChip || unsubmittedChip) && (
+          <div className="desktop-sidebar-user-points">
+            {balanceChip}
+            {unsubmittedChip}
+          </div>
+        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {username && (
+        <span style={{ color: "var(--color-fg-muted)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+          {username}
+        </span>
+      )}
+      {unsubmittedChip}
+      {balanceChip}
+      {avatarBtn}
     </div>
   );
 }

@@ -30,7 +30,7 @@ const MOCK_RECURRING: TaskDto[] = ([
   { taskId: "r4", userId: "demo", title: "Monthly budget review", description: null, category: "Finance", priority: "high", status: "pending", pointValue: 5, dueDate: "2026-05-15", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "monthly", submitted: false },
   // Streak tier showcase
   { taskId: "r5", userId: "demo", title: "10-minute meditation", description: "Sit, breathe, settle", category: "Wellness", priority: "medium", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-04-04T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 31, longestStreakCount: 31 },
-  { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22, hasCounter: true, counterUnit: "words" },
+  { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22, hasCounter: true, counterUnit: "words", counterGoal: 40 },
   { taskId: "r7", userId: "demo", title: "Floss", description: "One more day to 2.0x", category: "Wellness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-05T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 29, longestStreakCount: 29 },
   { taskId: "r8", userId: "demo", title: "5-min stretch", description: null, category: "Fitness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-29T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 6, longestStreakCount: 9 },
 ] as TaskDto[]).map(withMockCycles);
@@ -218,6 +218,33 @@ function Recurring() {
     setHistoryRefreshKey((k) => k + 1);
   }, [logPromptTask, isAuthenticated, setError]);
 
+  const quickLog = useCallback(async (t: TaskDto, delta: number) => {
+    const appendCycle = (cycle: CheckInCycleDto) => {
+      setTasks((prev) => prev.map((x) => x.taskId === t.taskId
+        ? { ...x, recentCycles: [cycle, ...(x.recentCycles ?? [])] }
+        : x));
+      setDetailTask((curr) => curr && curr.taskId === t.taskId
+        ? { ...curr, recentCycles: [cycle, ...(curr.recentCycles ?? [])] }
+        : curr);
+    };
+    if (!isAuthenticated) {
+      const now = new Date();
+      appendCycle({
+        cycleId: -now.getTime(),
+        taskId: t.taskId,
+        checkInDate: now.toISOString(),
+        counterValue: delta,
+        createdAt: now.toISOString(),
+      });
+      setHistoryRefreshKey((k) => k + 1);
+      return;
+    }
+    const { data, error } = await tasksApi.logCounter(t.taskId, delta);
+    if (error) { setError(error); return; }
+    if (data) appendCycle(data);
+    setHistoryRefreshKey((k) => k + 1);
+  }, [isAuthenticated, setError]);
+
   const noopToggle = useCallback(() => {}, []);
 
   async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
@@ -245,6 +272,7 @@ function Recurring() {
       submitted: detailTask.submitted,
       hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
       counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
+      counterGoal: fields.counterGoal !== undefined ? fields.counterGoal : (detailTask.counterGoal ?? null),
     };
     const { error } = await tasksApi.update(detailTask.taskId, req);
     if (error) return error;
@@ -457,39 +485,10 @@ function Recurring() {
         isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
         onCheckIn={canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
         checkInBlocked={!canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
-        onLog={dt.hasCounter ? () => requestLog(dt) : undefined}
-        historyRefreshKey={historyRefreshKey}
+        onQuickLog={dt.hasCounter ? (delta) => quickLog(dt, delta) : undefined}
         onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
         onSave={handleSaveTask}
         onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}
-        onUndoCheckIn={async (cycleId) => {
-          const data = await handleUndoCheckIn(dt, cycleId);
-          setDetailTask((curr) => {
-            if (!curr || curr.taskId !== dt.taskId) return curr;
-            const cycles = (curr.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-            if (!data) return { ...curr, recentCycles: cycles, lastCheckInDate: null };
-            const restoredDueDate = data.previousDueDate
-              || (curr.dueDate && curr.recurrenceRule
-                ? (() => {
-                    const prev = getPrevPeriodStart(parseLocalDate(curr.dueDate), curr.recurrenceRule);
-                    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
-                  })()
-                : curr.dueDate);
-            return {
-              ...curr, recentCycles: cycles,
-              currentStreakCount: data.streakCount, longestStreakCount: data.longestCount,
-              dueDate: restoredDueDate, lastCheckInDate: data.previousLastCheckInDate || null,
-            };
-          });
-          setHistoryRefreshKey((k) => k + 1);
-        }}
-        onDeleteLogCycle={async (cycleId) => {
-          await handleDeleteLogCycle(dt, cycleId);
-          setDetailTask((curr) => curr && curr.taskId === dt.taskId
-            ? { ...curr, recentCycles: (curr.recentCycles ?? []).filter((c) => c.cycleId !== cycleId) }
-            : curr);
-          setHistoryRefreshKey((k) => k + 1);
-        }}
         initialEditMode={isRestart}
         mustReschedule={isRestart}
         inline={isDesktop}
@@ -550,7 +549,9 @@ function Recurring() {
       <DesktopSidebar
         navItems={[
           { href: "/", label: "Today", icon: <NavIconList /> },
-          { href: "/recurring", label: "Recurring", icon: <NavIconRepeat />, active: true },
+          { href: "/recurring", label: "Routines", icon: <NavIconRepeat />, active: true },
+        ]}
+        footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },
         ]}
         filterGroups={[
@@ -590,12 +591,28 @@ function Recurring() {
           </div>
         )}
         <div className="flex items-center justify-between px-6 pt-4 pb-3" style={{ borderBottom: "1px solid var(--color-border-soft)" }}>
-          {/* Page-name title intentionally omitted on desktop — the sidebar
-              shows the active section. Active category appears as a small
-              breadcrumb on the left when one is set. */}
-          <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-            {activeCategory ?? " "}
-          </span>
+          {/* Left: cap tooltip + active filter label, plus active-category breadcrumb when set. */}
+          <div className="flex items-center gap-2">
+            <CategoryCapsTooltip variant="recurring">
+              <div tabIndex={0} aria-label="Show routine point caps" className="flex items-center justify-center" style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M9 16l2 2 4-4" />
+                </svg>
+              </div>
+            </CategoryCapsTooltip>
+            <span style={{ fontSize: 11, color: "var(--color-fg)", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+              {RECURRING_FILTERS.find((f) => f.value === activeFilter)?.label ?? "All"}
+            </span>
+            {activeCategory && (
+              <>
+                <span style={{ color: "var(--color-fg-subtle)", fontSize: 10 }}>·</span>
+                <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                  {activeCategory}
+                </span>
+              </>
+            )}
+          </div>
+
           <div className="flex items-center gap-1.5">
             <div className="relative mr-1">
               {showSortMenu && (
@@ -689,18 +706,11 @@ function Recurring() {
                 </div>
               )}
             </div>
-            <CategoryCapsTooltip variant="recurring">
-              <div tabIndex={0} aria-label="Show task point caps" className="flex items-center justify-center" style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M9 16l2 2 4-4" />
-                </svg>
-              </div>
-            </CategoryCapsTooltip>
             <button
               onClick={() => isAuthenticated && setShowNewTask(true)}
               disabled={!isAuthenticated}
-              title={!isAuthenticated ? "Sign in to create tasks" : "New recurring task"}
-              aria-label="New recurring task"
+              title={!isAuthenticated ? "Sign in to create tasks" : "New routine"}
+              aria-label="New routine"
               className="flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ml-1"
               style={{ width: 28, height: 28, fontSize: 18, lineHeight: 1, background: "transparent", border: "none", color: "var(--color-fg)" }}
             >
@@ -738,7 +748,7 @@ function Recurring() {
 
           <div style={{ paddingTop: 32, background: "var(--color-bg)" }}>
             {(() => {
-              const label = RECURRING_FILTERS.find((f) => f.value === activeFilter)?.label ?? "Recurring";
+              const label = RECURRING_FILTERS.find((f) => f.value === activeFilter)?.label ?? "Routines";
               return (
                 <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px]">
                   <span
@@ -782,7 +792,7 @@ function Recurring() {
             <CategoryCapsTooltip variant="recurring">
               <div
                 tabIndex={0}
-                aria-label="Show recurring point caps"
+                aria-label="Show routine point caps"
                 className="flex items-center justify-center mr-1"
                 style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}
               >
@@ -968,7 +978,7 @@ function Recurring() {
 
             {!loading && tasks.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 gap-2">
-                <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No recurring tasks</p>
+                <p className="text-sm tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>No routines</p>
                 {isAuthenticated && (
                   <button
                     onClick={() => setShowNewTask(true)}

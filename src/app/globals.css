@@ -719,6 +719,117 @@ textarea::placeholder {
   --color-on-active-highlight: var(--color-on-active-highlight-alt);
 }
 
+/* Hidden at >=880px (the desktop breakpoint where the 3-column shell takes
+   over). Used to swap header chrome for sidebar chrome on desktop. */
+@media (min-width: 880px) {
+  .hide-on-desktop {
+    display: none !important;
+  }
+}
+
+/* User chip pinned to the top of the desktop sidebar — replaces the header's
+   AuthHeader on desktop. Single horizontal row: avatar + username on the
+   left, balance/unsubmitted pinned to the right. */
+.desktop-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 14px;
+  border-bottom: 1px solid var(--color-border-soft);
+  margin-bottom: 6px;
+}
+
+.desktop-sidebar-user-name {
+  min-width: 0;
+  color: var(--color-fg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-sidebar-user-points {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Counter goal stepper — themed alternative to browser-default spin buttons.
+   The input + / − buttons live in a single bordered shell that picks up
+   --color-active-highlight on hover/focus. */
+.goal-stepper {
+  display: inline-flex;
+  align-items: stretch;
+  height: 22px;
+  border: 1px solid var(--color-border-hairline);
+  border-radius: 3px;
+  background: var(--color-input);
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+
+.goal-stepper:focus-within {
+  border-color: var(--color-active-highlight-border);
+}
+
+.goal-stepper-input {
+  width: 44px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--color-input-fg);
+  border: none;
+  outline: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.goal-stepper-input::-webkit-outer-spin-button,
+.goal-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.goal-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  background: transparent;
+  color: var(--color-fg-subtle);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.goal-stepper-btn:first-child {
+  border-right: 1px solid var(--color-border-hairline);
+}
+
+.goal-stepper-btn:last-child {
+  border-left: 1px solid var(--color-border-hairline);
+}
+
+.goal-stepper-btn:hover:not(:disabled) {
+  background: var(--color-active-highlight-bg);
+  color: var(--color-active-highlight);
+}
+
+.goal-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .pixel-btn {
   display: inline-flex;
   align-items: center;

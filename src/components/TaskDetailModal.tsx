@@ -6,6 +6,7 @@ import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
+import GoalStepper from "@/components/GoalStepper";
 import SubtaskRow from "@/components/SubtaskRow";
 import SlideToCheckIn from "@/components/SlideToCheckIn";
 import DetailPager from "@/components/DetailPager";
@@ -32,6 +33,7 @@ export interface EditableTaskFields {
   dueDate: string | null;
   hasCounter?: boolean;
   counterUnit?: string | null;
+  counterGoal?: number | null;
 }
 
 interface Props {
@@ -46,15 +48,11 @@ interface Props {
   onPause?: () => void;
   onUndo?: () => void;
   onDelete?: () => void;
-  onLog?: () => void;
-  historyRefreshKey?: number;
+  // Quick-log a positive or negative delta to the counter for today.
+  // No prompt — used by the +/- buttons under the avatar.
+  onQuickLog?: (delta: number) => void | Promise<void>;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
-  // Reverses the most recent same-day cycle. Branches on the cycle's CycleType:
-  // - "checkin" calls onUndoCheckIn (full rollback of points/streak/dueDate)
-  // - "log"     calls onDeleteLogCycle (just removes the row)
-  onUndoCheckIn?: (cycleId: number) => Promise<void> | void;
-  onDeleteLogCycle?: (cycleId: number) => Promise<void> | void;
   isActing?: boolean;
   canUndo?: boolean;
   initialEditMode?: boolean;
@@ -131,8 +129,8 @@ function ActionBtn({
 export default function TaskDetailModal({
   task, currentStreakCount, longestStreakCount, onClose,
   onStart, onCheckIn, checkInBlocked, onComplete, onPause, onUndo, onDelete,
-  onLog, historyRefreshKey,
-  onSave, onSubtasksChange, onUndoCheckIn, onDeleteLogCycle,
+  onQuickLog,
+  onSave, onSubtasksChange,
   isActing, canUndo, initialEditMode, mustReschedule, inline,
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
@@ -231,6 +229,7 @@ export default function TaskDetailModal({
   );
   const [editHasCounter, setEditHasCounter] = useState<boolean>(!!task.hasCounter);
   const [editCounterUnit, setEditCounterUnit] = useState<string>(task.counterUnit ?? "");
+  const [editCounterGoal, setEditCounterGoal] = useState<string>(task.counterGoal != null ? String(task.counterGoal) : "");
   const [showEditDescription, setShowEditDescription] = useState(!!editDescription);
 
   function startEdit() {
@@ -242,6 +241,7 @@ export default function TaskDetailModal({
     setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
     setEditHasCounter(!!task.hasCounter);
     setEditCounterUnit(task.counterUnit ?? "");
+    setEditCounterGoal(task.counterGoal != null ? String(task.counterGoal) : "");
     setEditError(null);
     setIsEditing(true);
   }
@@ -268,6 +268,9 @@ export default function TaskDetailModal({
         : null,
       hasCounter: task.isRecurring ? editHasCounter : undefined,
       counterUnit: task.isRecurring ? (editHasCounter && editCounterUnit ? editCounterUnit : null) : undefined,
+      counterGoal: task.isRecurring
+        ? (editHasCounter && editCounterGoal.trim() && Number(editCounterGoal) > 0 ? Number(editCounterGoal) : null)
+        : undefined,
     });
     setIsSaving(false);
     if (err) { setEditError(err); return; }
@@ -487,7 +490,7 @@ export default function TaskDetailModal({
                 <span style={{ fontSize: "11px", lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
                 <span style={{ fontSize: "11px", lineHeight: 1.4 }}>
                   {task.isRecurring
-                    ? "This recurring task is overdue. Confirm the new due date or pick a different one to resume."
+                    ? "This routine is overdue. Confirm the new due date or pick a different one to resume."
                     : "This task is overdue. Pick a new due date after today to start it, or delete the task."}
                 </span>
               </div>
@@ -622,6 +625,19 @@ export default function TaskDetailModal({
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
                     </div>
                   )}
+                  {editHasCounter && (
+                    <div className="flex items-center gap-1.5">
+                      <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+                        Goal
+                      </span>
+                      <GoalStepper value={editCounterGoal} onChange={setEditCounterGoal} />
+                      {editCounterUnit && editCounterGoal.trim() && (
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>
+                          {editCounterUnit} / {task.recurrenceRule === "weekly" ? "wk" : task.recurrenceRule === "monthly" ? "mo" : "day"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </Field>
             )}
@@ -719,7 +735,7 @@ export default function TaskDetailModal({
             {task.isRecurring && ((task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") || task.hasCounter) && (
               <DetailPager
                 height={236}
-                labels={["Stage", "Stats"]}
+                labels={(task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") ? ["Stage", "Stats"] : ["Stage"]}
                 cards={[
                   {
                     key: "stage",
@@ -736,71 +752,98 @@ export default function TaskDetailModal({
                               sum += c.counterValue; count++;
                             }
                           }
-                          if (count === 0) return null;
-                          return (
-                            <span style={{ fontSize: 11, color: "var(--color-fg)", fontWeight: 600 }}>
-                              Today · {sum.toLocaleString()}{task.counterUnit ? ` ${task.counterUnit}` : ""}
+                          const goal = task.counterGoal ?? null;
+                          if (count === 0 && goal == null && !onQuickLog) return null;
+                          const unit = task.counterUnit ? ` ${task.counterUnit}` : "";
+                          const reached = goal != null && sum >= goal;
+                          const innerText = goal != null
+                            ? `${sum.toLocaleString()} / ${goal.toLocaleString()}${unit}`
+                            : `${sum.toLocaleString()}${unit}`;
+                          const labelStyle = { fontSize: 11, color: "var(--color-fg)", fontWeight: 600, fontVariantNumeric: "tabular-nums" as const, display: "inline-flex", alignItems: "center", gap: 6 };
+                          const quantity = onQuickLog && task.status === "pending" ? (
+                            <span className="goal-stepper" aria-label="Quick log" style={{ height: 20, verticalAlign: "middle" }}>
+                              <button
+                                type="button"
+                                className="goal-stepper-btn"
+                                onClick={() => onQuickLog(-1)}
+                                disabled={sum <= 0}
+                                aria-label="Log -1"
+                              >
+                                −
+                              </button>
+                              <span
+                                className="goal-stepper-input"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 600,
+                                  color: "var(--color-fg)",
+                                  width: "auto",
+                                  padding: "0 8px",
+                                  whiteSpace: "nowrap",
+                                }}
+                                aria-live="polite"
+                              >
+                                {innerText}
+                                {reached && <span style={{ marginLeft: 6, color: "var(--color-success)" }}>✓</span>}
+                              </span>
+                              <button
+                                type="button"
+                                className="goal-stepper-btn"
+                                onClick={() => onQuickLog(1)}
+                                aria-label="Log +1"
+                              >
+                                +
+                              </button>
                             </span>
+                          ) : (
+                            <span>{innerText}{reached && <span style={{ marginLeft: 6, color: "var(--color-success)" }}>✓</span>}</span>
+                          );
+                          if (count === 0 && goal == null && !onQuickLog) return null;
+                          if (goal == null) {
+                            return (
+                              <span style={labelStyle}>
+                                Today
+                                {quantity}
+                              </span>
+                            );
+                          }
+                          const pct = Math.min(100, Math.round((sum / goal) * 100));
+                          return (
+                            <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 180 }}>
+                              <span style={labelStyle}>
+                                Today
+                                {quantity}
+                              </span>
+                              <div style={{ width: "100%", height: 4, background: "var(--color-track)", borderRadius: 2, overflow: "hidden" }}>
+                                <div
+                                  style={{
+                                    width: `${pct}%`,
+                                    height: "100%",
+                                    background: reached ? "var(--color-success)" : "var(--color-active-highlight-alt)",
+                                    transition: "width 0.3s",
+                                  }}
+                                />
+                              </div>
+                            </div>
                           );
                         })()}
                       </div>
                     ),
                   },
-                  {
+                  ...((task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") ? [{
                     key: "stats",
                     content: (
                       <div className="flex flex-col gap-3" style={{ overflowY: "auto", flex: 1 }}>
-                        {(task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") && (
-                          <HeatmapStrip
-                            rule={task.recurrenceRule}
-                            hasCounter={task.hasCounter ?? false}
-                            cycles={task.recentCycles ?? []}
-                          />
-                        )}
-                        {task.hasCounter ? (
-                          <CounterHistory
-                            taskId={task.taskId}
-                            unit={task.counterUnit ?? null}
-                            isAuthenticated={isAuthenticated}
-                            refreshKey={historyRefreshKey ?? 0}
-                            seed={task.recentCycles ?? null}
-                            onUndoCheckIn={onUndoCheckIn}
-                            onDeleteLogCycle={onDeleteLogCycle}
-                          />
-                        ) : (
-                          // Recurring task without a counter — explain what would
-                          // live in this slot so the bottom of the Stats card
-                          // doesn't look unintentionally empty.
-                          <div className="flex flex-col gap-1.5">
-                            <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                              Log
-                            </span>
-                            <div
-                              style={{
-                                borderRadius: 6,
-                                background: "var(--color-surface-deep)",
-                                boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
-                                padding: "14px 12px",
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 4,
-                                textAlign: "center",
-                              }}
-                            >
-                              <span style={{ color: "var(--color-fg-muted)", fontSize: 11, letterSpacing: "0.05em" }}>
-                                Log history will appear here
-                              </span>
-                              <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, letterSpacing: "0.02em" }}>
-                                Add a counter unit in Edit to start logging values per check-in.
-                              </span>
-                            </div>
-                          </div>
-                        )}
+                        <HeatmapStrip
+                          rule={task.recurrenceRule}
+                          hasCounter={task.hasCounter ?? false}
+                          cycles={task.recentCycles ?? []}
+                        />
                       </div>
                     ),
-                  },
+                  }] : []),
                 ]}
               />
             )}
@@ -927,22 +970,6 @@ export default function TaskDetailModal({
                   icon={
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
                       <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-active-highlight-alt)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  }
-                />
-              )}
-
-              {task.isRecurring && task.hasCounter && onLog && (
-                <ActionBtn
-                  onClick={onLog}
-                  disabled={isActing}
-                  color="var(--color-active-highlight)"
-                  hoverBg="var(--color-active-highlight-bg)"
-                  label="Log"
-                  icon={
-                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
-                      <line x1="1.5" y1="5" x2="8.5" y2="5" style={{ stroke: "var(--color-active-highlight)" }} strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   }
                 />
@@ -1208,351 +1235,3 @@ function fmtCycleDate(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function fmtCycleTime(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function CounterHistory({ taskId, unit, isAuthenticated, refreshKey, seed, onUndoCheckIn, onDeleteLogCycle }: {
-  taskId: string;
-  unit: string | null;
-  isAuthenticated: boolean;
-  refreshKey: number;
-  seed: CheckInCycleDto[] | null;
-  onUndoCheckIn?: (cycleId: number) => Promise<void> | void;
-  onDeleteLogCycle?: (cycleId: number) => Promise<void> | void;
-}) {
-  // Seed synchronously from TaskDto.recentCycles so first paint already shows
-  // history. The effect below still refetches in the background so stale seeds
-  // (e.g. after a fresh check-in) get reconciled and we pick up TotalCount.
-  const [items, setItems] = useState<CheckInCycleDto[]>(seed ?? []);
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(seed?.length ?? 0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [savingCycleId, setSavingCycleId] = useState<number | null>(null);
-  const [undoingCycleId, setUndoingCycleId] = useState<number | null>(null);
-
-  const hasMore = items.length < totalCount;
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let cancelled = false;
-    // Only show the spinner if we have nothing to render yet — otherwise the
-    // background refresh stays invisible and seeded rows remain in place.
-    const hasSeededContent = items.length > 0;
-    if (!hasSeededContent) setLoading(true);
-    setError(null);
-    tasksApi.getCheckInHistory(taskId, 1, HISTORY_PAGE_SIZE).then(({ data, error }) => {
-      if (cancelled) return;
-      setLoading(false);
-      if (error) { setError(error); return; }
-      setItems(data!.data);
-      setTotalCount(data!.totalCount);
-      setPage(1);
-    });
-    return () => { cancelled = true; };
-    // items.length is intentionally omitted — we only want this effect to fire
-    // on identity/auth/refresh changes, and the spinner-skip check is read once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, isAuthenticated, refreshKey]);
-
-  async function loadMore() {
-    if (loading || !hasMore) return;
-    setLoading(true);
-    const next = page + 1;
-    const { data, error } = await tasksApi.getCheckInHistory(taskId, next, HISTORY_PAGE_SIZE);
-    setLoading(false);
-    if (error) { setError(error); return; }
-    setItems((prev) => [...prev, ...data!.data]);
-    setPage(next);
-  }
-
-  function startEdit(c: CheckInCycleDto) {
-    // Editing requires an API call to persist the new value — silently
-    // refuse if the session ever drops to unauthenticated so the user
-    // doesn't get a confusing failure on save.
-    if (!isAuthenticated) return;
-    setEditingCycleId(c.cycleId);
-    setEditValue(c.counterValue == null ? "" : String(c.counterValue));
-    setError(null);
-  }
-
-  function cancelEdit() {
-    setEditingCycleId(null);
-    setEditValue("");
-  }
-
-  async function saveEdit(c: CheckInCycleDto) {
-    const trimmed = editValue.trim();
-    let newValue: number | null;
-    if (trimmed === "") {
-      newValue = null;
-    } else if (!/^\d+$/.test(trimmed)) {
-      setError("Enter a whole number, or leave blank to clear.");
-      return;
-    } else {
-      newValue = Number(trimmed);
-      if (newValue < 0) { setError("Must be 0 or greater."); return; }
-    }
-    if (newValue === c.counterValue) {
-      cancelEdit();
-      return;
-    }
-    setSavingCycleId(c.cycleId);
-    const { error: apiError } = await tasksApi.updateCheckInCycle(taskId, c.cycleId, newValue);
-    setSavingCycleId(null);
-    if (apiError) { setError(apiError); return; }
-    setItems((prev) => prev.map((x) => x.cycleId === c.cycleId ? { ...x, counterValue: newValue } : x));
-    cancelEdit();
-  }
-
-  // Demo mode (no auth) — show a sign-in nudge in place of the log list. The
-  // heatmap above still renders the seeded cycles so the modal isn't barren.
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-            History{unit ? ` · ${unit}` : ""}
-          </span>
-        </div>
-        <div
-          style={{
-            borderRadius: 6,
-            background: "var(--color-surface-deep)",
-            boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
-            padding: "14px 12px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            textAlign: "center",
-          }}
-        >
-          <span style={{ color: "var(--color-fg-muted)", fontSize: 11, letterSpacing: "0.05em" }}>
-            Sign in to log and review counter history
-          </span>
-          <a
-            href="/login"
-            className="text-[10px] tracking-widest uppercase"
-            style={{
-              color: "var(--color-active-highlight)",
-              fontWeight: 600,
-              textDecoration: "none",
-              letterSpacing: "0.18em",
-            }}
-          >
-            Sign in →
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-          History{unit ? ` · ${unit}` : ""}
-        </span>
-        {totalCount > 0 && (
-          <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
-            {items.length}/{totalCount}
-          </span>
-        )}
-      </div>
-
-      {error && (
-        <p className="text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>
-      )}
-
-      {!loading && items.length === 0 && !error && (
-        <p className="text-xs" style={{ color: "var(--color-fg-subtle)" }}>No check-ins yet.</p>
-      )}
-
-      {items.length > 0 && (() => {
-        const groups: { dateKey: string; entries: CheckInCycleDto[] }[] = [];
-        for (const c of items) {
-          const dateKey = c.checkInDate.split("T")[0];
-          const last = groups[groups.length - 1];
-          if (last && last.dateKey === dateKey) last.entries.push(c);
-          else groups.push({ dateKey, entries: [c] });
-        }
-        const todayKey = (() => { const d = new Date(); d.setHours(0,0,0,0); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
-        const latestCycleId = items[0]?.cycleId;
-        const latestIsToday = items[0] ? items[0].checkInDate.split("T")[0] === todayKey : false;
-        async function handleReverse(c: CheckInCycleDto) {
-          if (undoingCycleId != null) return;
-          setUndoingCycleId(c.cycleId);
-          // Optimistic local removal — refreshKey-driven refetch will reconcile.
-          setItems((prev) => prev.filter((x) => x.cycleId !== c.cycleId));
-          setTotalCount((prev) => Math.max(0, prev - 1));
-          try {
-            if (c.cycleType === "log") {
-              await onDeleteLogCycle?.(c.cycleId);
-            } else {
-              await onUndoCheckIn?.(c.cycleId);
-            }
-          } finally {
-            setUndoingCycleId(null);
-          }
-        }
-        return (
-          <div
-            style={{
-              maxHeight: 150,
-              overflowY: "auto",
-              borderRadius: 6,
-              background: "var(--color-surface-deep)",
-              boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.08)",
-              padding: "6px 10px 10px",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {groups.map(({ dateKey, entries }, gIdx) => (
-              <div key={dateKey}>
-                <div className={`flex items-center gap-3 ${gIdx === 0 ? "mb-1" : "mt-4 mb-1"}`}>
-                  <span
-                    className="tracking-widest uppercase text-[11px] font-semibold"
-                    style={{ color: "var(--color-fg-muted)" }}
-                  >
-                    {fmtCycleDate(dateKey)}
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: "var(--color-border-soft)" }} />
-                </div>
-                <div className="flex flex-col">
-                  {entries.map((c, idx) => {
-                    const isEditing = editingCycleId === c.cycleId;
-                    const isSaving = savingCycleId === c.cycleId;
-                    // Logs can be deleted any time (no side effects to reverse).
-                    // Check-ins can only be undone on the same day for the
-                    // latest cycle, since they roll back streak/dueDate/points.
-                    const canReverse = c.cycleType === "log"
-                      ? !!onDeleteLogCycle
-                      : !!onUndoCheckIn && latestIsToday && c.cycleId === latestCycleId;
-                    const isUndoing = undoingCycleId === c.cycleId;
-                    return (
-                      <div
-                        key={c.cycleId}
-                        className="flex items-center justify-between gap-3"
-                        style={{
-                          fontSize: "11px",
-                          color: "var(--color-fg-muted)",
-                          padding: "5px 0",
-                          borderBottom: idx === entries.length - 1
-                            ? "none"
-                            : "1px dashed var(--color-border-hairline)",
-                        }}
-                      >
-                        <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                          {fmtCycleTime(c.createdAt)}
-                        </span>
-                        {canReverse && !isEditing && (
-                          <button
-                            onClick={() => handleReverse(c)}
-                            disabled={isUndoing}
-                            aria-label={c.cycleType === "log" ? "Delete this log entry" : "Undo this check-in"}
-                            title={c.cycleType === "log" ? "Delete this log entry" : "Undo this check-in"}
-                            className="cursor-pointer disabled:opacity-40"
-                            style={{
-                              marginLeft: "auto",
-                              background: "transparent",
-                              border: "1px solid var(--color-border-hairline)",
-                              borderRadius: 999,
-                              padding: "2px 7px",
-                              color: "var(--color-fg-subtle)",
-                              fontSize: 9,
-                              letterSpacing: "0.18em",
-                              textTransform: "uppercase",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {c.cycleType === "log" ? "Delete" : "Undo"}
-                          </button>
-                        )}
-                        {isEditing ? (
-                          <span className="inline-flex items-center gap-1">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              autoFocus
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); saveEdit(c); }
-                                else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
-                              }}
-                              onBlur={() => saveEdit(c)}
-                              disabled={isSaving}
-                              placeholder="—"
-                              className="outline-none text-right"
-                              style={{
-                                width: 64,
-                                background: "var(--color-input)",
-                                color: "var(--color-input-fg)",
-                                border: "1px solid var(--color-active-highlight-border)",
-                                borderRadius: "3px",
-                                padding: "2px 6px",
-                                fontSize: "11px",
-                                fontVariantNumeric: "tabular-nums",
-                              }}
-                            />
-                            {unit && <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>{unit}</span>}
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => startEdit(c)}
-                            className="inline-flex items-baseline gap-1 cursor-text"
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              padding: "1px 4px",
-                              borderRadius: "3px",
-                              color: c.counterValue == null ? "var(--color-fg-subtle)" : "var(--color-fg)",
-                              fontWeight: 600,
-                              fontVariantNumeric: "tabular-nums",
-                              fontSize: "11px",
-                            }}
-                            title="Click to edit"
-                          >
-                            {c.counterValue == null ? "—" : c.counterValue.toLocaleString()}
-                            {unit && c.counterValue != null && (
-                              <span style={{ color: "var(--color-fg-subtle)", fontWeight: 400, fontSize: "10px" }}>{unit}</span>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
-      {hasMore && (
-        <button
-          onClick={loadMore}
-          disabled={loading}
-          className="self-start text-[10px] tracking-widest uppercase cursor-pointer disabled:opacity-40"
-          style={{
-            color: "var(--color-active-highlight)",
-            background: "transparent",
-            border: "1px solid var(--color-active-highlight-border)",
-            borderRadius: "999px",
-            padding: "3px 10px",
-          }}
-        >
-          {loading ? "Loading…" : "Load more"}
-        </button>
-      )}
-    </div>
-  );
-}

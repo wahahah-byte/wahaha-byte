@@ -165,6 +165,34 @@ function Home() {
     setHistoryRefreshKey((k) => k + 1);
   }, [logPromptTask, isAuthenticated, setError, setTasks]);
 
+  // Quick log: bypasses the prompt, used by the +/- buttons under the avatar.
+  const quickLog = useCallback(async (t: TaskDto, delta: number) => {
+    const appendCycle = (cycle: CheckInCycleDto) => {
+      setTasks((prev) => prev.map((x) => x.taskId === t.taskId
+        ? { ...x, recentCycles: [cycle, ...(x.recentCycles ?? [])] }
+        : x));
+      setDetailTask((curr) => curr && curr.taskId === t.taskId
+        ? { ...curr, recentCycles: [cycle, ...(curr.recentCycles ?? [])] }
+        : curr);
+    };
+    if (!isAuthenticated) {
+      const now = new Date();
+      appendCycle({
+        cycleId: -now.getTime(),
+        taskId: t.taskId,
+        checkInDate: now.toISOString(),
+        counterValue: delta,
+        createdAt: now.toISOString(),
+      });
+      setHistoryRefreshKey((k) => k + 1);
+      return;
+    }
+    const { data, error } = await tasksApi.logCounter(t.taskId, delta);
+    if (error) { setError(error); return; }
+    if (data) appendCycle(data);
+    setHistoryRefreshKey((k) => k + 1);
+  }, [isAuthenticated, setError, setTasks]);
+
   function applyFilter(value: string) {
     setActiveFilter(value);
     const params = new URLSearchParams(searchParams.toString());
@@ -203,6 +231,7 @@ function Home() {
       submitted: detailTask.submitted,
       hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
       counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
+      counterGoal: fields.counterGoal !== undefined ? fields.counterGoal : (detailTask.counterGoal ?? null),
     };
     const { error } = await tasksApi.update(detailTask.taskId, req);
     if (error) return error;
@@ -408,8 +437,7 @@ function Home() {
         isActing={advancing === dt.taskId || pausing === dt.taskId || slashingId === dt.taskId}
         onStart={dt.status === "pending" && !dt.isRecurring ? () => { closeDetail(); handleAdvance(dt); } : undefined}
         onCheckIn={dt.status === "pending" && dt.isRecurring && canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate) ? () => { closeDetail(); requestCheckIn(dt); } : undefined}
-        onLog={dt.isRecurring && dt.hasCounter ? () => requestLog(dt) : undefined}
-        historyRefreshKey={historyRefreshKey}
+        onQuickLog={dt.isRecurring && dt.hasCounter ? (delta) => quickLog(dt, delta) : undefined}
         checkInBlocked={dt.status === "pending" && dt.isRecurring && !canCheckInNow(dt.dueDate, dt.recurrenceRule, dt.lastCheckInDate)}
         onPause={dt.status === "in_progress" ? () => { closeDetail(); handlePause(dt); } : undefined}
         onComplete={dt.status === "in_progress" ? () => { closeDetail(); handleAdvance(dt); } : undefined}
@@ -417,34 +445,6 @@ function Home() {
         onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
         onSave={handleSaveTask}
         onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}
-        onUndoCheckIn={async (cycleId) => {
-          const data = await handleUndoCheckIn(dt, cycleId);
-          setDetailTask((curr) => {
-            if (!curr || curr.taskId !== dt.taskId) return curr;
-            const cycles = (curr.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-            if (!data) return { ...curr, recentCycles: cycles, lastCheckInDate: null };
-            const restoredDueDate = data.previousDueDate
-              || (curr.dueDate && curr.recurrenceRule
-                ? (() => {
-                    const prev = getPrevPeriodStart(parseLocalDate(curr.dueDate), curr.recurrenceRule);
-                    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
-                  })()
-                : curr.dueDate);
-            return {
-              ...curr, recentCycles: cycles,
-              currentStreakCount: data.streakCount, longestStreakCount: data.longestCount,
-              dueDate: restoredDueDate, lastCheckInDate: data.previousLastCheckInDate || null,
-            };
-          });
-          setHistoryRefreshKey((k) => k + 1);
-        }}
-        onDeleteLogCycle={async (cycleId) => {
-          await handleDeleteLogCycle(dt, cycleId);
-          setDetailTask((curr) => curr && curr.taskId === dt.taskId
-            ? { ...curr, recentCycles: (curr.recentCycles ?? []).filter((c) => c.cycleId !== cycleId) }
-            : curr);
-          setHistoryRefreshKey((k) => k + 1);
-        }}
         initialEditMode={isRestart}
         mustReschedule={isRestart}
         inline={isDesktop}
@@ -514,7 +514,9 @@ function Home() {
       <DesktopSidebar
         navItems={[
           { href: "/", label: "Today", icon: <NavIconList />, active: true },
-          { href: "/recurring", label: "Recurring", icon: <NavIconRepeat /> },
+          { href: "/recurring", label: "Routines", icon: <NavIconRepeat /> },
+        ]}
+        footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },
         ]}
         filterGroups={[
@@ -553,13 +555,8 @@ function Home() {
           </div>
         )}
         <div className="flex items-center justify-between px-6 pt-4 pb-3" style={{ borderBottom: "1px solid var(--color-border-soft)" }}>
-          {/* Page-name title intentionally omitted on desktop — the sidebar
-              shows the active section. Just an active-category breadcrumb on
-              the left when one is set, otherwise nothing. */}
-          <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-            {activeCategory ?? " "}
-          </span>
-          <div className="flex items-center gap-1.5">
+          {/* Left: cap tooltip + active filter label, plus active-category breadcrumb when set. */}
+          <div className="flex items-center gap-2">
             <CategoryCapsTooltip variant="regular">
               <div tabIndex={0} aria-label="Show task point caps" className="flex items-center justify-center" style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -567,6 +564,20 @@ function Home() {
                 </svg>
               </div>
             </CategoryCapsTooltip>
+            <span style={{ fontSize: 11, color: "var(--color-fg)", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+              {FILTERS.find((f) => f.value === activeFilter)?.label ?? "All"}
+            </span>
+            {activeCategory && (
+              <>
+                <span style={{ color: "var(--color-fg-subtle)", fontSize: 10 }}>·</span>
+                <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                  {activeCategory}
+                </span>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <TaskListControls
               sortMode={sortMode}
               groupMode={groupMode}

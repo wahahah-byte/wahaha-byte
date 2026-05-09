@@ -32,6 +32,9 @@ export interface TaskDto {
   isArchived?: boolean;
   hasCounter?: boolean;
   counterUnit?: string | null;
+  // Optional per-cycle target (e.g., 8 cups/day, 50 pages/day). Only meaningful
+  // when hasCounter is true; null/undefined means no goal.
+  counterGoal?: number | null;
   subtasks?: Subtask[];
   recentCycles?: CheckInCycleDto[];
 }
@@ -48,6 +51,7 @@ export interface CreateTaskRequest {
   recurrenceRule?: string;
   hasCounter?: boolean;
   counterUnit?: string | null;
+  counterGoal?: number | null;
 }
 
 export interface UpdateTaskRequest {
@@ -65,6 +69,7 @@ export interface UpdateTaskRequest {
   submitted: boolean;
   hasCounter?: boolean;
   counterUnit?: string | null;
+  counterGoal?: number | null;
 }
 
 export interface CheckInCycleDto {

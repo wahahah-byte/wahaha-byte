@@ -77,7 +77,7 @@ export default function SubmitBar({
               </span>
             ) : (
               <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.05em" }}>
-                Regular: {remaining} pts left · Recurring: {recurringRemaining} pts left
+                Regular: {remaining} pts left · Routines: {recurringRemaining} pts left
               </span>
             )}
           </div>

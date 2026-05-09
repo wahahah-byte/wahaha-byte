@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import Link from "next/link";
+import AuthHeader from "@/components/AuthHeader";
 
 export interface SidebarNavItem {
   href: string;
@@ -30,28 +31,34 @@ export interface SidebarFilterGroup {
 interface Props {
   navItems: SidebarNavItem[];
   filterGroups?: SidebarFilterGroup[];
+  // Nav items pinned to the sidebar's bottom (rendered as nav rows).
+  footerNavItems?: SidebarNavItem[];
   // Optional bottom slot (e.g., user/settings shortcut).
   footer?: ReactNode;
 }
 
-export default function DesktopSidebar({ navItems, filterGroups, footer }: Props) {
+export default function DesktopSidebar({ navItems, filterGroups, footerNavItems, footer }: Props) {
+  const renderNavRow = (item: SidebarNavItem) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      className={`desktop-sidebar-row${item.active ? " active" : ""}`}
+      aria-current={item.active ? "page" : undefined}
+    >
+      <span className="desktop-sidebar-icon" aria-hidden>{item.icon}</span>
+      <span className="desktop-sidebar-label">{item.label}</span>
+      {item.badge != null && (
+        <span className="desktop-sidebar-badge">{item.badge}</span>
+      )}
+    </Link>
+  );
+
   return (
     <div className="desktop-sidebar">
+      <AuthHeader variant="sidebar" />
+
       <nav className="desktop-sidebar-section" aria-label="Pages">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`desktop-sidebar-row${item.active ? " active" : ""}`}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <span className="desktop-sidebar-icon" aria-hidden>{item.icon}</span>
-            <span className="desktop-sidebar-label">{item.label}</span>
-            {item.badge != null && (
-              <span className="desktop-sidebar-badge">{item.badge}</span>
-            )}
-          </Link>
-        ))}
+        {navItems.map(renderNavRow)}
       </nav>
 
       {filterGroups?.map((group) => (
@@ -85,6 +92,12 @@ export default function DesktopSidebar({ navItems, filterGroups, footer }: Props
           ))}
         </div>
       ))}
+
+      {footerNavItems && footerNavItems.length > 0 && (
+        <nav className="desktop-sidebar-section" aria-label="More">
+          {footerNavItems.map(renderNavRow)}
+        </nav>
+      )}
 
       {footer && <div className="desktop-sidebar-footer">{footer}</div>}
     </div>
