@@ -3,27 +3,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { tasksApi, TaskDto, UpdateTaskRequest, CheckInCycleDto } from "@/lib/api/tasks";
-import NewTaskModal from "@/components/NewTaskModal";
-import TaskDetailModal, { EditableTaskFields } from "@/components/TaskDetailModal";
+import { tasksApi, TaskDto } from "@/lib/api/tasks";
+import TaskDetailModal from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
-import CounterPromptModal from "@/components/CounterPromptModal";
 import SubmitBar from "@/components/SubmitBar";
 import CapWarningModal from "@/components/CapWarningModal";
 import TaskListControls from "@/components/TaskListControls";
+import TaskPageHeader from "@/components/TaskPageHeader";
+import DemoModeBanner from "@/components/DemoModeBanner";
+import TaskPageOverlays from "@/components/TaskPageOverlays";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 import MobileActionBar from "@/components/MobileActionBar";
 import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
-import TierUpBanner from "@/components/TierUpBanner";
-import CheckInUndoToast from "@/components/CheckInUndoToast";
 import DesktopShell from "@/components/DesktopShell";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
+import { useLogCounter } from "@/hooks/useLogCounter";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
+import { useOverdueRestart } from "@/hooks/useOverdueRestart";
+import { useSaveTask } from "@/hooks/useSaveTask";
+import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
+import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
 import { canCheckInNow, parseLocalDate, getPrevPeriodStart } from "@/lib/dateUtils";
-import { CATEGORIES, CATEGORY_COLOR, FILTERS, maxPointsFor } from "@/lib/constants";
+import { CATEGORIES, FILTERS, maxPointsFor } from "@/lib/constants";
 import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
 import { useToast } from "@/context/ToastContext";
@@ -53,26 +58,11 @@ function Home() {
   const [activeFilter, setActiveFilter] = useState(initialActiveFilter);
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
-  // Desktop layout (>=1024px) replaces the swipe pager + edge drawer with a
-  // 3-column shell. Tracked via matchMedia so we can render the right layout
-  // synchronously after hydration.
-  const [isDesktop, setIsDesktop] = useState(false);
+  const isDesktop = useDesktopLayout();
   // Category quick-filter lives in the desktop sidebar. Null means "all".
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 880px)");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    const update = () => setIsDesktop(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
+  const { beginRestart, clearRestart, isRestart } = useOverdueRestart();
   const [counterPromptTask, setCounterPromptTask] = useState<TaskDto | null>(null);
-  const [logPromptTask, setLogPromptTask] = useState<TaskDto | null>(null);
-  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
   const [sortMode, setSortMode] = useState<SortMode>("due");
   const [uncompletedCollapsed, setUncompletedCollapsed] = useState(false);
@@ -89,7 +79,7 @@ function Home() {
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
   } = submission;
 
-  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn } =
+  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -119,9 +109,9 @@ function Home() {
   }, [setTasks]);
 
   const handleRestartOverdue = useCallback((t: TaskDto) => {
-    setOverdueRestartTaskId(t.taskId);
+    beginRestart(t);
     setDetailTask(t);
-  }, []);
+  }, [beginRestart]);
 
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
@@ -131,67 +121,9 @@ function Home() {
     handleCheckIn(t);
   }, [handleCheckIn]);
 
-  const requestLog = useCallback((t: TaskDto) => {
-    setLogPromptTask(t);
-  }, []);
-
-  const submitLog = useCallback(async (value: number) => {
-    const t = logPromptTask;
-    if (!t) return;
-    setLogPromptTask(null);
-    const appendCycle = (cycle: CheckInCycleDto) => {
-      setTasks((prev) => prev.map((x) => x.taskId === t.taskId
-        ? { ...x, recentCycles: [cycle, ...(x.recentCycles ?? [])] }
-        : x));
-      setDetailTask((curr) => curr && curr.taskId === t.taskId
-        ? { ...curr, recentCycles: [cycle, ...(curr.recentCycles ?? [])] }
-        : curr);
-    };
-    if (!isAuthenticated) {
-      const now = new Date();
-      appendCycle({
-        cycleId: -now.getTime(),
-        taskId: t.taskId,
-        checkInDate: now.toISOString(),
-        counterValue: value,
-        createdAt: now.toISOString(),
-      });
-      setHistoryRefreshKey((k) => k + 1);
-      return;
-    }
-    const { data, error } = await tasksApi.logCounter(t.taskId, value);
-    if (error) { setError(error); return; }
-    if (data) appendCycle(data);
-    setHistoryRefreshKey((k) => k + 1);
-  }, [logPromptTask, isAuthenticated, setError, setTasks]);
-
-  // Quick log: bypasses the prompt, used by the +/- buttons under the avatar.
-  const quickLog = useCallback(async (t: TaskDto, delta: number) => {
-    const appendCycle = (cycle: CheckInCycleDto) => {
-      setTasks((prev) => prev.map((x) => x.taskId === t.taskId
-        ? { ...x, recentCycles: [cycle, ...(x.recentCycles ?? [])] }
-        : x));
-      setDetailTask((curr) => curr && curr.taskId === t.taskId
-        ? { ...curr, recentCycles: [cycle, ...(curr.recentCycles ?? [])] }
-        : curr);
-    };
-    if (!isAuthenticated) {
-      const now = new Date();
-      appendCycle({
-        cycleId: -now.getTime(),
-        taskId: t.taskId,
-        checkInDate: now.toISOString(),
-        counterValue: delta,
-        createdAt: now.toISOString(),
-      });
-      setHistoryRefreshKey((k) => k + 1);
-      return;
-    }
-    const { data, error } = await tasksApi.logCounter(t.taskId, delta);
-    if (error) { setError(error); return; }
-    if (data) appendCycle(data);
-    setHistoryRefreshKey((k) => k + 1);
-  }, [isAuthenticated, setError, setTasks]);
+  const { logPromptTask, requestLog, cancelLog, submitLog, quickLog } = useLogCounter({
+    isAuthenticated, setTasks, setDetailTask, setError,
+  });
 
   function applyFilter(value: string) {
     setActiveFilter(value);
@@ -202,49 +134,14 @@ function Home() {
     router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }
 
-  async function handleSaveTask(fields: EditableTaskFields): Promise<string | null> {
-    if (!detailTask) return null;
-    const isRestart = overdueRestartTaskId === detailTask.taskId;
-    if (!isAuthenticated) {
-      const updated = { ...detailTask, ...fields };
-      setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
-      setDetailTask(updated);
-      if (isRestart) {
-        setOverdueRestartTaskId(null);
-        setDetailTask(null);
-        if (!updated.isRecurring) handleAdvance(updated);
-      }
-      return null;
-    }
-    const req: UpdateTaskRequest = {
-      taskId: detailTask.taskId,
-      title: fields.title,
-      description: fields.description ?? undefined,
-      category: fields.category,
-      priority: fields.priority,
-      status: detailTask.status,
-      pointValue: detailTask.pointValue,
-      dueDate: fields.dueDate ?? undefined,
-      completedAt: detailTask.completedAt ?? undefined,
-      isRecurring: detailTask.isRecurring,
-      recurrenceRule: detailTask.recurrenceRule ?? undefined,
-      submitted: detailTask.submitted,
-      hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
-      counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
-      counterGoal: fields.counterGoal !== undefined ? fields.counterGoal : (detailTask.counterGoal ?? null),
-    };
-    const { error } = await tasksApi.update(detailTask.taskId, req);
-    if (error) return error;
-    const updated = { ...detailTask, ...fields };
-    setTasks((prev) => prev.map((t) => t.taskId === detailTask.taskId ? updated : t));
-    setDetailTask(updated);
-    if (isRestart) {
-      setOverdueRestartTaskId(null);
-      setDetailTask(null);
+  const handleSaveTask = useSaveTask({
+    detailTask, setDetailTask, setTasks, isAuthenticated,
+    isRestart: isRestart(detailTask),
+    clearRestart,
+    onAfterRestart: (updated) => {
       if (!updated.isRecurring) handleAdvance(updated);
-    }
-    return null;
-  }
+    },
+  });
 
   // Tasks visible after applying the desktop sidebar's category filter.
   // On mobile activeCategory stays null so this is a no-op. Declared above the
@@ -425,8 +322,8 @@ function Home() {
     if (!detailTask) return null;
     const dt = detailTask;
     const dtCanUndo = dt.status === "completed" && dt.submitted === false && !dt.pointsAwarded && !submittedTaskIds.has(dt.taskId);
-    const isRestart = overdueRestartTaskId === dt.taskId;
-    const closeDetail = () => { setOverdueRestartTaskId(null); setDetailTask(null); };
+    const dtIsRestart = isRestart(dt);
+    const closeDetail = () => { clearRestart(); setDetailTask(null); };
     return (
       <TaskDetailModal
         task={dt}
@@ -445,8 +342,8 @@ function Home() {
         onDelete={() => { closeDetail(); handleDelete(dt.taskId); }}
         onSave={handleSaveTask}
         onSubtasksChange={(subtasks) => setTasks((prev) => prev.map((t) => t.taskId === dt.taskId ? { ...t, subtasks } : t))}
-        initialEditMode={isRestart}
-        mustReschedule={isRestart}
+        initialEditMode={dtIsRestart}
+        mustReschedule={dtIsRestart}
         inline={isDesktop}
       />
     );
@@ -454,13 +351,23 @@ function Home() {
 
   // Top-level overlays/banners that render in both layouts.
   const sharedOverlays = (
-    <>
-      {showNewTask && (
-        <NewTaskModal
-          onClose={() => setShowNewTask(false)}
-          onCreated={(task) => { setTasks((prev) => [task, ...prev]); setShowNewTask(false); }}
-        />
-      )}
+    <TaskPageOverlays
+      showNewTask={showNewTask}
+      onCloseNewTask={() => setShowNewTask(false)}
+      onTaskCreated={(task) => { setTasks((prev) => [task, ...prev]); setShowNewTask(false); }}
+      counterPromptTask={counterPromptTask}
+      onCloseCounterPrompt={() => setCounterPromptTask(null)}
+      onSubmitCounterCheckIn={(t, value) => { setCounterPromptTask(null); handleCheckIn(t, value); }}
+      logPromptTask={logPromptTask}
+      onCancelLog={cancelLog}
+      onSubmitLog={submitLog}
+      tierUp={tierUp}
+      onDismissTierUp={dismissTierUp}
+      undoableCheckIn={undoableCheckIn}
+      tasks={tasks}
+      onUndoCheckInFromToast={handleUndoCheckInFromToast}
+      onDismissUndoableCheckIn={dismissUndoableCheckIn}
+    >
       {showCapWarning && (
         <CapWarningModal
           selectedPts={selectedPts}
@@ -470,42 +377,7 @@ function Home() {
           onConfirm={doSubmit}
         />
       )}
-      {counterPromptTask && (
-        <CounterPromptModal
-          taskTitle={counterPromptTask.title}
-          unit={counterPromptTask.counterUnit}
-          recentValues={(counterPromptTask.recentCycles ?? []).map((c) => c.counterValue).filter((v): v is number => typeof v === "number")}
-          onClose={() => setCounterPromptTask(null)}
-          onSubmit={(value) => {
-            const t = counterPromptTask;
-            setCounterPromptTask(null);
-            handleCheckIn(t, value);
-          }}
-        />
-      )}
-      {logPromptTask && (
-        <CounterPromptModal
-          taskTitle={logPromptTask.title}
-          unit={logPromptTask.counterUnit}
-          mode="log"
-          recentValues={(logPromptTask.recentCycles ?? []).map((c) => c.counterValue).filter((v): v is number => typeof v === "number")}
-          onClose={() => setLogPromptTask(null)}
-          onSubmit={(value) => { if (value !== undefined) submitLog(value); }}
-        />
-      )}
-      <TierUpBanner message={tierUp} onDone={dismissTierUp} />
-      {undoableCheckIn && (() => {
-        const t = tasks.find((x) => x.taskId === undoableCheckIn.taskId);
-        if (!t) return null;
-        return (
-          <CheckInUndoToast
-            taskTitle={undoableCheckIn.taskTitle}
-            onUndo={() => handleUndoCheckInFromToast(t, undoableCheckIn.cycleId)}
-            onDismiss={dismissUndoableCheckIn}
-          />
-        );
-      })()}
-    </>
+    </TaskPageOverlays>
   );
 
   // Desktop-only 3-column shell. Mobile keeps the existing layout below.
@@ -519,83 +391,37 @@ function Home() {
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },
         ]}
-        filterGroups={[
-          {
-            title: "Status",
-            groupKey: "status",
-            onSelect: applyFilter,
-            items: FILTERS.map((f) => ({
-              value: f.value,
-              label: f.label,
-              count: filterCounts[f.value] ?? 0,
-              active: f.value === activeFilter,
-            })),
-          },
-          ...(categoryStats.length ? [{
-            title: "Categories",
-            groupKey: "categories",
-            onSelect: (v: string) => setActiveCategory((prev) => prev === v ? null : v),
-            items: categoryStats.map(([cat, count]) => ({
-              value: cat,
-              label: cat,
-              count,
-              dotColor: CATEGORY_COLOR[cat] ?? "var(--color-fg-muted)",
-              active: activeCategory === cat,
-            })),
-          }] : []),
-        ]}
+        filterGroups={buildSidebarFilterGroups({
+          statusTitle: "Status",
+          statusFilters: FILTERS,
+          activeFilter,
+          filterCounts,
+          onStatusSelect: applyFilter,
+          categories: categoryStats,
+          activeCategory,
+          onCategorySelect: (v) => setActiveCategory((prev) => prev === v ? null : v),
+        })}
       />
     );
     const main = (
       <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--color-bg)" }}>
-        {!isAuthenticated && (
-          <div className="flex items-center justify-between mx-6 mt-4 mb-2 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: 3 }}>
-            <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>
-            <Link href="/login" style={{ color: "var(--color-active-highlight)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
-          </div>
-        )}
-        <div className="flex items-center justify-between px-6 pt-4 pb-3" style={{ borderBottom: "1px solid var(--color-border-soft)" }}>
-          {/* Left: cap tooltip + active filter label, plus active-category breadcrumb when set. */}
-          <div className="flex items-center gap-2">
-            <CategoryCapsTooltip variant="regular">
-              <div tabIndex={0} aria-label="Show task point caps" className="flex items-center justify-center" style={{ width: 26, height: 26, color: "var(--color-fg-muted)", cursor: "help" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M9 16l2 2 4-4" />
-                </svg>
-              </div>
-            </CategoryCapsTooltip>
-            <span style={{ fontSize: 11, color: "var(--color-fg)", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase" }}>
-              {FILTERS.find((f) => f.value === activeFilter)?.label ?? "All"}
-            </span>
-            {activeCategory && (
-              <>
-                <span style={{ color: "var(--color-fg-subtle)", fontSize: 10 }}>·</span>
-                <span style={{ fontSize: 11, color: "var(--color-fg-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-                  {activeCategory}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5">
+        {!isAuthenticated && <DemoModeBanner className="mx-6 mt-4 mb-2" />}
+        <TaskPageHeader
+          capsVariant="regular"
+          filterLabel={FILTERS.find((f) => f.value === activeFilter)?.label ?? "All"}
+          activeCategory={activeCategory}
+          newTaskLabel="New task"
+          isAuthenticated={isAuthenticated}
+          onNewTask={() => setShowNewTask(true)}
+          controls={
             <TaskListControls
               sortMode={sortMode}
               groupMode={groupMode}
               onSortChange={setSortMode}
               onGroupChange={setGroupMode}
             />
-            <button
-              onClick={() => isAuthenticated && setShowNewTask(true)}
-              disabled={!isAuthenticated}
-              title={!isAuthenticated ? "Sign in to create tasks" : "New task"}
-              aria-label="New task"
-              className="flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ml-1"
-              style={{ width: 28, height: 28, fontSize: 18, lineHeight: 1, background: "transparent", border: "none", color: "var(--color-fg)" }}
-            >
-              +
-            </button>
-          </div>
-        </div>
+          }
+        />
         <div className="flex-1 overflow-auto px-6 py-4">
           {!loading && renderFilterPage(activeFilter)}
         </div>
@@ -632,12 +458,7 @@ function Home() {
           className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden"
           style={{ maxWidth: 420 }}
         >
-          {!isAuthenticated && (
-            <div className="flex items-center justify-between mt-3 mb-3 px-3 py-2 text-[10px] tracking-widest uppercase" style={{ background: "var(--color-active-highlight-bg)", border: "1px solid var(--color-active-highlight-border)", borderRadius: "3px" }}>
-              <span style={{ color: "var(--color-active-highlight)", opacity: 0.85 }}>Demo · changes are not saved</span>
-              <Link href="/login" style={{ color: "var(--color-active-highlight)", letterSpacing: "0.18em", fontWeight: 600 }}>Sign in →</Link>
-            </div>
-          )}
+          {!isAuthenticated && <DemoModeBanner />}
 
           <div style={{ paddingTop: 32, background: "var(--color-bg)" }}>
             {(() => {
@@ -897,29 +718,6 @@ function Home() {
 
 // Sidebar nav icons — small mono SVGs that mirror the existing
 // MobileEdgeDrawer icon set so the desktop and mobile nav match visually.
-function NavIconList() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" />
-      <polyline points="3,6 4,7 6,5" /><polyline points="3,12 4,13 6,11" /><polyline points="3,18 4,19 6,17" />
-    </svg>
-  );
-}
-function NavIconRepeat() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 4 21 10 15 10" />
-    </svg>
-  );
-}
-function NavIconArchive() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  );
-}
-
 export default function Page() {
   return (
     <Suspense>

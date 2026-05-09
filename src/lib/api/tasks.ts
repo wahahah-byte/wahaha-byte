@@ -7,6 +7,12 @@ export interface Subtask {
   completed: boolean;
   sortOrder: number;
   createdAt: string;
+  // Fitness extension: when setsTarget is set, the subtask renders a set
+  // counter (e.g., "Push-ups · 2/5 @ 8 reps") instead of a plain checkbox.
+  // setsCompleted increments per tap; auto-completes when it hits setsTarget.
+  setsTarget?: number | null;
+  repsTarget?: number | null;
+  setsCompleted?: number | null;
 }
 
 export interface TaskDto {

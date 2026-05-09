@@ -139,7 +139,10 @@ export default function TaskDetailModal({
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
   const [subtasks, setSubtasksState] = useState<Subtask[]>(task.subtasks ?? []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [newSubtaskSets, setNewSubtaskSets] = useState("");
+  const [newSubtaskReps, setNewSubtaskReps] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
+  const isFitness = task.category === "Fitness";
   useEffect(() => { setSubtasksState(task.subtasks ?? []); }, [task.taskId, task.subtasks]);
 
   function commitSubtasks(next: Subtask[]) {
@@ -176,6 +179,10 @@ export default function TaskDetailModal({
     setAddingSubtask(true);
     const snapshot = subtasks;
     const sortOrder = (snapshot[snapshot.length - 1]?.sortOrder ?? -1) + 1;
+    const setsTarget = isFitness && newSubtaskSets.trim() && Number(newSubtaskSets) > 0
+      ? Number(newSubtaskSets) : null;
+    const repsTarget = isFitness && newSubtaskReps.trim() && Number(newSubtaskReps) > 0
+      ? Number(newSubtaskReps) : null;
     const optimistic: Subtask = {
       subtaskId: nextLocalId(),
       taskId: task.taskId,
@@ -183,18 +190,46 @@ export default function TaskDetailModal({
       completed: false,
       sortOrder,
       createdAt: new Date().toISOString(),
+      setsTarget,
+      repsTarget,
+      setsCompleted: setsTarget != null ? 0 : null,
     };
     const optimisticList = [...snapshot, optimistic];
     commitSubtasks(optimisticList);
     setNewSubtaskTitle("");
+    setNewSubtaskSets("");
+    setNewSubtaskReps("");
     if (!isAuthenticated) { setAddingSubtask(false); return; }
-    const { data, error } = await subtasksApi.create(task.taskId, title);
+    const { data, error } = await subtasksApi.create(task.taskId, {
+      title,
+      setsTarget,
+      repsTarget,
+    });
     setAddingSubtask(false);
     if (error) {
       commitSubtasks(snapshot);
       return;
     }
     commitSubtasks(optimisticList.map((x) => x.subtaskId === optimistic.subtaskId ? data! : x));
+  }
+
+  async function handleIncrementSet(s: Subtask) {
+    if (s.setsTarget == null) return;
+    const currentDone = s.setsCompleted ?? 0;
+    if (currentDone >= s.setsTarget) return;
+    const nextDone = currentDone + 1;
+    const nextCompleted = nextDone >= s.setsTarget;
+    const snapshot = subtasks;
+    const next = snapshot.map((x) => x.subtaskId === s.subtaskId
+      ? { ...x, setsCompleted: nextDone, completed: nextCompleted || x.completed }
+      : x);
+    commitSubtasks(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.update(s.subtaskId, {
+      setsCompleted: nextDone,
+      ...(nextCompleted && !s.completed ? { completed: true } : {}),
+    });
+    if (error) commitSubtasks(snapshot);
   }
 
   const subtaskDoneCount = subtasks.filter((s) => s.completed).length;
@@ -867,6 +902,7 @@ export default function TaskDetailModal({
                     subtask={s}
                     onToggle={() => handleToggleSubtask(s)}
                     onDelete={() => handleDeleteSubtask(s)}
+                    onIncrementSet={() => handleIncrementSet(s)}
                   />
                 ))}
                 {task.status !== "completed" && (
@@ -879,11 +915,42 @@ export default function TaskDetailModal({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
                       }}
-                      placeholder="Add subtask…"
+                      placeholder={isFitness ? "Exercise…" : "Add subtask…"}
                       disabled={addingSubtask}
                       className="flex-1 text-xs outline-none bg-transparent"
-                      style={{ color: "var(--color-fg)", border: "none", padding: "2px 0" }}
+                      style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
                     />
+                    {isFitness && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={newSubtaskSets}
+                          onChange={(e) => setNewSubtaskSets(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                          }}
+                          placeholder="sets"
+                          aria-label="Sets"
+                          className="num-input-themed"
+                        />
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={newSubtaskReps}
+                          onChange={(e) => setNewSubtaskReps(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                          }}
+                          placeholder="reps"
+                          aria-label="Reps"
+                          className="num-input-themed"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

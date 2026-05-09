@@ -7,12 +7,13 @@ type Props = {
   subtask: Subtask;
   onToggle: () => void;
   onDelete: () => void;
+  onIncrementSet?: () => void;
 };
 
 const COMMIT_THRESHOLD = 80;
 const MAX_DRAG = 160;
 
-export default function SubtaskRow({ subtask, onToggle, onDelete }: Props) {
+export default function SubtaskRow({ subtask, onToggle, onDelete, onIncrementSet }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
 
@@ -131,10 +132,62 @@ export default function SubtaskRow({ subtask, onToggle, onDelete }: Props) {
           style={{
             color: subtask.completed ? "var(--color-fg-muted)" : "var(--color-fg)",
             textDecoration: subtask.completed ? "line-through" : "none",
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {subtask.title}
         </span>
+
+        {subtask.setsTarget != null && subtask.setsTarget > 0 && (() => {
+          const done = subtask.setsCompleted ?? 0;
+          const target = subtask.setsTarget!;
+          const reps = subtask.repsTarget;
+          const reached = done >= target;
+          return (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span
+                style={{
+                  fontSize: 10,
+                  color: reached ? "var(--color-success)" : "var(--color-fg-muted)",
+                  fontVariantNumeric: "tabular-nums",
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {done}/{target}
+                {reps != null && reps > 0 && (
+                  <span style={{ color: "var(--color-fg-subtle)", fontWeight: 400, marginLeft: 4 }}>
+                    × {reps}
+                  </span>
+                )}
+              </span>
+              {!reached && onIncrementSet && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onIncrementSet(); }}
+                  className="goal-stepper-btn"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    border: "1px solid var(--color-border-hairline)",
+                    borderRadius: 3,
+                    background: "var(--color-input)",
+                    color: "var(--color-fg-muted)",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    fontWeight: 600,
+                  }}
+                  aria-label="Mark one set complete"
+                >
+                  +
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         <button
           onClick={onDelete}

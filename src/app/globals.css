@@ -796,6 +796,42 @@ textarea::placeholder {
   margin: 0;
 }
 
+/* Compact themed number input (no spinners, theme colors, focus highlight).
+   Used by inline sets/reps fields in the new-subtask row, etc. */
+.num-input-themed {
+  width: 40px;
+  padding: 2px 6px;
+  background: var(--color-input);
+  color: var(--color-input-fg);
+  border: 1px solid var(--color-border-hairline);
+  border-radius: 3px;
+  font-size: 11px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.num-input-themed::placeholder {
+  color: var(--color-fg-subtle);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.num-input-themed:focus {
+  border-color: var(--color-active-highlight-border);
+  background: var(--color-active-highlight-bg);
+}
+
+.num-input-themed::-webkit-outer-spin-button,
+.num-input-themed::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
 .goal-stepper-btn {
   display: inline-flex;
   align-items: center;
