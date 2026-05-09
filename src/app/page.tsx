@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { tasksApi, TaskDto } from "@/lib/api/tasks";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
@@ -27,7 +26,7 @@ import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
 import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
-import { canCheckInNow, parseLocalDate, getPrevPeriodStart } from "@/lib/dateUtils";
+import { canCheckInNow } from "@/lib/dateUtils";
 import { CATEGORIES, FILTERS, maxPointsFor } from "@/lib/constants";
 import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
