@@ -954,7 +954,7 @@ export default function TaskDetailModal({
               </p>
             )}
 
-            {task.isRecurring && ((task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") || task.hasCounter) && (
+            {task.isRecurring && (
               <DetailPager
                 height={236}
                 labels={(task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") ? ["Stage", "Stats"] : ["Stage"]}
