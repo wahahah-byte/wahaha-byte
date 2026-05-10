@@ -198,6 +198,17 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hat_alien_neo.png",
     isAvailable: true,
   },
+  {
+    itemId: 2002,
+    name: "Sweater",
+    category: "outerwear",
+    slot: "BODY",
+    rarity: "COMMON",
+    cost: 40,
+    description: "A cozy knit sweater.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/sweater_knit_white.png",
+    isAvailable: true,
+  },
 ];
 
 const itemById = new Map(MOCK_AVATAR_ITEMS.map((i) => [i.itemId, i]));
@@ -206,7 +217,7 @@ export function mockItem(id: number) { return itemById.get(id) ?? null; }
 // Default mock equipped set. PNG-backed items show on the ChibiAvatar; the
 // legacy pixel-rect items are kept in case anything still uses PixelAvatar
 // but won't render here (no previewAssetUrl).
-export const MOCK_EQUIPPED_IDS: number[] = [2001];
+export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002];
 
 export function buildMockEquipped(): UserInventoryDto[] {
   const now = new Date().toISOString();
