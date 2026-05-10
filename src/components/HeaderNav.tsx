@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Tasks", activeColor: "var(--color-active-highlight)" },
+  { href: "/", label: "To Do", activeColor: "var(--color-active-highlight)" },
   { href: "/recurring", label: "Routines", activeColor: "var(--color-active-highlight-alt)" },
   { href: "/archive", label: "Archive", activeColor: "var(--color-accent)" },
 ];

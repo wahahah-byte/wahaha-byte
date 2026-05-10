@@ -3,6 +3,35 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
+// Format a Date as a local-tz YYYY-MM-DD string. Use this (not toISOString)
+// when comparing against a checkInDate's date-only portion: ISO strings are
+// UTC, which can put a midnight check-in on the "wrong" day for users east
+// or west of UTC.
+export function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// "Today" in local time as a YYYY-MM-DD string. Matches dateKey(new Date()).
+export function todayLocalKey(): string {
+  return dateKey(new Date());
+}
+
+// Sum `counterValue`s across cycles that landed today (local time). Used by
+// goal-met checks and the avatar's today-total. Robust to a missing list.
+export function sumTodayCycleCounter(
+  cycles: { checkInDate: string; counterValue?: number | null }[] | undefined | null
+): number {
+  if (!cycles || cycles.length === 0) return 0;
+  const today = todayLocalKey();
+  let sum = 0;
+  for (const c of cycles) {
+    if (typeof c.counterValue === "number" && c.checkInDate.split("T")[0] === today) {
+      sum += c.counterValue;
+    }
+  }
+  return sum;
+}
+
 function normalizeRule(rule: string | null | undefined): string {
   return (rule ?? "").toLowerCase();
 }

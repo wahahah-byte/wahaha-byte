@@ -285,6 +285,37 @@ textarea::placeholder {
     + .task-row-wrapper:not(.task-row-phantom) {
     border-top: 1px solid var(--color-border-hairline);
   }
+  /* Currently-open detail task: tinted background + left accent stripe so the
+     row visibly pairs with the inline detail panel on the right. Mobile uses
+     the modal overlay so isOpenInDetail is never set there. The stripe is a
+     pseudo-element on the wrapper so it sits above the inner's inline styles
+     (which set borderLeft / background per row state). */
+  .desktop-shell .task-list-panel .task-row-wrapper.task-row-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-active-highlight);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .desktop-shell .task-list-panel .task-row-wrapper.task-row-active .task-row-inner {
+    background: var(--color-active-highlight-border);
+  }
+  .desktop-shell .task-list-panel .task-row-wrapper.task-row-active:hover .task-row-inner {
+    background: var(--color-active-highlight-border);
+  }
+  /* Routines: bump tint opacity. The alt-border var ships at ~32% alpha,
+     which still reads as faint over the panel background — boost it to
+     ~45% so the selected routine stands out alongside the colored
+     borderLeft state markers (in_progress, missed, etc.). Picks up the
+     scope-remapped --color-active-highlight (alt) so it stays themed. */
+  .desktop-shell .recurring-scope .task-list-panel .task-row-wrapper.task-row-active .task-row-inner,
+  .desktop-shell .recurring-scope .task-list-panel .task-row-wrapper.task-row-active:hover .task-row-inner {
+    background: color-mix(in srgb, var(--color-active-highlight) 15%, transparent);
+  }
   .desktop-shell .grid[style*="max-width: 420"] {
     max-width: none !important;
     margin-inline: 0 !important;

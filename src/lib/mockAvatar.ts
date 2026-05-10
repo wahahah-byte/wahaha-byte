@@ -197,6 +197,9 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     description: "A futuristic alien helmet.",
     previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hat_alien_neo.png",
     isAvailable: true,
+    coversHair: true,
+    renderScale: 1.2,
+    offsetY: 10,
   },
   {
     itemId: 2002,
@@ -224,6 +227,27 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     isAvailable: true,
     offsetX: 11,
   },
+  // WEAPON_FRONT (z=130) — planned granular slot, casts to ItemSlot like
+  // HAIR_FRONT above. Backend currently maps weapons onto the HAND enum
+  // (also z=130), so the same asset works once the catalog goes live.
+  // sourceWidth=384 (vs base 256) so the polearm can extend past the
+  // character bounds; ChibiAvatar centers the wider canvas over the base.
+  {
+    itemId: 2004,
+    name: "Cyber Polearm",
+    category: "weapon",
+    slot: "WEAPON_FRONT" as ItemSlot,
+    rarity: "EPIC",
+    cost: 500,
+    description: "An alien cyber polearm crackling with energy.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_polearm_alien_cyber.png",
+    isAvailable: true,
+    sourceWidth: 384,
+    sourceHeight: 384,
+    offsetX: 6,
+    offsetY: -8,
+    renderScale: 1.25,
+  },
 ];
 
 const itemById = new Map(MOCK_AVATAR_ITEMS.map((i) => [i.itemId, i]));
@@ -232,7 +256,7 @@ export function mockItem(id: number) { return itemById.get(id) ?? null; }
 // Default mock equipped set. PNG-backed items show on the ChibiAvatar; the
 // legacy pixel-rect items are kept in case anything still uses PixelAvatar
 // but won't render here (no previewAssetUrl).
-export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002, 2003];
+export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002, 2003, 2004];
 
 export function buildMockEquipped(): UserInventoryDto[] {
   const now = new Date().toISOString();

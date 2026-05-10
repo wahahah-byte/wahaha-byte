@@ -242,7 +242,7 @@ export default function ArchivePage() {
     const sidebar = (
       <DesktopSidebar
         navItems={[
-          { href: "/", label: "Today", icon: <NavIconList /> },
+          { href: "/", label: "To Do", icon: <NavIconList /> },
           { href: "/recurring", label: "Routines", icon: <NavIconRepeat /> },
         ]}
         footerNavItems={[

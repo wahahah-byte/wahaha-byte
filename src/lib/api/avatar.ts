@@ -18,6 +18,22 @@ export interface AvatarItemDto {
   // Mock-data only — backend ignores; ChibiAvatar applies as a transform.
   offsetX?: number;
   offsetY?: number;
+  // Optional native canvas dimensions of the asset. Defaults to 256×384
+  // (matches base.png). Use when a sprite extends past the character
+  // bounds — e.g. an oversized weapon on a wider canvas. The item's
+  // canvas is centered over the base canvas; offsetX/Y still nudges
+  // from that anchor. Mock-data only — backend ignores.
+  sourceWidth?: number;
+  sourceHeight?: number;
+  // Optional uniform scale applied around the item's center. Defaults to 1.
+  // Use to up- or down-scale a sprite without redrawing it; because the
+  // origin is the item's center, offsetX/Y stays calibrated across scale
+  // changes. Mock-data only — backend ignores.
+  renderScale?: number;
+  // When true, hides any equipped hair (category "hair") while this item
+  // is equipped. Use for full-coverage helmets / masks where hair would
+  // otherwise poke through. Mock-data only — backend ignores.
+  coversHair?: boolean;
 }
 
 export interface UserInventoryDto {

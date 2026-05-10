@@ -13,6 +13,7 @@ import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
 import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
+import { dateKey } from "@/lib/dateUtils";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
@@ -1342,10 +1343,6 @@ const LABEL_COL = 22;
 // Empty / 4 filled levels — driven via opacity on the highlight color.
 const LEVEL_OPACITY = [0, 0.30, 0.55, 0.80, 1.0];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[]; pendingTodayDelta?: number }) {
   // GitHub-style 7×N grid: rows are days-of-week (Sun..Sat), columns are weeks

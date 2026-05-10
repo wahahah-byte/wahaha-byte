@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { TaskDto, Subtask } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, todayLocalKey } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
@@ -49,6 +49,11 @@ interface TaskRowProps {
   // For recurring counter tasks, the swipe-left action panel surfaces Log
   // instead of Check-in (counter tasks check in via the modal's slider).
   onLog?: (task: TaskDto) => void;
+  // True when this row's task is the one shown in the desktop detail panel.
+  // Adds a highlight so the user can see which list row corresponds to the
+  // panel on the right. Mobile uses the modal overlay so this flag is unused
+  // there. Set by the parent — the row doesn't compute it itself.
+  isOpenInDetail?: boolean;
 }
 
 function TaskRowImpl({
@@ -56,6 +61,7 @@ function TaskRowImpl({
   filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
   onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange, onUndoCheckIn, onLog,
+  isOpenInDetail,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
@@ -100,11 +106,7 @@ function TaskRowImpl({
     if (!task.isRecurring || !onUndoCheckIn) return null;
     const latest = task.recentCycles?.[0];
     if (!latest || latest.cycleType !== "checkin") return null;
-    const todayKey = (() => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    })();
-    return latest.checkInDate.split("T")[0] === todayKey ? latest : null;
+    return latest.checkInDate.split("T")[0] === todayLocalKey() ? latest : null;
   })();
   const wasCheckedInToday = !!undoableCycle;
 
@@ -310,7 +312,7 @@ function TaskRowImpl({
     <>
     <div
       ref={wrapperRef}
-      className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}`}
+      className={`task-row-wrapper${slashingId === task.taskId ? " task-row-deleting" : ""}${isOpenInDetail ? " task-row-active" : ""}`}
       style={{ position: "relative", height: "60px", touchAction: "pan-y", overflow: "visible" }}
       data-revealed={revealed ? "true" : undefined}
       onTouchStart={handleTouchStart}

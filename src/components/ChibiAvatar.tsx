@@ -56,9 +56,17 @@ export default function ChibiAvatar({
 
   // Filter to items that actually have a PNG asset, then sort by slot z-order.
   // Items without a previewAssetUrl (e.g. legacy mock pixel-rect items) are
-  // simply skipped — the base character still shows.
+  // simply skipped — the base character still shows. Hair (category "hair")
+  // is suppressed when any equipped item declares coversHair — e.g. a
+  // full-coverage helmet — so hair doesn't poke through.
+  const hideHair = equipped.some((inv) => inv.avatarItem?.coversHair === true);
   const layered = equipped
-    .filter((inv) => inv.avatarItem?.previewAssetUrl)
+    .filter((inv) => {
+      const item = inv.avatarItem;
+      if (!item?.previewAssetUrl) return false;
+      if (hideHair && item.category === "hair") return false;
+      return true;
+    })
     .sort((a, b) => {
       const za = SLOT_Z[a.avatarItem!.slot] ?? 100;
       const zb = SLOT_Z[b.avatarItem!.slot] ?? 100;
@@ -91,10 +99,28 @@ export default function ChibiAvatar({
       />
       {layered.map((inv) => {
         const item = inv.avatarItem!;
+        // Per-item canvas can be larger than the base (e.g. an oversized
+        // weapon at 384×384 vs base 256×384). Render at the item's native
+        // dimensions scaled by the same source-pixel→DOM-pixel ratio as
+        // the base, then anchor at top-left — i.e. the item canvas's (0,0)
+        // matches the base canvas's (0,0). Extra pixels overhang to the
+        // right and/or below. Use offsetX/Y to nudge if the asset was
+        // drawn with a different anchor convention.
+        const itemSrcW = item.sourceWidth ?? SOURCE_W;
+        const itemSrcH = item.sourceHeight ?? SOURCE_H;
+        const scale = height / SOURCE_H;
+        const itemW = Math.round(itemSrcW * scale);
+        const itemH = Math.round(itemSrcH * scale);
+        const left = 0;
+        const top = 0;
         // Source-canvas offsets scaled to render size so a "1px right"
         // hint stays visually consistent across height settings.
-        const dx = ((item.offsetX ?? 0) * width) / SOURCE_W;
-        const dy = ((item.offsetY ?? 0) * height) / SOURCE_H;
+        const dx = (item.offsetX ?? 0) * scale;
+        const dy = (item.offsetY ?? 0) * scale;
+        // Per-item uniform scale, applied via CSS transform around the
+        // item img's center — so changing scale doesn't drift the visual
+        // anchor and offsetX/Y stays calibrated.
+        const renderScale = item.renderScale ?? 1;
         return (
           <img
             key={inv.inventoryId}
@@ -102,16 +128,21 @@ export default function ChibiAvatar({
             // and prepends the GitHub Pages base path for /-rooted public assets.
             src={assetPath(item.previewAssetUrl!)}
             alt=""
-            width={width}
-            height={height}
+            width={itemW}
+            height={itemH}
             draggable={false}
             style={{
               position: "absolute",
-              inset: 0,
+              left,
+              top,
+              width: itemW,
+              height: itemH,
               imageRendering: "pixelated",
               userSelect: "none",
               pointerEvents: "none",
-              transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
+              transform: dx || dy || renderScale !== 1
+                ? `translate(${dx}px, ${dy}px) scale(${renderScale})`
+                : undefined,
             }}
           />
         );

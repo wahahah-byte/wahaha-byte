@@ -26,7 +26,7 @@ import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
 import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
-import { canCheckInNow } from "@/lib/dateUtils";
+import { canCheckInNow, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { CATEGORIES, FILTERS, maxPointsFor } from "@/lib/constants";
 import { buildListItems, chunkListItems, GroupMode, SortMode } from "@/lib/taskList";
 import { usePoints } from "@/context/PointsContext";
@@ -115,6 +115,13 @@ function Home() {
 
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
+      // Goal already met via prior +/- logs → skip the prompt; the user
+      // doesn't need to enter another value just to confirm the check-in.
+      const goal = t.counterGoal ?? 0;
+      if (goal > 0 && sumTodayCycleCounter(t.recentCycles) >= goal) {
+        handleCheckIn(t);
+        return;
+      }
       setCounterPromptTask(t);
       return;
     }
@@ -302,6 +309,7 @@ function Home() {
                       onRestartOverdue={handleRestartOverdue}
                       onArchive={handleArchive}
                       onSubtasksChange={handleSubtasksChange}
+                      isOpenInDetail={isDesktop && detailTask?.taskId === item.taskId}
                     />
                   ))}
                   <div className="task-row-wrapper task-row-phantom" aria-hidden="true">
@@ -326,6 +334,7 @@ function Home() {
     const closeDetail = () => { clearRestart(); setDetailTask(null); };
     return (
       <TaskDetailModal
+        key={dt.taskId}
         task={dt}
         currentStreakCount={dt.currentStreakCount}
         longestStreakCount={dt.longestStreakCount}
@@ -385,7 +394,7 @@ function Home() {
     const sidebar = (
       <DesktopSidebar
         navItems={[
-          { href: "/", label: "Today", icon: <NavIconList />, active: true },
+          { href: "/", label: "To Do", icon: <NavIconList />, active: true },
           { href: "/recurring", label: "Routines", icon: <NavIconRepeat /> },
         ]}
         footerNavItems={[
