@@ -95,3 +95,34 @@ export function authedPatch<T>(path: string, body?: unknown, options?: RequestIn
 export function authedDelete<T>(path: string, options?: RequestInit) {
   return apiFetch<T>(path, { method: "DELETE", ...options }, true);
 }
+
+// Multipart POST. Don't set Content-Type — the browser must set it itself so
+// the boundary parameter is included. apiFetch defaults Content-Type to
+// application/json, so we have to explicitly null it out via a sentinel
+// (empty string would still send a header). We strip the JSON header here
+// by passing a custom set that apiFetch will spread last and then we override.
+export async function authedPostFormData<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(typeof window !== "undefined"
+      ? { "X-Timezone-Offset": String(new Date().getTimezoneOffset()) }
+      : {}),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: form, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    let message: string;
+    try {
+      const json = JSON.parse(text);
+      message = Array.isArray(json) ? json.join(" ") : String(json);
+    } catch {
+      message = text || res.statusText;
+    }
+    return { data: null, error: message };
+  }
+  if (res.status === 204) return { data: null as T, error: null };
+  const data: T = await res.json();
+  return { data, error: null };
+}

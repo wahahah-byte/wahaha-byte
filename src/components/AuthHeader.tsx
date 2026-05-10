@@ -20,8 +20,8 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
   const { theme, toggleTheme } = useTheme();
 
   const {
-    balance, username, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
-    setBalance, setUsername, setRecurringSubmittedToday, setDailySubmitted,
+    balance, username, profilePictureUrl, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
+    setBalance, setUsername, setProfilePictureUrl, setRecurringSubmittedToday, setDailySubmitted,
   } = usePoints();
 
   useEffect(() => {
@@ -33,6 +33,7 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
       if (data) {
         setBalance(data.currentBalance);
         setUsername(data.username);
+        setProfilePictureUrl(data.profilePictureUrl ?? null);
         setDailySubmitted(data.pointsSubmittedToday ?? 0);
         setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
       }
@@ -96,13 +97,23 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
     <div className="relative shrink-0">
       <button
         onClick={() => setMenuOpen((o) => !o)}
-        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
-        style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
+        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer overflow-hidden"
+        style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd", padding: 0 }}
+        aria-label="Account menu"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
-          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
-        </svg>
+        {profilePictureUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={profilePictureUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+          </svg>
+        )}
       </button>
 
       {menuOpen && (
@@ -184,6 +195,16 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                     {theme === "dark" ? "Dark" : "Light"}
                   </span>
                 </button>
+                <a
+                  href="/settings"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
+                  style={{ color: "var(--color-fg-muted)", background: "transparent", textDecoration: "none" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Settings
+                </a>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
