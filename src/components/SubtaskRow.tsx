@@ -1,23 +1,78 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Subtask } from "@/lib/api/tasks";
+
+export interface SubtaskUpdateFields {
+  title?: string;
+  setsTarget?: number | null;
+  repsTarget?: number | null;
+}
 
 type Props = {
   subtask: Subtask;
+  isFitness?: boolean;
   onToggle: () => void;
   onDelete: () => void;
   onIncrementSet?: () => void;
+  onUpdate?: (fields: SubtaskUpdateFields) => void;
 };
 
 const COMMIT_THRESHOLD = 80;
 const MAX_DRAG = 160;
 
-export default function SubtaskRow({ subtask, onToggle, onDelete, onIncrementSet }: Props) {
+export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onIncrementSet, onUpdate }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
 
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(subtask.title);
+  const [editSets, setEditSets] = useState(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
+  const [editReps, setEditReps] = useState(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Skip the next blur-commit when the user pressed Enter or Escape (those
+  // already settled the field and stole focus from the input).
+  const skipNextBlurRef = useRef(false);
+
+  useEffect(() => {
+    if (editing && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [editing]);
+
+  function startEdit() {
+    if (!onUpdate || subtask.completed) return;
+    setEditTitle(subtask.title);
+    setEditSets(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
+    setEditReps(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    skipNextBlurRef.current = true;
+    setEditing(false);
+  }
+
+  function commitEdit() {
+    if (!onUpdate) { setEditing(false); return; }
+    const trimmed = editTitle.trim();
+    const fields: SubtaskUpdateFields = {};
+    if (trimmed && trimmed !== subtask.title) fields.title = trimmed;
+    if (isFitness) {
+      const sets = editSets.trim() ? Number(editSets) : NaN;
+      const nextSets = Number.isFinite(sets) && sets > 0 ? sets : null;
+      if (nextSets !== (subtask.setsTarget ?? null)) fields.setsTarget = nextSets;
+      const reps = editReps.trim() ? Number(editReps) : NaN;
+      const nextReps = Number.isFinite(reps) && reps > 0 ? reps : null;
+      if (nextReps !== (subtask.repsTarget ?? null)) fields.repsTarget = nextReps;
+    }
+    if (Object.keys(fields).length > 0) onUpdate(fields);
+    setEditing(false);
+  }
+
   function onTouchStart(e: React.TouchEvent) {
+    if (editing) return;
     const t = e.touches[0];
     swipeRef.current = { startX: t.clientX, startY: t.clientY, locked: null };
   }
@@ -127,21 +182,82 @@ export default function SubtaskRow({ subtask, onToggle, onDelete, onIncrementSet
           </span>
         </button>
 
-        <span
-          className="flex-1 text-xs select-none"
-          style={{
-            color: subtask.completed ? "var(--color-fg-muted)" : "var(--color-fg)",
-            textDecoration: subtask.completed ? "line-through" : "none",
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {subtask.title}
-        </span>
+        {editing ? (
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
+              else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+            }}
+            onBlur={() => {
+              if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
+              commitEdit();
+            }}
+            className="flex-1 text-xs outline-none bg-transparent"
+            style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
+          />
+        ) : (
+          <span
+            onClick={onUpdate ? startEdit : undefined}
+            className="flex-1 text-xs select-none"
+            style={{
+              color: subtask.completed ? "var(--color-fg-muted)" : "var(--color-fg)",
+              textDecoration: subtask.completed ? "line-through" : "none",
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              cursor: onUpdate && !subtask.completed ? "text" : "default",
+            }}
+          >
+            {subtask.title}
+          </span>
+        )}
 
-        {subtask.setsTarget != null && subtask.setsTarget > 0 && (() => {
+        {editing && isFitness ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={editSets}
+              onChange={(e) => setEditSets(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+              }}
+              onBlur={() => {
+                if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
+                commitEdit();
+              }}
+              placeholder="sets"
+              aria-label="Sets"
+              className="num-input-themed"
+            />
+            <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={editReps}
+              onChange={(e) => setEditReps(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+              }}
+              onBlur={() => {
+                if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
+                commitEdit();
+              }}
+              placeholder="reps"
+              aria-label="Reps"
+              className="num-input-themed"
+            />
+          </div>
+        ) : subtask.setsTarget != null && subtask.setsTarget > 0 && (() => {
           const done = subtask.setsCompleted ?? 0;
           const target = subtask.setsTarget!;
           const reps = subtask.repsTarget;
@@ -149,12 +265,14 @@ export default function SubtaskRow({ subtask, onToggle, onDelete, onIncrementSet
           return (
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span
+                onClick={onUpdate && !subtask.completed ? startEdit : undefined}
                 style={{
                   fontSize: 10,
                   color: reached ? "var(--color-success)" : "var(--color-fg-muted)",
                   fontVariantNumeric: "tabular-nums",
                   fontWeight: 600,
                   letterSpacing: "0.04em",
+                  cursor: onUpdate && !subtask.completed ? "text" : "default",
                 }}
               >
                 {done}/{target}
@@ -189,27 +307,29 @@ export default function SubtaskRow({ subtask, onToggle, onDelete, onIncrementSet
           );
         })()}
 
-        <button
-          onClick={onDelete}
-          className="flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors"
-          style={{
-            width: 32, height: 32,
-            background: "transparent",
-            border: "none",
-            color: "var(--color-fg-subtle)",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-danger)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
-          aria-label="Delete subtask"
-        >
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 3V2.2h4V3" />
-            <line x1="2" y1="3.5" x2="12" y2="3.5" />
-            <path d="M3.5 4l0.7 7.5h5.6L10.5 4" fill="none" />
-            <line x1="6" y1="6" x2="6" y2="10" />
-            <line x1="8" y1="6" x2="8" y2="10" />
-          </svg>
-        </button>
+        {!editing && (
+          <button
+            onClick={onDelete}
+            className="flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors"
+            style={{
+              width: 32, height: 32,
+              background: "transparent",
+              border: "none",
+              color: "var(--color-fg-subtle)",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-danger)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-fg-subtle)")}
+            aria-label="Delete subtask"
+          >
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 3V2.2h4V3" />
+              <line x1="2" y1="3.5" x2="12" y2="3.5" />
+              <path d="M3.5 4l0.7 7.5h5.6L10.5 4" fill="none" />
+              <line x1="6" y1="6" x2="6" y2="10" />
+              <line x1="8" y1="6" x2="8" y2="10" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

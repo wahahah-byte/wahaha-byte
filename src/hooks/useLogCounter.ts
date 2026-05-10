@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { tasksApi, TaskDto, CheckInCycleDto } from "@/lib/api/tasks";
 
 interface Deps {
@@ -10,14 +10,29 @@ interface Deps {
   setError: (msg: string) => void;
 }
 
+export interface FlushOptions {
+  // Set true when calling during page unload / visibility change. The fetch is
+  // sent with `keepalive: true` so the request survives the page being torn
+  // down. Don't use for normal flushes — keepalive has a small per-page byte
+  // budget and is meant for last-gasp delivery.
+  keepalive?: boolean;
+}
+
 // Centralised counter-cycle logger shared by Today and Routines.
 // - requestLog opens the prompt modal (used by TaskRow's swipe-Log action).
 // - submitLog commits the prompt's value as a cycle and closes the modal.
-// - quickLog skips the modal — used by the +/- buttons under the avatar.
-// All paths optimistically update the task list + detail panel and fall
-// back to local-only when the user isn't signed in (demo mode).
+// - flushQuickLog commits a buffered +/- delta as a single cycle. Caller is
+//   responsible for the buffering (see QuickLogStepper); this hook just turns
+//   a delta into one API call and one local-state append.
+// Demo mode appends a synthetic cycle immediately. Auth mode waits for the
+// server response, then appends. Returning the cycle (rather than appending
+// optimistically up front) lets the caller align the cycle's addition with
+// its own buffer reset — the displayed sum can stay constant across the
+// flush instead of dipping or doubling for a frame.
 export function useLogCounter({ isAuthenticated, setTasks, setDetailTask, setError }: Deps) {
   const [logPromptTask, setLogPromptTask] = useState<TaskDto | null>(null);
+  // Monotonic negative-id generator for demo-mode synthetic cycles.
+  const tempIdRef = useRef(-1);
 
   const appendCycle = useCallback((taskId: string, cycle: CheckInCycleDto) => {
     setTasks((prev) => prev.map((x) => x.taskId === taskId
@@ -28,21 +43,38 @@ export function useLogCounter({ isAuthenticated, setTasks, setDetailTask, setErr
       : curr);
   }, [setTasks, setDetailTask]);
 
-  const writeCycle = useCallback(async (taskId: string, value: number) => {
+  // Returns the appended cycle on success, null on failure. Demo mode
+  // appends a synthetic cycle locally; auth mode waits for the server's
+  // response and only then appends. The caller (typically QuickLogStepper)
+  // is responsible for adjusting any local "buffered" delta atomically with
+  // the cycle's addition — that's what keeps the displayed sum stable.
+  const writeCycle = useCallback(async (taskId: string, value: number, opts?: FlushOptions): Promise<CheckInCycleDto | null> => {
     if (!isAuthenticated) {
+      const tempId = tempIdRef.current--;
       const now = new Date();
-      appendCycle(taskId, {
-        cycleId: -now.getTime(),
+      const local: CheckInCycleDto = {
+        cycleId: tempId,
         taskId,
         checkInDate: now.toISOString(),
         counterValue: value,
         createdAt: now.toISOString(),
-      });
-      return;
+      };
+      appendCycle(taskId, local);
+      return local;
     }
-    const { data, error } = await tasksApi.logCounter(taskId, value);
-    if (error) { setError(error); return; }
-    if (data) appendCycle(taskId, data);
+
+    const { data, error } = await tasksApi.logCounter(taskId, value, opts?.keepalive ? { keepalive: true } : undefined);
+    if (error) {
+      // Tag the toast with the rejected delta so the user knows what to redo.
+      // Without this they only see the raw server message ("Bad Request"),
+      // which gives no clue that their last +/- run wasn't saved.
+      const signed = `${value > 0 ? "+" : ""}${value}`;
+      setError(`Couldn't save log (${signed}): ${error}`);
+      return null;
+    }
+    if (!data) return null;
+    appendCycle(taskId, data);
+    return data;
   }, [isAuthenticated, appendCycle, setError]);
 
   const requestLog = useCallback((t: TaskDto) => {
@@ -58,16 +90,16 @@ export function useLogCounter({ isAuthenticated, setTasks, setDetailTask, setErr
     await writeCycle(t.taskId, value);
   }, [logPromptTask, writeCycle]);
 
-  const quickLog = useCallback((t: TaskDto, delta: number) => writeCycle(t.taskId, delta), [writeCycle]);
-
   // Stable-identity flush: takes taskId explicitly so the detail modal can
-  // safely call it from a useEffect cleanup without closure-capturing a stale
-  // task. Used to commit the buffered +/- delta as a single API call when the
-  // modal closes or switches to a different task.
-  const flushQuickLog = useCallback((taskId: string, delta: number) => {
-    if (delta === 0) return;
-    return writeCycle(taskId, delta);
+  // safely call it from a useEffect cleanup or unload handler without
+  // closure-capturing a stale task. Pass `{ keepalive: true }` from
+  // pagehide/visibilitychange handlers so the request survives unload.
+  // Resolves to the appended cycle on success, null on failure. Returns
+  // a resolved-null promise for delta=0 so the caller can always `await`.
+  const flushQuickLog = useCallback((taskId: string, delta: number, opts?: FlushOptions): Promise<CheckInCycleDto | null> => {
+    if (delta === 0) return Promise.resolve(null);
+    return writeCycle(taskId, delta, opts);
   }, [writeCycle]);
 
-  return { logPromptTask, requestLog, cancelLog, submitLog, quickLog, flushQuickLog };
+  return { logPromptTask, requestLog, cancelLog, submitLog, flushQuickLog };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
@@ -11,6 +11,7 @@ import SubtaskRow from "@/components/SubtaskRow";
 import SlideToCheckIn from "@/components/SlideToCheckIn";
 import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
+import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
 
 const PRIORITIES = [
@@ -49,10 +50,13 @@ interface Props {
   onUndo?: () => void;
   onDelete?: () => void;
   // Quick-log buffered delta flush. The +/- buttons under the avatar mutate a
-  // local buffer instead of calling on each tap; the flush fires once when the
-  // modal closes or switches tasks. Signature takes taskId explicitly so the
-  // useEffect cleanup can route to the right task without a stale closure.
-  onFlushQuickLog?: (taskId: string, delta: number) => void;
+  // local buffer instead of calling on each tap; the flush fires after a short
+  // idle (debounce), when the modal closes or switches tasks, and on
+  // page/tab close. Pass `{ keepalive: true }` from unload handlers so the
+  // request survives the page being torn down. Signature takes taskId
+  // explicitly so cleanup paths route to the right task without a stale
+  // closure. Resolves to the appended cycle on success, null on failure.
+  onFlushQuickLog?: (taskId: string, delta: number, opts?: { keepalive?: boolean }) => Promise<CheckInCycleDto | null>;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
   isActing?: boolean;
@@ -215,6 +219,32 @@ export default function TaskDetailModal({
     commitSubtasks(optimisticList.map((x) => x.subtaskId === optimistic.subtaskId ? data! : x));
   }
 
+  async function handleUpdateSubtask(s: Subtask, fields: { title?: string; setsTarget?: number | null; repsTarget?: number | null }) {
+    if (Object.keys(fields).length === 0) return;
+    const snapshot = subtasks;
+    // If the user shrinks setsTarget below their current setsCompleted, clamp
+    // setsCompleted so the displayed "done/target" stays sensible.
+    const next = snapshot.map((x) => {
+      if (x.subtaskId !== s.subtaskId) return x;
+      const merged = { ...x, ...fields };
+      if (fields.setsTarget !== undefined) {
+        const target = fields.setsTarget;
+        if (target == null) merged.setsCompleted = null;
+        else if ((merged.setsCompleted ?? 0) > target) merged.setsCompleted = target;
+      }
+      return merged;
+    });
+    commitSubtasks(next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const updatedRow = next.find((x) => x.subtaskId === s.subtaskId)!;
+    const apiFields: { title?: string; setsTarget?: number | null; repsTarget?: number | null; setsCompleted?: number | null } = { ...fields };
+    if (fields.setsTarget !== undefined && updatedRow.setsCompleted !== s.setsCompleted) {
+      apiFields.setsCompleted = updatedRow.setsCompleted ?? null;
+    }
+    const { error } = await subtasksApi.update(s.subtaskId, apiFields);
+    if (error) commitSubtasks(snapshot);
+  }
+
   async function handleIncrementSet(s: Subtask) {
     if (s.setsTarget == null) return;
     const currentDone = s.setsCompleted ?? 0;
@@ -335,26 +365,135 @@ export default function TaskDetailModal({
   // fetch and the heatmap falls back to the embedded slice.
   const [heatmapHistory, setHeatmapHistory] = useState<CheckInCycleDto[] | null>(null);
 
-  // Buffered delta from the +/- stepper. Resets when the modal switches tasks
-  // and flushes (one API call) on unmount or task change. Mirror in a ref so
-  // the cleanup function reads the latest value without re-binding the effect.
+  // Merge fetched history with the embedded slice so optimistic updates from
+  // a just-completed check-in (which mutate task.recentCycles via the parent
+  // store) stay visible without re-fetching. Local entries win on duplicate
+  // cycleIds — they reflect any in-flight edits the server hasn't acked yet.
+  // The avatar's cycleSumToday and the heatmap both read from this so they
+  // can never disagree about today's committed total.
+  const heatmapCycles = useMemo(() => {
+    const fetched = heatmapHistory ?? [];
+    const local = task.recentCycles ?? [];
+    if (fetched.length === 0) return local;
+    const byId = new Map<number, CheckInCycleDto>();
+    for (const c of fetched) byId.set(c.cycleId, c);
+    for (const c of local) byId.set(c.cycleId, c);
+    return Array.from(byId.values());
+  }, [heatmapHistory, task.recentCycles]);
+
+  // The +/- counter buffer lives here (rather than inside QuickLogStepper) so
+  // the heatmap on the sibling pager card can read it too. Without that,
+  // avatar and heatmap drift by pendingLog for the duration of an in-flight
+  // flush. Each tap re-renders the modal, but display value math is set up
+  // so that no intermediate render shows the wrong sum (see the debounce
+  // effect's commentary for the keep-pendingLog-till-API-responds invariant).
   const [pendingLog, setPendingLog] = useState(0);
   const pendingLogRef = useRef(0);
   useEffect(() => { pendingLogRef.current = pendingLog; }, [pendingLog]);
-  // flushRef holds the latest onFlushQuickLog so the cleanup can call it
-  // without listing the prop in deps (which would re-run cleanup every render).
+
+  // How much of pendingLog is already mid-flight (sent to the server but not
+  // yet reflected via parent appendCycle + our local decrement). Used to
+  // compute the un-flushed remainder so concurrent taps during an in-flight
+  // flush don't double-send or under-send.
+  const inFlightSentRef = useRef(0);
+
+  // Mirror onFlushQuickLog in a ref so long-lived effect cleanups don't capture
+  // a stale prop reference.
   const flushRef = useRef(onFlushQuickLog);
   useEffect(() => { flushRef.current = onFlushQuickLog; });
 
+  // Today's committed counter sum (used to compute the displayed total and
+  // for the - button's clamp). Also fed to HeatmapStrip alongside pendingLog
+  // via pendingTodayDelta so both stay in sync.
+  const todayKey = useMemo(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    return dateKey(d);
+  }, []);
+  const cycleSumToday = useMemo(() => {
+    let sum = 0;
+    for (const c of heatmapCycles) {
+      if (c.checkInDate.split("T")[0] === todayKey && typeof c.counterValue === "number") {
+        sum += c.counterValue;
+      }
+    }
+    return sum;
+  }, [heatmapCycles, todayKey]);
+
+  const handleStepperIncrement = useCallback(() => {
+    setPendingLog((p) => p + 1);
+  }, []);
+  const handleStepperDecrement = useCallback(() => {
+    // Clamp against cycleSumToday so rapid taps can't drive the displayed
+    // total below 0. The disabled prop on the - button reflects the
+    // last-rendered state, which can lag on fast tap bursts.
+    setPendingLog((p) => (cycleSumToday + p - 1 < 0 ? p : p - 1));
+  }, [cycleSumToday]);
+
+  // Flush any un-sent buffered delta on unmount or task change so a buffered
+  // correction isn't lost. Subtract whatever's already mid-flight — that
+  // portion has its own in-flight handler and shouldn't be sent twice.
   useEffect(() => {
-    // Fresh task = fresh buffer.
-    setPendingLog(0);
-    pendingLogRef.current = 0;
-    const taskId = task.taskId;
+    const tid = task.taskId;
     return () => {
-      const delta = pendingLogRef.current;
-      if (delta !== 0) flushRef.current?.(taskId, delta);
+      const remainder = pendingLogRef.current - inFlightSentRef.current;
+      if (remainder !== 0) flushRef.current?.(tid, remainder);
       pendingLogRef.current = 0;
+      inFlightSentRef.current = 0;
+    };
+  }, [task.taskId]);
+
+  // Debounced auto-flush. Keep pendingLog at its full value for the duration
+  // of the API roundtrip; the displayed sum is cycleSumToday + pendingLog,
+  // and during the in-flight period cycleSumToday hasn't moved yet so the
+  // display stays stable. When the response lands, the parent's appendCycle
+  // adds the cycle (cycleSumToday += delta) and we immediately subtract
+  // delta from pendingLog inside the same render (flushSync) — both moves
+  // cancel out, so the displayed total is unchanged. No flicker.
+  useEffect(() => {
+    if (!flushRef.current) return;
+    const remainder = pendingLog - inFlightSentRef.current;
+    if (remainder === 0) return;
+    const tid = task.taskId;
+    const timer = setTimeout(async () => {
+      const delta = pendingLogRef.current - inFlightSentRef.current;
+      if (delta === 0) return;
+      inFlightSentRef.current += delta;
+      try {
+        const result = await flushRef.current?.(tid, delta);
+        if (!result) {
+          // Failure: pendingLog stays so the user can retry. Drop the
+          // in-flight reservation so future debounce cycles can re-send.
+          inFlightSentRef.current -= delta;
+          return;
+        }
+        flushSync(() => {
+          setPendingLog((p) => p - delta);
+        });
+        inFlightSentRef.current -= delta;
+      } catch {
+        inFlightSentRef.current -= delta;
+      }
+    }, QUICK_LOG_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [pendingLog, task.taskId]);
+
+  // Tab/page-close safety net via keepalive fetch. State updates here are
+  // best-effort — on actual unload they're discarded harmlessly.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tid = task.taskId;
+    const flush = () => {
+      const remainder = pendingLogRef.current - inFlightSentRef.current;
+      if (remainder === 0) return;
+      inFlightSentRef.current += remainder;
+      flushRef.current?.(tid, remainder, { keepalive: true });
+    };
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [task.taskId]);
 
@@ -374,20 +513,6 @@ export default function TaskDetailModal({
     })();
     return () => { cancelled = true; };
   }, [task.taskId, task.isRecurring, task.recurrenceRule]);
-
-  // Merge fetched history with the embedded slice so optimistic updates from
-  // a just-completed check-in (which mutate task.recentCycles via the parent
-  // store) stay visible without re-fetching. Local entries win on duplicate
-  // cycleIds — they reflect any in-flight edits the server hasn't acked yet.
-  const heatmapCycles = useMemo(() => {
-    const fetched = heatmapHistory ?? [];
-    const local = task.recentCycles ?? [];
-    if (fetched.length === 0) return local;
-    const byId = new Map<number, CheckInCycleDto>();
-    for (const c of fetched) byId.set(c.cycleId, c);
-    for (const c of local) byId.set(c.cycleId, c);
-    return Array.from(byId.values());
-  }, [heatmapHistory, task.recentCycles]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -838,99 +963,22 @@ export default function TaskDetailModal({
                     content: (
                       <div className="flex-1 flex flex-col items-center justify-center gap-2">
                         <ChibiAvatar equipped={buildMockEquipped()} height={192} />
-                        {(() => {
-                          if (!task.hasCounter) return null;
-                          const today = new Date(); today.setHours(0, 0, 0, 0);
-                          const todayKey = dateKey(today);
-                          let cycleSum = 0; let count = 0;
-                          for (const c of task.recentCycles ?? []) {
-                            if (c.checkInDate.split("T")[0] === todayKey && typeof c.counterValue === "number") {
-                              cycleSum += c.counterValue; count++;
-                            }
-                          }
-                          // Display reflects buffered +/- taps so the user sees their
-                          // intent immediately; the actual API call happens on flush.
-                          const sum = cycleSum + pendingLog;
-                          const goal = task.counterGoal ?? null;
-                          if (count === 0 && pendingLog === 0 && goal == null && !onFlushQuickLog) return null;
-                          const unit = task.counterUnit ? ` ${task.counterUnit}` : "";
-                          const reached = goal != null && sum >= goal;
-                          const innerText = goal != null
-                            ? `${sum.toLocaleString()} / ${goal.toLocaleString()}${unit}`
-                            : `${sum.toLocaleString()}${unit}`;
-                          const labelStyle = { fontSize: 11, color: "var(--color-fg)", fontWeight: 600, fontVariantNumeric: "tabular-nums" as const, display: "inline-flex", alignItems: "center", gap: 6 };
-                          // lastCheckInDate is only written by handleCheckIn — never by
-                          // logCounter — so it's a clean signal that today's check-in is
-                          // committed. Hide the +/- once that's true to keep the slider
-                          // as the unambiguous "complete the day" affordance.
+                        {task.hasCounter && (() => {
+                          // hasCounter && pending status && not yet checked in today
+                          // is the gate for showing the +/- buttons; otherwise we
+                          // render a read-only sum.
                           const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;
-                          const quantity = onFlushQuickLog && task.status === "pending" && !checkedInToday ? (
-                            <span className="goal-stepper" aria-label="Quick log" style={{ height: 20, verticalAlign: "middle" }}>
-                              <button
-                                type="button"
-                                className="goal-stepper-btn"
-                                onClick={() => setPendingLog((p) => p - 1)}
-                                disabled={sum <= 0}
-                                aria-label="Log -1"
-                              >
-                                −
-                              </button>
-                              <span
-                                className="goal-stepper-input"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontWeight: 600,
-                                  color: "var(--color-fg)",
-                                  width: "auto",
-                                  padding: "0 8px",
-                                  whiteSpace: "nowrap",
-                                }}
-                                aria-live="polite"
-                              >
-                                {innerText}
-                                {reached && <span style={{ marginLeft: 6, color: "var(--color-success)" }}>✓</span>}
-                              </span>
-                              <button
-                                type="button"
-                                className="goal-stepper-btn"
-                                onClick={() => setPendingLog((p) => p + 1)}
-                                aria-label="Log +1"
-                              >
-                                +
-                              </button>
-                            </span>
-                          ) : (
-                            <span>{innerText}{reached && <span style={{ marginLeft: 6, color: "var(--color-success)" }}>✓</span>}</span>
-                          );
-                          if (count === 0 && pendingLog === 0 && goal == null && !onFlushQuickLog) return null;
-                          if (goal == null) {
-                            return (
-                              <span style={labelStyle}>
-                                Today
-                                {quantity}
-                              </span>
-                            );
-                          }
-                          const pct = Math.min(100, Math.round((sum / goal) * 100));
+                          const showStepper = !!onFlushQuickLog && task.status === "pending" && !checkedInToday;
                           return (
-                            <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 180 }}>
-                              <span style={labelStyle}>
-                                Today
-                                {quantity}
-                              </span>
-                              <div style={{ width: "100%", height: 4, background: "var(--color-track)", borderRadius: 2, overflow: "hidden" }}>
-                                <div
-                                  style={{
-                                    width: `${pct}%`,
-                                    height: "100%",
-                                    background: reached ? "var(--color-success)" : "var(--color-active-highlight-alt)",
-                                    transition: "width 0.3s",
-                                  }}
-                                />
-                              </div>
-                            </div>
+                            <QuickLogStepper
+                              cycleSum={cycleSumToday}
+                              pendingLog={pendingLog}
+                              showStepper={showStepper}
+                              counterUnit={task.counterUnit}
+                              counterGoal={task.counterGoal}
+                              onIncrement={handleStepperIncrement}
+                              onDecrement={handleStepperDecrement}
+                            />
                           );
                         })()}
                       </div>
@@ -944,6 +992,7 @@ export default function TaskDetailModal({
                           rule={task.recurrenceRule}
                           hasCounter={task.hasCounter ?? false}
                           cycles={heatmapCycles}
+                          pendingTodayDelta={task.hasCounter ? pendingLog : 0}
                         />
                       </div>
                     ),
@@ -969,9 +1018,11 @@ export default function TaskDetailModal({
                   <SubtaskRow
                     key={s.subtaskId}
                     subtask={s}
+                    isFitness={isFitness}
                     onToggle={() => handleToggleSubtask(s)}
                     onDelete={() => handleDeleteSubtask(s)}
                     onIncrementSet={() => handleIncrementSet(s)}
+                    onUpdate={(fields) => handleUpdateSubtask(s, fields)}
                   />
                 ))}
                 {task.status !== "completed" && (
@@ -1283,6 +1334,8 @@ function Field({ label, children, className }: { label: string; children: React.
 
 const HISTORY_PAGE_SIZE = 30;
 const HEATMAP_WEEKS = 12;
+// Idle window before a buffered +/- delta auto-flushes to the API.
+const QUICK_LOG_DEBOUNCE_MS = 1500;
 const CELL_SIZE = 14;
 const CELL_GAP = 3;
 const LABEL_COL = 22;
@@ -1294,7 +1347,7 @@ function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[] }) {
+function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[]; pendingTodayDelta?: number }) {
   // GitHub-style 7×N grid: rows are days-of-week (Sun..Sat), columns are weeks
   // oldest-on-left. Today always sits in the rightmost column at row=todayDow;
   // any cells in that column past today render invisibly so the grid keeps shape.
@@ -1324,17 +1377,39 @@ function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: 
     columns.push(col);
   }
 
-  const cycleByDate = new Map(cycles.map((c) => [c.checkInDate.split("T")[0], c]));
+  // A day can have multiple cycles (a check-in plus one or more logs), so
+  // aggregate per date: sum counterValue across all cycles that day, and track
+  // presence separately so non-counter tasks still light up the cell.
+  const dayByDate = new Map<string, { sum: number; hasValue: boolean }>();
+  for (const c of cycles) {
+    const key = c.checkInDate.split("T")[0];
+    const entry = dayByDate.get(key) ?? { sum: 0, hasValue: false };
+    if (typeof c.counterValue === "number") {
+      entry.sum += c.counterValue;
+      entry.hasValue = true;
+    }
+    dayByDate.set(key, entry);
+  }
+  // Fold the buffered +/- delta into today's cell so the heatmap mirrors the
+  // avatar total during the in-flight window. Without this the avatar can
+  // display X+1 while the heatmap still reads X for the duration of the
+  // debounce + API roundtrip.
+  if (pendingTodayDelta !== 0) {
+    const entry = dayByDate.get(todayKey) ?? { sum: 0, hasValue: false };
+    entry.sum += pendingTodayDelta;
+    entry.hasValue = true;
+    dayByDate.set(todayKey, entry);
+  }
   const maxValue = Math.max(
     1,
-    ...cycles.map((c) => (typeof c.counterValue === "number" ? c.counterValue : 0)),
+    ...Array.from(dayByDate.values()).map((d) => d.sum),
   );
 
   function levelFor(cell: Cell): number {
-    const cycle = cycleByDate.get(cell.key);
-    if (!cycle) return 0;
+    const day = dayByDate.get(cell.key);
+    if (!day) return 0;
     if (!hasCounter) return 4;
-    const v = typeof cycle.counterValue === "number" ? cycle.counterValue : 0;
+    const v = day.sum;
     if (v <= 0) return 1;
     const ratio = v / maxValue;
     if (ratio < 0.34) return 1;
@@ -1349,7 +1424,7 @@ function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: 
   const totalExpected = rule === "weekdays"
     ? visibleCells.filter((c) => !c.isWeekend).length
     : visibleCells.length;
-  const checkedCount = visibleCells.reduce((n, c) => (cycleByDate.has(c.key) ? n + 1 : n), 0);
+  const checkedCount = visibleCells.reduce((n, c) => (dayByDate.has(c.key) ? n + 1 : n), 0);
 
   // Month label per column — only shown when the month changes from the column to its left.
   const monthLabels: (string | null)[] = columns.map((col, ci) => {
@@ -1436,11 +1511,11 @@ function HeatmapStrip({ rule, hasCounter, cycles }: { rule: string; hasCounter: 
                 );
               }
               const isWeekendOff = rule === "weekdays" && cell.isWeekend;
-              const cycle = cycleByDate.get(cell.key);
-              const checked = !!cycle;
+              const day = dayByDate.get(cell.key);
+              const checked = !!day;
               const level = levelFor(cell);
               const isToday = cell.key === todayKey;
-              const value = typeof cycle?.counterValue === "number" ? cycle!.counterValue : null;
+              const value = day?.hasValue ? day.sum : null;
               const tooltip = isWeekendOff && !checked
                 ? `${fmtCycleDate(cell.key)} · off-day`
                 : `${fmtCycleDate(cell.key)}${

@@ -190,8 +190,8 @@ export const tasksApi = {
   updateCheckInCycle: (taskId: string, cycleId: number, counterValue: number | null) =>
     authedPatch<void>(`/api/tasks/${taskId}/checkin-history/${cycleId}`, { counterValue }),
 
-  logCounter: (id: string, counterValue: number) =>
-    authedPost<CheckInCycleDto>(`/api/tasks/${id}/log-counter`, { counterValue }),
+  logCounter: (id: string, counterValue: number, init?: { keepalive?: boolean }) =>
+    authedPost<CheckInCycleDto>(`/api/tasks/${id}/log-counter`, { counterValue }, init),
 
   undoCheckIn: (taskId: string, cycleId: number) =>
     authedPost<UndoCheckInResponse>(`/api/tasks/${taskId}/checkin/${cycleId}/undo`, {}),

@@ -35,6 +35,10 @@ interface UseTaskActionsOptions {
   submittedTaskIds: Set<string>;
   setError: (msg: string) => void;
   setSuccess?: (msg: string) => void;
+  // Optional: when a task is deleted, also dismiss the detail panel if it
+  // happens to be open on that task. Without this, deleting a task from the
+  // row (swipe / bulk action) leaves a stale detail modal showing.
+  setDetailTask?: React.Dispatch<React.SetStateAction<TaskDto | null>>;
 }
 
 export function useTaskActions({
@@ -42,6 +46,7 @@ export function useTaskActions({
   stagedTaskIds, setStagedTaskIds,
   selectedIds, setSelectedIds,
   submittedTaskIds, setError, setSuccess,
+  setDetailTask,
 }: UseTaskActionsOptions) {
   const { recurringSubmittedToday, setRecurringSubmittedToday, setDailySubmitted, setBalance, updateStaged } = usePoints();
 
@@ -368,6 +373,11 @@ export function useTaskActions({
 
   const handleDelete = useEvent(async function handleDelete(id: string) {
     const snapshot = tasks.find((t) => t.taskId === id);
+    // Dismiss the detail panel up front if it's open on this task, so the
+    // user doesn't see a modal full of stale data while the slash animation
+    // plays. If the API call later fails we'll re-add the task, but the
+    // panel stays closed — the toast surfaces the error instead.
+    setDetailTask?.((curr) => curr?.taskId === id ? null : curr);
     if (!isAuthenticated) {
       if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
       setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));

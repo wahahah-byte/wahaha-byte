@@ -86,6 +86,7 @@ function Home() {
       submittedTaskIds,
       setError,
       setSuccess,
+      setDetailTask,
     });
 
   useEffect(() => {

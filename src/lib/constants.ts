@@ -65,7 +65,7 @@ export function maxPointsFor(category: string): number {
 export const COUNTER_UNITS = [
   "words", "pages", "chapters",
   "minutes", "hours",
-  "workouts", "pushups", "situps",
+  "workouts",
   "km", "miles", "steps",
   "glasses", "calories",
   "items", "tasks",

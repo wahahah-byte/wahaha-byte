@@ -107,6 +107,7 @@ function Recurring() {
       submittedTaskIds,
       setError: (msg) => setError(msg),
       setSuccess: (msg) => setSuccess(msg),
+      setDetailTask,
     });
 
   useEffect(() => {
