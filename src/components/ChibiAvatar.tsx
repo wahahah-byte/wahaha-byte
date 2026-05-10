@@ -89,25 +89,33 @@ export default function ChibiAvatar({
           pointerEvents: "none",
         }}
       />
-      {layered.map((inv) => (
-        <img
-          key={inv.inventoryId}
-          // assetPath is a no-op for full https:// URLs (e.g. blob storage)
-          // and prepends the GitHub Pages base path for /-rooted public assets.
-          src={assetPath(inv.avatarItem!.previewAssetUrl!)}
-          alt=""
-          width={width}
-          height={height}
-          draggable={false}
-          style={{
-            position: "absolute",
-            inset: 0,
-            imageRendering: "pixelated",
-            userSelect: "none",
-            pointerEvents: "none",
-          }}
-        />
-      ))}
+      {layered.map((inv) => {
+        const item = inv.avatarItem!;
+        // Source-canvas offsets scaled to render size so a "1px right"
+        // hint stays visually consistent across height settings.
+        const dx = ((item.offsetX ?? 0) * width) / SOURCE_W;
+        const dy = ((item.offsetY ?? 0) * height) / SOURCE_H;
+        return (
+          <img
+            key={inv.inventoryId}
+            // assetPath is a no-op for full https:// URLs (e.g. blob storage)
+            // and prepends the GitHub Pages base path for /-rooted public assets.
+            src={assetPath(item.previewAssetUrl!)}
+            alt=""
+            width={width}
+            height={height}
+            draggable={false}
+            style={{
+              position: "absolute",
+              inset: 0,
+              imageRendering: "pixelated",
+              userSelect: "none",
+              pointerEvents: "none",
+              transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

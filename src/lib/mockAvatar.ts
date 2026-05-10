@@ -209,6 +209,21 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/sweater_knit_white.png",
     isAvailable: true,
   },
+  // Slot uses the planned granular HAIR_FRONT (z=80, below HEAD/HAT) so
+  // hair renders behind a hat. Backend enum doesn't have HAIR yet — cast
+  // is intentional, mirrors the alien-helmet "HAT slot ships later" note.
+  {
+    itemId: 2003,
+    name: "Seraph Wave Brown",
+    category: "hair",
+    slot: "HAIR_FRONT" as ItemSlot,
+    rarity: "UNCOMMON",
+    cost: 60,
+    description: "Long wavy brown hair.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hair_seraph_wave_brown.png",
+    isAvailable: true,
+    offsetX: 11,
+  },
 ];
 
 const itemById = new Map(MOCK_AVATAR_ITEMS.map((i) => [i.itemId, i]));
@@ -217,7 +232,7 @@ export function mockItem(id: number) { return itemById.get(id) ?? null; }
 // Default mock equipped set. PNG-backed items show on the ChibiAvatar; the
 // legacy pixel-rect items are kept in case anything still uses PixelAvatar
 // but won't render here (no previewAssetUrl).
-export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002];
+export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002, 2003];
 
 export function buildMockEquipped(): UserInventoryDto[] {
   const now = new Date().toISOString();

@@ -14,6 +14,10 @@ export interface AvatarItemDto {
   description?: string | null;
   previewAssetUrl?: string | null;
   isAvailable: boolean;
+  // Optional render-only nudge (source-canvas pixels, 256×384 grid).
+  // Mock-data only — backend ignores; ChibiAvatar applies as a transform.
+  offsetX?: number;
+  offsetY?: number;
 }
 
 export interface UserInventoryDto {
