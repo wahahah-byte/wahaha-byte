@@ -63,18 +63,30 @@ export function useLogCounter({ isAuthenticated, setTasks, setDetailTask, setErr
       return local;
     }
 
-    const { data, error } = await tasksApi.logCounter(taskId, value, opts?.keepalive ? { keepalive: true } : undefined);
-    if (error) {
+    const result = await tasksApi.logCounter(taskId, value, opts?.keepalive ? { keepalive: true } : undefined);
+    if (result.error) {
+      // 404 means the task is gone — typically because the user deleted it
+      // while a flush was in-flight (the modal's unmount cleanup zeros the
+      // buffered case, but already-sent requests still land). Silently drop
+      // those; toasting "Couldn't save log" against a task that no longer
+      // exists is misleading.
+      if (result.status === 404) return null;
+      // 400 with the "already checked in" message means the user checked in
+      // while a +/- buffer was still mid-flight. The cycle is now closed
+      // and the buffered delta refers to a finalised cycle, so drop it
+      // silently — the toast would surprise a user who just successfully
+      // completed their check-in.
+      if (result.status === 400 && /already checked in/i.test(result.error)) return null;
       // Tag the toast with the rejected delta so the user knows what to redo.
       // Without this they only see the raw server message ("Bad Request"),
       // which gives no clue that their last +/- run wasn't saved.
       const signed = `${value > 0 ? "+" : ""}${value}`;
-      setError(`Couldn't save log (${signed}): ${error}`);
+      setError(`Couldn't save log (${signed}): ${result.error}`);
       return null;
     }
-    if (!data) return null;
-    appendCycle(taskId, data);
-    return data;
+    if (!result.data) return null;
+    appendCycle(taskId, result.data);
+    return result.data;
   }, [isAuthenticated, appendCycle, setError]);
 
   const requestLog = useCallback((t: TaskDto) => {

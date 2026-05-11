@@ -55,51 +55,53 @@ export default function DesktopSidebar({ navItems, filterGroups, footerNavItems,
 
   return (
     <div className="desktop-sidebar">
-      <AuthHeader variant="sidebar" />
-
-      <nav className="desktop-sidebar-section" aria-label="Pages">
-        {navItems.map(renderNavRow)}
-      </nav>
-
-      {filterGroups?.map((group) => (
-        <div key={group.groupKey ?? group.title} className="desktop-sidebar-section">
-          <div className="desktop-sidebar-section-title">{group.title}</div>
-          {group.items.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => group.onSelect(item.value)}
-              className={`desktop-sidebar-row${item.active ? " active" : ""}`}
-            >
-              <span className="desktop-sidebar-icon" aria-hidden>
-                {item.dotColor ? (
-                  <span
-                    style={{
-                      width: 8, height: 8, borderRadius: "50%",
-                      background: item.dotColor,
-                      display: "inline-block",
-                    }}
-                  />
-                ) : (
-                  <FilterIcon />
-                )}
-              </span>
-              <span className="desktop-sidebar-label">{item.label}</span>
-              {item.count != null && item.count > 0 && (
-                <span className="desktop-sidebar-badge">{item.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      ))}
-
-      {footerNavItems && footerNavItems.length > 0 && (
-        <nav className="desktop-sidebar-section" aria-label="More">
-          {footerNavItems.map(renderNavRow)}
+      <div className="desktop-sidebar-scroll">
+        <nav className="desktop-sidebar-section" aria-label="Pages">
+          {navItems.map(renderNavRow)}
         </nav>
-      )}
 
-      {footer && <div className="desktop-sidebar-footer">{footer}</div>}
+        {filterGroups?.map((group) => (
+          <div key={group.groupKey ?? group.title} className="desktop-sidebar-section">
+            <div className="desktop-sidebar-section-title">{group.title}</div>
+            {group.items.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => group.onSelect(item.value)}
+                className={`desktop-sidebar-row${item.active ? " active" : ""}`}
+              >
+                <span className="desktop-sidebar-icon" aria-hidden>
+                  {item.dotColor ? (
+                    <span
+                      style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: item.dotColor,
+                        display: "inline-block",
+                      }}
+                    />
+                  ) : (
+                    <FilterIcon />
+                  )}
+                </span>
+                <span className="desktop-sidebar-label">{item.label}</span>
+                {item.count != null && item.count > 0 && (
+                  <span className="desktop-sidebar-badge">{item.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ))}
+
+        {footerNavItems && footerNavItems.length > 0 && (
+          <nav className="desktop-sidebar-section" aria-label="More">
+            {footerNavItems.map(renderNavRow)}
+          </nav>
+        )}
+
+        {footer && <div className="desktop-sidebar-footer">{footer}</div>}
+      </div>
+
+      <AuthHeader variant="sidebar" />
     </div>
   );
 }

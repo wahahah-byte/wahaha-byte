@@ -3,7 +3,7 @@ const API_URL =
 
 export type ApiResult<T> =
   | { data: T; error: null }
-  | { data: null; error: string };
+  | { data: null; error: string; status: number };
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -39,7 +39,7 @@ async function apiFetch<T>(
     } catch {
       message = text || res.statusText;
     }
-    return { data: null, error: message };
+    return { data: null, error: message, status: res.status };
   }
 
   if (res.status === 204) return { data: null as T, error: null };
@@ -120,7 +120,7 @@ export async function authedPostFormData<T>(path: string, form: FormData): Promi
     } catch {
       message = text || res.statusText;
     }
-    return { data: null, error: message };
+    return { data: null, error: message, status: res.status };
   }
   if (res.status === 204) return { data: null as T, error: null };
   const data: T = await res.json();

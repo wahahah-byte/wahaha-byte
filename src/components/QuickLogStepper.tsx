@@ -8,6 +8,10 @@ interface Props {
   showStepper: boolean;
   counterUnit?: string | null;
   counterGoal?: number | null;
+  // When true, the + button disables once sum reaches goal. The cap is also
+  // enforced server-side; this prop only suppresses optimistic taps so we
+  // don't queue deltas the API will reject and toast about.
+  capAtGoal?: boolean;
   // Reserved for future external use; not read here. Keeps the parent's
   // state-coordination clean — the parent owns pendingLog because the
   // heatmap (a sibling) also reads it.
@@ -27,11 +31,13 @@ export default function QuickLogStepper({
   showStepper,
   counterUnit,
   counterGoal,
+  capAtGoal,
   onIncrement,
   onDecrement,
 }: Props) {
   const sum = cycleSum + pendingLog;
   const goal = counterGoal ?? null;
+  const capped = !!capAtGoal && goal != null && sum >= goal;
 
   // Render nothing if there's nothing to display and no input affordance.
   if (cycleSum === 0 && pendingLog === 0 && goal == null && !showStepper) return null;
@@ -74,6 +80,8 @@ export default function QuickLogStepper({
         type="button"
         className="goal-stepper-btn"
         onClick={onIncrement}
+        disabled={capped}
+        title={capped ? "Capped at goal" : undefined}
         aria-label="Log +1"
       >
         +

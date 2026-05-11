@@ -11,7 +11,11 @@ export interface SubtaskUpdateFields {
 
 type Props = {
   subtask: Subtask;
-  isFitness?: boolean;
+  // When true, the row renders as a read-only display: no toggle, delete,
+  // swipe, inline edit, or set increment. Used while the parent task's
+  // current cycle is locked (e.g. after a recurring check-in) so the
+  // per-cycle subtask state stays frozen until the next cycle.
+  readOnly?: boolean;
   onToggle: () => void;
   onDelete: () => void;
   onIncrementSet?: () => void;
@@ -21,7 +25,7 @@ type Props = {
 const COMMIT_THRESHOLD = 80;
 const MAX_DRAG = 160;
 
-export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onIncrementSet, onUpdate }: Props) {
+export default function SubtaskRow({ subtask, readOnly, onToggle, onDelete, onIncrementSet, onUpdate }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
 
@@ -42,7 +46,7 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
   }, [editing]);
 
   function startEdit() {
-    if (!onUpdate || subtask.completed) return;
+    if (!onUpdate || subtask.completed || readOnly) return;
     setEditTitle(subtask.title);
     setEditSets(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
     setEditReps(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
@@ -59,20 +63,18 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
     const trimmed = editTitle.trim();
     const fields: SubtaskUpdateFields = {};
     if (trimmed && trimmed !== subtask.title) fields.title = trimmed;
-    if (isFitness) {
-      const sets = editSets.trim() ? Number(editSets) : NaN;
-      const nextSets = Number.isFinite(sets) && sets > 0 ? sets : null;
-      if (nextSets !== (subtask.setsTarget ?? null)) fields.setsTarget = nextSets;
-      const reps = editReps.trim() ? Number(editReps) : NaN;
-      const nextReps = Number.isFinite(reps) && reps > 0 ? reps : null;
-      if (nextReps !== (subtask.repsTarget ?? null)) fields.repsTarget = nextReps;
-    }
+    const sets = editSets.trim() ? Number(editSets) : NaN;
+    const nextSets = Number.isFinite(sets) && sets > 0 ? sets : null;
+    if (nextSets !== (subtask.setsTarget ?? null)) fields.setsTarget = nextSets;
+    const reps = editReps.trim() ? Number(editReps) : NaN;
+    const nextReps = Number.isFinite(reps) && reps > 0 ? reps : null;
+    if (nextReps !== (subtask.repsTarget ?? null)) fields.repsTarget = nextReps;
     if (Object.keys(fields).length > 0) onUpdate(fields);
     setEditing(false);
   }
 
   function onTouchStart(e: React.TouchEvent) {
-    if (editing) return;
+    if (editing || readOnly) return;
     const t = e.touches[0];
     swipeRef.current = { startX: t.clientX, startY: t.clientY, locked: null };
   }
@@ -160,9 +162,10 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
         onTouchCancel={onTouchEnd}
       >
         <button
-          onClick={onToggle}
-          className="w-6 h-6 flex-shrink-0 flex items-center justify-center cursor-pointer"
-          style={{ background: "transparent", border: "none" }}
+          onClick={readOnly ? undefined : onToggle}
+          disabled={readOnly}
+          className="w-6 h-6 flex-shrink-0 flex items-center justify-center"
+          style={{ background: "transparent", border: "none", cursor: readOnly ? "default" : "pointer", opacity: readOnly ? 0.7 : 1 }}
           aria-label={subtask.completed ? "Uncheck subtask" : "Check subtask"}
         >
           <span
@@ -217,7 +220,7 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
           </span>
         )}
 
-        {editing && isFitness ? (
+        {editing ? (
           <div className="flex items-center gap-1 flex-shrink-0">
             <input
               type="number"
@@ -282,7 +285,7 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
                   </span>
                 )}
               </span>
-              {!reached && onIncrementSet && (
+              {!reached && onIncrementSet && !readOnly && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onIncrementSet(); }}
@@ -307,7 +310,7 @@ export default function SubtaskRow({ subtask, isFitness, onToggle, onDelete, onI
           );
         })()}
 
-        {!editing && (
+        {!editing && !readOnly && (
           <button
             onClick={onDelete}
             className="flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors"

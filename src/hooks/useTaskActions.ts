@@ -208,17 +208,24 @@ export function useTaskActions({
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
       const tier = tierForStreak(prevCount, newCount);
       if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
-      const nowIso = new Date().toISOString();
+      // checkInDate must match the server's convention (local-midnight written
+      // as fake-UTC) so consumers comparing `cycle.checkInDate.split("T")[0]`
+      // against `todayLocalKey()` see the same date. Using a real UTC
+      // toISOString() here drifts the cycle to "tomorrow" on west-of-UTC
+      // evenings, which makes wasCheckedInToday read false and leaks back
+      // into the Log gate, undo affordance, and heatmap aggregation.
+      const checkInDateLocalAsFakeUtc = `${todayIso}T00:00:00Z`;
       const synthCycle = {
         cycleId: -Date.now(),
         taskId: task.taskId,
-        checkInDate: nowIso,
+        checkInDate: checkInDateLocalAsFakeUtc,
         counterValue: counterValue ?? null,
-        createdAt: nowIso,
+        createdAt: new Date().toISOString(),
         cycleType: "checkin" as const,
       };
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-        ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0), recentCycles: [synthCycle, ...(t.recentCycles ?? [])] }
+        ? { ...t, dueDate: nextDue, lastCheckInDate: todayIso, currentStreakCount: newCount, longestStreakCount: Math.max(newCount, t.longestStreakCount ?? 0), recentCycles: [synthCycle, ...(t.recentCycles ?? [])],
+            subtasks: t.subtasks?.map((s) => ({ ...s, completed: false, setsCompleted: null })) }
         : t
       ));
       setAdvancing(null);
@@ -266,19 +273,22 @@ export function useTaskActions({
     setAdvancing(null);
     // Append the new cycle to recentCycles so the in-row Undo button (and
     // today-chip / heatmap) can find its cycleId without a refetch.
-    const nowIso = new Date().toISOString();
+    // Match the server's local-midnight-as-fake-UTC convention for
+    // checkInDate — see the synthCycle comment above for why this matters.
+    const checkInDateLocalAsFakeUtc = `${todayIso}T00:00:00Z`;
     const newCycle = {
       cycleId: data!.cycleId,
       taskId: task.taskId,
-      checkInDate: nowIso,
+      checkInDate: checkInDateLocalAsFakeUtc,
       counterValue: counterValue ?? null,
-      createdAt: nowIso,
+      createdAt: new Date().toISOString(),
       cycleType: "checkin" as const,
     };
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
       ? { ...t, status: "pending", dueDate: nextDueDate, lastCheckInDate: todayIso, completedAt: null, submitted: false,
           currentStreakCount: data!.streakCount, longestStreakCount: data!.longestCount,
-          recentCycles: [newCycle, ...(t.recentCycles ?? [])] }
+          recentCycles: [newCycle, ...(t.recentCycles ?? [])],
+          subtasks: t.subtasks?.map((s) => ({ ...s, completed: false, setsCompleted: null })) }
       : t
     ));
     armUndoToast(task.taskId, data!.cycleId, task.title);

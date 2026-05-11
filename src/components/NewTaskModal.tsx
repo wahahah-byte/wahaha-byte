@@ -40,11 +40,14 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
   const [dueDate, setDueDate] = useState<Date | null>(
     initialRecurring ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null,
   );
+  const [isRange, setIsRange] = useState(false);
+  const [startDate, setStartDate] = useState<Date | null>(null);
   const [isRecurring, setIsRecurring] = useState(initialRecurring);
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
   const [hasCounter, setHasCounter] = useState(false);
   const [counterUnit, setCounterUnit] = useState<string>("");
   const [counterGoal, setCounterGoal] = useState<string>("");
+  const [capLogAtGoal, setCapLogAtGoal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,21 +70,25 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
 
   async function handleSubmit() {
     if (!title.trim()) { setError("Title is required."); return; }
-    if (dueDate) {
-      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      if (dueDate < todayMidnight) { setError("Due date cannot be in the past."); return; }
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (dueDate && dueDate < todayMidnight) { setError("Due date cannot be in the past."); return; }
+    if (isRange) {
+      if (!startDate) { setError("Pick a start date."); return; }
+      if (!dueDate) { setError("Pick an end date."); return; }
+      if (dueDate < startDate) { setError("End date must be on or after start date."); return; }
     }
     setSubmitting(true);
     setError(null);
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const dto: CreateTaskRequest = {
       title: title.trim(),
       description: description.trim() || undefined,
       category,
       priority,
       pointValue,
-      dueDate: dueDate
-        ? `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}-${String(dueDate.getDate()).padStart(2, "0")}`
-        : undefined,
+      dueDate: dueDate ? fmt(dueDate) : undefined,
+      startDate: isRange && startDate ? fmt(startDate) : undefined,
       isRecurring,
       recurrenceRule: isRecurring ? recurrenceRule : undefined,
       hasCounter: isRecurring ? hasCounter : false,
@@ -89,6 +96,9 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
       counterGoal: isRecurring && hasCounter && counterGoal.trim() && Number(counterGoal) > 0
         ? Number(counterGoal)
         : null,
+      capLogAtGoal: isRecurring && hasCounter && capLogAtGoal && counterGoal.trim() && Number(counterGoal) > 0
+        ? true
+        : false,
     };
     const { data, error: apiError } = await tasksApi.create(dto);
     setSubmitting(false);
@@ -229,9 +239,46 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           </button>
         ) : (
           <div className="flex flex-col gap-3 mb-3 mt-1">
-            <Field label={isRecurring ? "First Due" : "Due"}>
-              <DatePicker value={dueDate} onChange={setDueDate} />
-            </Field>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
+                  {isRange ? (isRecurring ? "Start / End" : "Range") : isRecurring ? "First Due" : "Due"}
+                </span>
+                <button
+                  onClick={() => {
+                    setIsRange((v) => {
+                      const next = !v;
+                      if (!next) setStartDate(null);
+                      else if (!startDate && dueDate) setStartDate(dueDate);
+                      return next;
+                    });
+                  }}
+                  className="text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                  style={{
+                    background: isRange ? "var(--color-active-highlight-bg)" : "transparent",
+                    color: isRange ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                    border: `1px solid ${isRange ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
+                    borderRadius: "999px",
+                    fontWeight: isRange ? 600 : 400,
+                    padding: "2px 8px",
+                  }}
+                >
+                  Range
+                </button>
+              </div>
+              {isRange ? (
+                <div className="flex gap-2">
+                  <div className="flex-1 min-w-0">
+                    <DatePicker value={startDate} onChange={setStartDate} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <DatePicker value={dueDate} onChange={setDueDate} />
+                  </div>
+                </div>
+              ) : (
+                <DatePicker value={dueDate} onChange={setDueDate} />
+              )}
+            </div>
 
             <div className="flex gap-3">
               <Field label="Category" className="flex-1 min-w-0">
@@ -322,6 +369,23 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                         </span>
                       )}
                     </div>
+                  )}
+                  {hasCounter && counterGoal.trim() && Number(counterGoal) > 0 && (
+                    <button
+                      onClick={() => setCapLogAtGoal((v) => !v)}
+                      title="Refuse logs that would push the day's total past the goal"
+                      className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
+                      style={{
+                        background: capLogAtGoal ? "var(--color-active-highlight-bg)" : "transparent",
+                        color: capLogAtGoal ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
+                        border: `1px solid ${capLogAtGoal ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
+                        borderRadius: "999px",
+                        fontWeight: capLogAtGoal ? 600 : 400,
+                        padding: "3px 10px",
+                      }}
+                    >
+                      Cap at goal
+                    </button>
                   )}
                 </div>
               </Field>

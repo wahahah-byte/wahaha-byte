@@ -75,6 +75,18 @@ export default function TierUpBanner({ message, onDone }: Props) {
 
 // Compute the milestone tier the user just crossed, if any.
 // Returns null when the new streak count isn't a tier boundary.
+// Returns the current tier number and label for a given streak count, or
+// null when the streak hasn't crossed the first threshold (3 days). Mirrors
+// the boundaries used by tierForStreak so the in-row badge and the tier-up
+// banner agree on what tier a streak belongs to.
+export function currentStreakTier(count: number): { tier: number; label: string } | null {
+  if (count < 3) return null;
+  if (count >= 30) return { tier: 4, label: "TIER 4" };
+  if (count >= 14) return { tier: 3, label: "TIER 3" };
+  if (count >= 7) return { tier: 2, label: "TIER 2" };
+  return { tier: 1, label: "TIER 1" };
+}
+
 export function tierForStreak(prev: number, next: number): TierUpMessage | null {
   const tiers: { at: number; label: string; mult: string }[] = [
     { at: 3, label: "Day 3", mult: "1.2×" },

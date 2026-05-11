@@ -4,11 +4,12 @@ import { memo, useEffect, useRef, useState } from "react";
 import { TaskDto, Subtask } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, todayLocalKey } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, todayLocalKey, getRangeProgress, isCycleClosed } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
 import CheckInBurstEffect from "@/components/CheckInBurstEffect";
+import { currentStreakTier } from "@/components/TierUpBanner";
 import { useTheme } from "@/context/ThemeContext";
 
 // iOS-style rubber-band damping: maps any |x| asymptotically to RUBBER_C.
@@ -109,6 +110,11 @@ function TaskRowImpl({
     return latest.checkInDate.split("T")[0] === todayLocalKey() ? latest : null;
   })();
   const wasCheckedInToday = !!undoableCycle;
+  // Cycle closure is a broader signal than "checked in today": it also covers
+  // weekly/biweekly/monthly tasks whose most recent check-in landed earlier
+  // in the cycle. Use this for affordances that should disappear for the
+  // remainder of the cycle (e.g. the Log button), not just for one day.
+  const cycleClosed = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
 
   const hasError = errorIds?.has(task.taskId) ?? false;
 
@@ -344,8 +350,10 @@ function TaskRowImpl({
         {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
           // Counter tasks: replace the Check-in swipe action with Log. Counter
           // tasks check in via the modal's slider; the swipe action is for
-          // quick log entries throughout the day.
-          if (task.hasCounter && onLog) {
+          // quick log entries throughout the day. Once the cycle is closed
+          // (any cadence — daily/weekly/biweekly/monthly), hide Log so the
+          // user can't append to a finalised cycle.
+          if (task.hasCounter && onLog && !cycleClosed) {
             return (
               <button
                 onClick={() => onLog(task)}
@@ -774,11 +782,15 @@ function TaskRowImpl({
                         ↻
                       </span>
                     )}
-                    {streakCount >= 3 && (
-                      <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.1em", opacity: 0.75, flexShrink: 0 }}>
-                        🔥 {streakCount}
-                      </span>
-                    )}
+                    {(() => {
+                      const tier = currentStreakTier(streakCount);
+                      if (!tier) return null;
+                      return (
+                        <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {tier.label} · {streakCount}
+                        </span>
+                      );
+                    })()}
                   </>
                 );
               })()}
@@ -815,22 +827,43 @@ function TaskRowImpl({
               Undo
             </button>
           ) : (
-            <>
-              {(overdueRegular || overdueRecurring) && (
-                <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
-              )}
-              <span
-                className="text-[10px]"
-                style={{
-                  color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
-                  fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
-                }}
-              >
-                {task.dueDate
-                  ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                  : "—"}
-              </span>
-            </>
+            (() => {
+              const rangeProgress = getRangeProgress(task.startDate, task.dueDate);
+              return (
+                <div className="flex flex-col items-center" style={{ lineHeight: 1.15 }}>
+                  <div className="flex items-center gap-1">
+                    {(overdueRegular || overdueRecurring) && (
+                      <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+                    )}
+                    <span
+                      className="text-[12px]"
+                      style={{
+                        color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
+                        fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
+                      }}
+                    >
+                      {task.dueDate
+                        ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : "—"}
+                    </span>
+                  </div>
+                  {rangeProgress && (
+                    <span
+                      style={{
+                        fontSize: 7,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        color: "var(--color-fg-subtle)",
+                        fontVariantNumeric: "tabular-nums",
+                        marginTop: 1,
+                      }}
+                    >
+                      Day {rangeProgress.day}/{rangeProgress.total}
+                    </span>
+                  )}
+                </div>
+              );
+            })()
           )}
         </div>
 
@@ -998,8 +1031,9 @@ function TaskRowImpl({
       <div className="row-toolbar" onClick={stop}>
         {task.status === "pending" && task.isRecurring && !isInProgress && (
           // Counter tasks: show Log on the desktop hover toolbar in place of
-          // Check-in (matches the swipe-left action on mobile).
-          task.hasCounter && onLog ? (
+          // Check-in (matches the swipe-left action on mobile). Hidden once
+          // the cycle is closed by a check-in, for any cadence.
+          task.hasCounter && onLog && !cycleClosed ? (
             <button
               onClick={(e) => { e.stopPropagation(); onLog(task); }}
               title="Log entry"

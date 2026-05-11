@@ -160,9 +160,14 @@ body {
 }
 
 /* Lock the document on task pages so only the inner task list scrolls.
-   Auth pages (login/register) don't render .task-page-shell, so they stay scrollable. */
+   Same lock applies to the desktop three-column shell — without it the
+   document scrolls and the bottom-pinned sidebar user strip ends up below
+   the fold. Auth pages (login/register) render neither class, so they
+   stay scrollable. */
 html:has(.task-page-shell),
-body:has(.task-page-shell) {
+body:has(.task-page-shell),
+html:has(.desktop-shell),
+body:has(.desktop-shell) {
   overflow: hidden;
   height: 100dvh;
 }
@@ -446,7 +451,14 @@ textarea::placeholder {
        Sidebar + detail narrow at the lower end of the breakpoint so the
        middle column keeps a usable amount of space at ~880px. */
     grid-template-columns: 200px 1fr 300px;
-    height: 100dvh;
+    /* Constrain the single row to the parent height (default auto would let
+       the row grow with content, pushing the bottom-pinned sidebar user strip
+       past the fold). minmax(0,1fr) is the standard fix for "make grid items
+       respect their inner flex/overflow constraints". */
+    grid-template-rows: minmax(0, 1fr);
+    /* Subtract the 50px global <header> in layout.tsx so the bottom-pinned
+       sidebar user strip stays inside the viewport. Mirrors .task-page-shell. */
+    height: calc(100dvh - 50px);
     overflow: hidden;
     background: var(--color-bg);
   }
@@ -471,7 +483,7 @@ textarea::placeholder {
     flex-direction: column;
     border-right: 1px solid var(--color-border-soft);
     background: var(--color-header);
-    overflow-y: auto;
+    overflow: hidden;
     min-width: 0;
   }
 
@@ -499,6 +511,19 @@ textarea::placeholder {
     gap: 6px;
     font-size: 13px;
     color: var(--color-fg-muted);
+    min-height: 0;
+  }
+
+  /* Inner scroll region between the nav/filters and the pinned user strip.
+     flex:1 + min-height:0 lets it shrink instead of pushing the user strip
+     off-screen when the sidebar's content is taller than the viewport. */
+  .desktop-sidebar-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .desktop-sidebar-section {
@@ -758,16 +783,19 @@ textarea::placeholder {
   }
 }
 
-/* User chip pinned to the top of the desktop sidebar — replaces the header's
-   AuthHeader on desktop. Single horizontal row: avatar + username on the
-   left, balance/unsubmitted pinned to the right. */
+/* User chip pinned to the bottom of the desktop sidebar (Discord-style) —
+   replaces the header's AuthHeader on desktop. Single horizontal row:
+   avatar + username on the left, balance/unsubmitted pinned to the right.
+   Lives outside the .desktop-sidebar-scroll wrapper so it stays visible
+   regardless of how tall the nav/filter content gets. */
 .desktop-sidebar-user {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px 14px;
-  border-bottom: 1px solid var(--color-border-soft);
-  margin-bottom: 6px;
+  padding: 12px 6px 4px;
+  border-top: 1px solid var(--color-border-soft);
+  margin-top: 6px;
+  flex-shrink: 0;
 }
 
 .desktop-sidebar-user-name {

@@ -120,7 +120,9 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
           <div
-            className={`absolute ${variant === "sidebar" ? "left-0" : "right-0"} mt-2 z-20 min-w-[160px] overflow-hidden`}
+            className={`absolute z-20 min-w-[160px] overflow-hidden ${
+              variant === "sidebar" ? "left-0 bottom-full mb-2" : "right-0 mt-2"
+            }`}
             style={{
                 background: "var(--color-surface)",
                 border: "1px solid var(--color-border)",

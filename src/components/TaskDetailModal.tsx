@@ -8,12 +8,13 @@ import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/c
 import DatePicker from "@/components/DatePicker";
 import GoalStepper from "@/components/GoalStepper";
 import SubtaskRow from "@/components/SubtaskRow";
+import { currentStreakTier } from "@/components/TierUpBanner";
 import SlideToCheckIn from "@/components/SlideToCheckIn";
 import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
 import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
-import { dateKey } from "@/lib/dateUtils";
+import { dateKey, isCycleClosed } from "@/lib/dateUtils";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
@@ -150,6 +151,10 @@ export default function TaskDetailModal({
   const [newSubtaskReps, setNewSubtaskReps] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
   const isFitness = task.category === "Fitness";
+  // Subtasks are frozen for the remainder of a closed cycle so a routine's
+  // per-cycle progress (which subtasks are checked, set counters) isn't
+  // mutated after the cycle's been finalised by a check-in.
+  const subtasksReadOnly = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
   useEffect(() => { setSubtasksState(task.subtasks ?? []); }, [task.taskId, task.subtasks]);
 
   function commitSubtasks(next: Subtask[]) {
@@ -186,9 +191,9 @@ export default function TaskDetailModal({
     setAddingSubtask(true);
     const snapshot = subtasks;
     const sortOrder = (snapshot[snapshot.length - 1]?.sortOrder ?? -1) + 1;
-    const setsTarget = isFitness && newSubtaskSets.trim() && Number(newSubtaskSets) > 0
+    const setsTarget = newSubtaskSets.trim() && Number(newSubtaskSets) > 0
       ? Number(newSubtaskSets) : null;
-    const repsTarget = isFitness && newSubtaskReps.trim() && Number(newSubtaskReps) > 0
+    const repsTarget = newSubtaskReps.trim() && Number(newSubtaskReps) > 0
       ? Number(newSubtaskReps) : null;
     const optimistic: Subtask = {
       subtaskId: nextLocalId(),
@@ -419,6 +424,17 @@ export default function TaskDetailModal({
     }
     return sum;
   }, [heatmapCycles, todayKey]);
+
+  // Discard any buffered +/- log before delegating to the parent's delete
+  // handler. Without this, the modal's unmount cleanup would flush the
+  // remainder against a task that's about to be (or already has been) deleted,
+  // surfacing a misleading "Couldn't save log" toast.
+  const handleDeleteClick = useCallback(() => {
+    pendingLogRef.current = 0;
+    inFlightSentRef.current = 0;
+    setPendingLog(0);
+    onDelete?.();
+  }, [onDelete]);
 
   const handleStepperIncrement = useCallback(() => {
     setPendingLog((p) => p + 1);
@@ -915,7 +931,10 @@ export default function TaskDetailModal({
                 <div className="flex flex-col gap-1.5" style={{ color: "var(--color-active-highlight-alt)" }}>
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="inline-flex items-baseline gap-1.5">
-                      <span aria-hidden style={{ fontSize: "11px", lineHeight: 1 }}>🔥</span>
+                      <span style={{ fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
+                        {currentStreakTier(c)?.label ?? "TIER 1"}
+                      </span>
+                      <span style={{ opacity: 0.5 }}>·</span>
                       <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{c}</span>
                       {longestStreakCount != null && longestStreakCount > c && (
                         <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>/ {longestStreakCount}</span>
@@ -977,6 +996,7 @@ export default function TaskDetailModal({
                               showStepper={showStepper}
                               counterUnit={task.counterUnit}
                               counterGoal={task.counterGoal}
+                              capAtGoal={task.capLogAtGoal}
                               onIncrement={handleStepperIncrement}
                               onDecrement={handleStepperDecrement}
                             />
@@ -1019,14 +1039,14 @@ export default function TaskDetailModal({
                   <SubtaskRow
                     key={s.subtaskId}
                     subtask={s}
-                    isFitness={isFitness}
+                    readOnly={subtasksReadOnly}
                     onToggle={() => handleToggleSubtask(s)}
                     onDelete={() => handleDeleteSubtask(s)}
                     onIncrementSet={() => handleIncrementSet(s)}
                     onUpdate={(fields) => handleUpdateSubtask(s, fields)}
                   />
                 ))}
-                {task.status !== "completed" && (
+                {task.status !== "completed" && !subtasksReadOnly && (
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center" style={{ color: "var(--color-fg-subtle)", fontSize: "12px", lineHeight: 1 }}>+</span>
                     <input
@@ -1041,37 +1061,35 @@ export default function TaskDetailModal({
                       className="flex-1 text-xs outline-none bg-transparent"
                       style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
                     />
-                    {isFitness && (
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="1"
-                          value={newSubtaskSets}
-                          onChange={(e) => setNewSubtaskSets(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                          }}
-                          placeholder="sets"
-                          aria-label="Sets"
-                          className="num-input-themed"
-                        />
-                        <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="1"
-                          value={newSubtaskReps}
-                          onChange={(e) => setNewSubtaskReps(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                          }}
-                          placeholder="reps"
-                          aria-label="Reps"
-                          className="num-input-themed"
-                        />
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={newSubtaskSets}
+                        onChange={(e) => setNewSubtaskSets(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                        }}
+                        placeholder="sets"
+                        aria-label="Sets"
+                        className="num-input-themed"
+                      />
+                      <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={newSubtaskReps}
+                        onChange={(e) => setNewSubtaskReps(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                        }}
+                        placeholder="reps"
+                        aria-label="Reps"
+                        className="num-input-themed"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1109,7 +1127,7 @@ export default function TaskDetailModal({
               </button>
               {mustReschedule && onDelete && (
                 <button
-                  onClick={onDelete}
+                  onClick={handleDeleteClick}
                   disabled={isSaving}
                   className="ml-auto flex items-center gap-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
                   style={{
@@ -1239,7 +1257,7 @@ export default function TaskDetailModal({
 
               {onDelete && (
                 <ActionBtn
-                  onClick={onDelete}
+                  onClick={handleDeleteClick}
                   disabled={isActing}
                   color="var(--color-danger)"
                   hoverBg="var(--color-danger-bg)"

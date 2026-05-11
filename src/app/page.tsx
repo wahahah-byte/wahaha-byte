@@ -78,7 +78,7 @@ function Home() {
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
   } = submission;
 
-  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn } =
+  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -301,6 +301,7 @@ function Home() {
                       penalizedTaskIds={penalizedTaskIds}
                       onAdvance={handleAdvance}
                       onCheckIn={requestCheckIn}
+                      onUndoCheckIn={handleUndoCheckIn}
                       onPause={handlePause}
                       onDelete={handleDelete}
                       onSkip={handleSkip}

@@ -13,7 +13,7 @@ import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
 import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
-import { canCheckInNow, isOverdue, parseLocalDate, getPrevPeriodStart, sumTodayCycleCounter } from "@/lib/dateUtils";
+import { canCheckInNow, isOverdue, parseLocalDate, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
@@ -228,6 +228,25 @@ function Recurring() {
     }
   };
 
+  // A task counts as "checked in this cycle" when its dueDate has been
+  // advanced past today by a check-in. Before any check-in, dueDate equals
+  // today (open for check-in) or is in the past (overdue, filtered above).
+  // After check-in, dueDate is strictly > today and lastCheckInDate is set,
+  // so the pair (today < due, lastCheckInDate present) uniquely identifies
+  // the "already completed this cycle, waiting for the next window" state.
+  //
+  // Earlier attempts compared lastCheckInDate to a period-derived prevStart;
+  // that mis-fires for daily tasks where yesterday's check-in date and
+  // today's prevStart coincide, classifying a still-pending task as done.
+  function isCheckedInThisCycle(t: TaskDto): boolean {
+    if (!t.lastCheckInDate || !t.dueDate || !t.recurrenceRule) return false;
+    if (isOverdue(t.dueDate)) return false;
+    const due = parseLocalDate(t.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today < due;
+  }
+
   function buildListItemsForFilter(filterValue: string): (TaskDto | Sep)[] {
     const filtered = tasks.filter((t) => tabMatches(t, filterValue) && passesCategory(t));
     if (groupMode === "frequency") {
@@ -271,7 +290,19 @@ function Recurring() {
       }
       return items;
     }
-    return [...filtered].sort(sortRecurring);
+    const sorted = [...filtered].sort(sortRecurring);
+    if (filterValue === "all") {
+      const active: TaskDto[] = [];
+      const checkedIn: TaskDto[] = [];
+      for (const t of sorted) {
+        if (isCheckedInThisCycle(t)) checkedIn.push(t);
+        else active.push(t);
+      }
+      if (active.length > 0 && checkedIn.length > 0) {
+        return [...active, sep("Checked In", "__sep-checked-in"), ...checkedIn];
+      }
+    }
+    return sorted;
   }
 
   function renderFilterPage(filterValue: string) {
@@ -590,8 +621,6 @@ function Recurring() {
             style={{ gridTemplateColumns: "1fr 64px 60px", maxWidth: 420, color: "var(--color-fg-muted)", position: "relative", zIndex: 2, background: "var(--color-bg)" }}
           >
             <span className="-ml-0.5 sm:-ml-1.5">Name</span>
-            <span className="text-center">Next</span>
-            <span className="text-center">Points</span>
           </div>
           </div>
 
