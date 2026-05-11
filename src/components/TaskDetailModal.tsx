@@ -362,6 +362,10 @@ export default function TaskDetailModal({
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
+  // While true the sheet's transform transition is re-enabled so the final
+  // slide-off (after a successful swipe-to-dismiss) animates instead of
+  // jumping. Cleared implicitly when the modal unmounts.
+  const [dismissing, setDismissing] = useState(false);
   const sheetDragRef = useRef<{ startY: number } | null>(null);
 
   // Extra check-in history for the heatmap. The embedded `task.recentCycles`
@@ -564,8 +568,53 @@ export default function TaskDetailModal({
     if (!d) return;
     if (sheetDragY > 110) {
       // Past dismiss threshold — slide off-screen, then close.
+      setDismissing(true);
       setSheetDragY(window.innerHeight);
-      setTimeout(onClose, 180);
+      setTimeout(onClose, 260);
+    } else {
+      setSheetDragY(0);
+    }
+  }, [sheetDragY, onClose]);
+
+  // Same swipe-down-to-dismiss gesture from anywhere in the modal body. Only
+  // arms when the scroll container is already at the top so it doesn't hijack
+  // mid-page scrolling, and only commits on a clear downward swipe (not a
+  // horizontal one — subtask rows have their own left-swipe). The recurring
+  // "Slide to check in" zone sits outside this scroll container, so it isn't
+  // affected.
+  const contentDragRef = useRef<{ startY: number; startX: number; committed: boolean } | null>(null);
+  const handleContentTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.currentTarget.scrollTop > 0) return;
+    contentDragRef.current = {
+      startY: e.touches[0].clientY,
+      startX: e.touches[0].clientX,
+      committed: false,
+    };
+  }, []);
+  const handleContentTouchMove = useCallback((e: React.TouchEvent) => {
+    const d = contentDragRef.current;
+    if (!d) return;
+    const dy = e.touches[0].clientY - d.startY;
+    const dx = e.touches[0].clientX - d.startX;
+    if (!d.committed) {
+      if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+      if (dy > 0 && dy > Math.abs(dx)) {
+        d.committed = true;
+      } else {
+        contentDragRef.current = null;
+        return;
+      }
+    }
+    setSheetDragY(dy > 0 ? dy : 0);
+  }, []);
+  const handleContentTouchEnd = useCallback(() => {
+    const d = contentDragRef.current;
+    contentDragRef.current = null;
+    if (!d || !d.committed) return;
+    if (sheetDragY > 110) {
+      setDismissing(true);
+      setSheetDragY(window.innerHeight);
+      setTimeout(onClose, 260);
     } else {
       setSheetDragY(0);
     }
@@ -597,9 +646,12 @@ export default function TaskDetailModal({
         boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.4)",
         maxHeight: "92vh",
         padding: "0 16px calc(16px + env(safe-area-inset-bottom, 0px))",
-        animation: sheetDragY === 0 ? "detail-sheet-in 0.24s cubic-bezier(0.2, 0, 0, 1)" : undefined,
+        animation: sheetDragY === 0 && !dismissing ? "detail-sheet-in 0.24s cubic-bezier(0.2, 0, 0, 1)" : undefined,
         transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
-        transition: sheetDragY === 0 ? "transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+        // Snap-back (release before threshold) and slide-off (commit dismiss)
+        // both animate; only the active finger-drag runs without transition so
+        // the sheet tracks the touch 1:1.
+        transition: sheetDragY === 0 || dismissing ? "transform 0.26s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
       }
     : {
         background: "var(--color-panel)",
@@ -614,7 +666,16 @@ export default function TaskDetailModal({
     : "fixed inset-0 z-50 flex items-center justify-center px-4";
 
   const overlayStyle: React.CSSProperties = isMobile
-    ? { background: "var(--color-modal-overlay)", zIndex: 60, animation: "detail-overlay-in 0.18s ease-out" }
+    ? {
+        background: "var(--color-modal-overlay)",
+        zIndex: 60,
+        animation: !dismissing ? "detail-overlay-in 0.18s ease-out" : undefined,
+        // Stay fully opaque during the drag — only fade out when the user has
+        // committed to dismiss, otherwise a partial-then-snap-back swipe would
+        // flicker the backdrop.
+        opacity: dismissing ? 0 : 1,
+        transition: "opacity 0.26s ease-out",
+      }
     : { background: "var(--color-modal-overlay)" };
 
   const sheet = (
@@ -643,8 +704,12 @@ export default function TaskDetailModal({
           </div>
         )}
         <div
+          onTouchStart={isMobile && !inline ? handleContentTouchStart : undefined}
+          onTouchMove={isMobile && !inline ? handleContentTouchMove : undefined}
+          onTouchEnd={isMobile && !inline ? handleContentTouchEnd : undefined}
+          onTouchCancel={isMobile && !inline ? handleContentTouchEnd : undefined}
           style={isMobile && !inline
-            ? { overflowY: "auto", padding: "4px 4px 4px", flex: 1, position: "relative" }
+            ? { overflowY: "auto", padding: "4px 4px 4px", flex: 1, position: "relative", overscrollBehavior: "contain" }
             : undefined
           }
         >
@@ -701,7 +766,7 @@ export default function TaskDetailModal({
               {task.title}
             </span>
           )}
-          {!isEditing && (
+          {!isEditing && !(task.isRecurring && task.status === "pending") && (
             <span
               className="flex-shrink-0 text-[8px] tracking-widest uppercase"
               style={{
@@ -1040,6 +1105,7 @@ export default function TaskDetailModal({
                     key={s.subtaskId}
                     subtask={s}
                     readOnly={subtasksReadOnly}
+                    showSetsReps={isFitness}
                     onToggle={() => handleToggleSubtask(s)}
                     onDelete={() => handleDeleteSubtask(s)}
                     onIncrementSet={() => handleIncrementSet(s)}
@@ -1061,35 +1127,37 @@ export default function TaskDetailModal({
                       className="flex-1 text-xs outline-none bg-transparent"
                       style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
                     />
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        value={newSubtaskSets}
-                        onChange={(e) => setNewSubtaskSets(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                        }}
-                        placeholder="sets"
-                        aria-label="Sets"
-                        className="num-input-themed"
-                      />
-                      <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        value={newSubtaskReps}
-                        onChange={(e) => setNewSubtaskReps(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                        }}
-                        placeholder="reps"
-                        aria-label="Reps"
-                        className="num-input-themed"
-                      />
-                    </div>
+                    {isFitness && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={newSubtaskSets}
+                          onChange={(e) => setNewSubtaskSets(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                          }}
+                          placeholder="sets"
+                          aria-label="Sets"
+                          className="num-input-themed"
+                        />
+                        <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={newSubtaskReps}
+                          onChange={(e) => setNewSubtaskReps(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
+                          }}
+                          placeholder="reps"
+                          aria-label="Reps"
+                          className="num-input-themed"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

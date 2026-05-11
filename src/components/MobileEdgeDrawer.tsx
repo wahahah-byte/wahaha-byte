@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
+import { usePoints } from "@/context/PointsContext";
 
 const ITEMS = [
   { href: "/", label: "To Do" },
@@ -11,12 +13,13 @@ const ITEMS = [
   { href: "/archive", label: "Archive" },
 ] as const;
 
-const DRAWER_WIDTH = 70;       // wide enough to fit "Recurring" comfortably
+const DRAWER_WIDTH = 220;      // wide enough for icon + uppercase label side-by-side
 const COMMIT_FRACTION = 0.5;   // drag must cross this fraction of DRAWER_WIDTH to commit
 const AXIS_DEADZONE = 8;
 
 export default function MobileEdgeDrawer() {
   const pathname = usePathname();
+  const { username, profilePictureUrl } = usePoints();
   const [open, setOpen] = useState(false);
   const [dragX, setDragX] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -55,10 +58,13 @@ export default function MobileEdgeDrawer() {
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  // Document-level open gesture: when the drawer is closed, a horizontal swipe
-  // that starts in the LEFT HALF of the viewport (and not over the task list
-  // panel) opens the drawer. The exclusion lets task rows keep their own
-  // swipe-to-reveal-actions gesture without interference.
+  // Document-level open gesture: when the drawer is closed, any horizontal
+  // right-swipe on the page opens the drawer. Swipes that begin on a row that
+  // is currently revealed are owned by the row's swipe-to-close gesture and
+  // must not also trigger the drawer; swipes elsewhere in the task list panel
+  // (closed rows, empty area) do open the drawer. The bottom action bar, the
+  // filter strip + handle, and any open modal opt out via the
+  // data-edge-drawer-block attributes so their gestures stay intact.
   useEffect(() => {
     if (open || isDesktop) return;
     const dragXRef: { current: number | null } = { current: null };
@@ -66,9 +72,9 @@ export default function MobileEdgeDrawer() {
     function onStart(e: TouchEvent) {
       if (e.touches.length > 1) return;
       const t = e.touches[0];
-      if (t.clientX > window.innerWidth / 2) return;
       const target = e.target as Element | null;
-      if (target?.closest(".task-list-panel")) return;
+      // A revealed row's right-swipe must close that row, not open the drawer.
+      if (target?.closest('.task-row-wrapper[data-revealed="true"]')) return;
       // Bottom action bar, filter tray + handle, and any open modal mark
       // themselves with this attribute so their gestures aren't hijacked.
       if (target?.closest("[data-edge-drawer-block]")) return;
@@ -95,7 +101,10 @@ export default function MobileEdgeDrawer() {
       const dy = t.clientY - d.startY;
       if (d.locked === null) {
         if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
-        if (Math.abs(dx) > Math.abs(dy)) {
+        // The closed-drawer open gesture is right-swipe only. A leftward
+        // horizontal motion shouldn't render a transparent backdrop or fight
+        // with a task row's reveal swipe.
+        if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
           d.locked = "h";
         } else {
           d.locked = "v";
@@ -220,8 +229,9 @@ export default function MobileEdgeDrawer() {
         />
       )}
 
-      {/* Drawer panel — narrow vertical rail anchored to the left edge,
-          buttons clustered at the bottom. */}
+      {/* Drawer panel — fixed-width column anchored to the left edge. Nav
+          items stack from the top; the user footer is pinned to the bottom
+          via marginTop:auto. */}
       <nav
         aria-label="Page navigation"
         className="sm:hidden"
@@ -239,9 +249,9 @@ export default function MobileEdgeDrawer() {
           zIndex: 40,
           display: "flex",
           flexDirection: "column",
-          justifyContent: "flex-end",                              // buttons cluster at the bottom
+          paddingTop: `calc(12px + env(safe-area-inset-top, 0px))`,
           paddingBottom: `calc(8px + env(safe-area-inset-bottom, 0px))`,
-          overflow: "hidden",                                      // clip any text bleed when closed
+          overflow: "hidden",
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
@@ -255,9 +265,11 @@ export default function MobileEdgeDrawer() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="flex flex-col items-center justify-center gap-0.5"
+              className="flex items-center"
               style={{
-                height: 50,
+                height: 44,
+                gap: 12,
+                padding: "0 16px",
                 color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
                 background: active ? "var(--color-active-highlight-bg)" : "transparent",
                 borderLeft: `2px solid ${active ? "var(--color-active-highlight)" : "transparent"}`,
@@ -266,13 +278,83 @@ export default function MobileEdgeDrawer() {
                 transition: "background 0.18s, color 0.18s",
               }}
             >
-              {item.label === "To Do" ? <TasksIcon /> : item.label === "Routines" ? <RecurringIcon /> : <ArchiveIcon />}
-              <span style={{ fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
+                {item.label === "To Do" ? <TasksIcon /> : item.label === "Routines" ? <RecurringIcon /> : <ArchiveIcon />}
+              </span>
+              <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
                 {item.label}
               </span>
             </Link>
           );
         })}
+
+        {/* Footer: avatar — username — settings cog. Pinned to bottom. */}
+        <div
+          style={{
+            marginTop: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            borderTop: "1px solid var(--color-border-soft)",
+          }}
+        >
+          <div
+            aria-hidden
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              overflow: "hidden",
+              background: "#3e3f42",
+              border: "1px solid #555659",
+              color: "#ddd",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {profilePictureUrl ? (
+              <Image src={profilePictureUrl} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} unoptimized />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+              </svg>
+            )}
+          </div>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              color: "var(--color-fg)",
+              fontSize: 12,
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {username ?? "Guest"}
+          </span>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              color: "var(--color-fg-muted)",
+              flexShrink: 0,
+            }}
+          >
+            <SettingsIcon />
+          </Link>
+        </div>
       </nav>
     </>,
     document.body
@@ -305,6 +387,14 @@ function ArchiveIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+function SettingsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 8.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03Z" />
     </svg>
   );
 }

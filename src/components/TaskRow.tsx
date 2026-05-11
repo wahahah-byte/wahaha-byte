@@ -193,6 +193,14 @@ function TaskRowImpl({
     if (drag.axis === "none") {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       if (Math.abs(dx) > Math.abs(dy)) {
+        // Right-swipe on a closed row passes through to MobileEdgeDrawer's
+        // document handler (open the nav). Only left-swipes — and right-swipes
+        // that close an already-revealed row — own the gesture.
+        if (dx > 0 && !revealed) {
+          drag.axis = "vertical";
+          dragRef.current = null;
+          return;
+        }
         drag.axis = "horizontal";
       } else {
         drag.axis = "vertical";
@@ -214,7 +222,9 @@ function TaskRowImpl({
       const excess = raw + drag.panelWidth; // negative
       offset = -drag.panelWidth + rubberBand(excess);
     } else if (raw > 0) {
-      offset = rubberBand(raw);
+      // Swiping right past the closed position should stop at closed, not
+      // rubber-band past it.
+      offset = 0;
     } else {
       offset = raw;
     }
@@ -572,14 +582,14 @@ function TaskRowImpl({
               {task.isRecurring ? (
                 <span
                   style={{
-                    width: 14, height: 14,
+                    width: 22, height: 22,
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     color: CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)",
                   }}
                 >
-                  <CategoryIcon category={task.category} size={14} />
+                  <CategoryIcon category={task.category} size={22} />
                 </span>
               ) : (
                 <span
@@ -611,13 +621,13 @@ function TaskRowImpl({
             <span
               className="flex-shrink-0 flex items-center justify-center"
               style={{
-                width: 14,
-                height: 14,
+                width: 22,
+                height: 22,
                 color: CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)",
               }}
               aria-hidden
             >
-              <CategoryIcon category={task.category} size={14} />
+              <CategoryIcon category={task.category} size={22} />
             </span>
           ) : (
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dot }} />

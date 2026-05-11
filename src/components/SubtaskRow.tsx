@@ -16,6 +16,10 @@ type Props = {
   // current cycle is locked (e.g. after a recurring check-in) so the
   // per-cycle subtask state stays frozen until the next cycle.
   readOnly?: boolean;
+  // Gates the sets×reps editor inputs and the counter display. Only Fitness
+  // tasks expose sets/reps; for every other category we hide that UI even
+  // if legacy data has setsTarget populated.
+  showSetsReps?: boolean;
   onToggle: () => void;
   onDelete: () => void;
   onIncrementSet?: () => void;
@@ -25,7 +29,7 @@ type Props = {
 const COMMIT_THRESHOLD = 80;
 const MAX_DRAG = 160;
 
-export default function SubtaskRow({ subtask, readOnly, onToggle, onDelete, onIncrementSet, onUpdate }: Props) {
+export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, onDelete, onIncrementSet, onUpdate }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
 
@@ -220,7 +224,7 @@ export default function SubtaskRow({ subtask, readOnly, onToggle, onDelete, onIn
           </span>
         )}
 
-        {editing ? (
+        {editing && showSetsReps ? (
           <div className="flex items-center gap-1 flex-shrink-0">
             <input
               type="number"
@@ -260,7 +264,7 @@ export default function SubtaskRow({ subtask, readOnly, onToggle, onDelete, onIn
               className="num-input-themed"
             />
           </div>
-        ) : subtask.setsTarget != null && subtask.setsTarget > 0 && (() => {
+        ) : !editing && showSetsReps && subtask.setsTarget != null && subtask.setsTarget > 0 && (() => {
           const done = subtask.setsCompleted ?? 0;
           const target = subtask.setsTarget!;
           const reps = subtask.repsTarget;

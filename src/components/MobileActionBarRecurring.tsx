@@ -97,7 +97,7 @@ export default function MobileActionBarRecurring({
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                <CategoryIcon category={cat} size={14} />
+                <CategoryIcon category={cat} size={20} />
               </button>
             );
           })}
