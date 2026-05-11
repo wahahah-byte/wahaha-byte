@@ -6,11 +6,15 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { usePoints } from "@/context/PointsContext";
+import { useTheme } from "@/context/ThemeContext";
+import { usersApi } from "@/lib/api/users";
+import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 
 const ITEMS = [
   { href: "/", label: "To Do" },
   { href: "/recurring", label: "Routines" },
   { href: "/archive", label: "Archive" },
+  { href: "/avatar", label: "Avatar" },
 ] as const;
 
 const DRAWER_WIDTH = 220;      // wide enough for icon + uppercase label side-by-side
@@ -19,8 +23,40 @@ const AXIS_DEADZONE = 8;
 
 export default function MobileEdgeDrawer() {
   const pathname = usePathname();
-  const { username, profilePictureUrl } = usePoints();
+  const {
+    username, profilePictureUrl, balance, unsubmittedPoints, dailySubmitted, recurringSubmittedToday,
+    setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday,
+  } = usePoints();
+  const { theme, toggleTheme } = useTheme();
+  const [hasToken, setHasToken] = useState(false);
   const [open, setOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const token = !!localStorage.getItem("auth_token");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasToken(token);
+    if (!token) return;
+    // Mobile no longer renders <AuthHeader>, so this drawer is responsible
+    // for hydrating the points context on every route change.
+    usersApi.getMe().then(({ data }) => {
+      if (!data) return;
+      setBalance(data.currentBalance);
+      setUsername(data.username);
+      setProfilePictureUrl(data.profilePictureUrl ?? null);
+      setDailySubmitted(data.pointsSubmittedToday ?? 0);
+      setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
+    });
+  }, [pathname, setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday]);
+
+  // Close the account popup whenever the drawer itself closes — covers
+  // swipe-to-close, backdrop tap, route change, and Escape key.
+  useEffect(() => {
+    if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAccountMenuOpen(false);
+    }
+  }, [open]);
   const [dragX, setDragX] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   // Track viewport so we can disable the drawer + its document-level swipe
@@ -162,6 +198,9 @@ export default function MobileEdgeDrawer() {
       if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
       if (Math.abs(dx) > Math.abs(dy)) {
         d.locked = "h";
+        // Hide the account popup the moment the drawer starts dragging so
+        // it doesn't translate along with the panel mid-swipe.
+        setAccountMenuOpen(false);
       } else {
         d.locked = "v";
         dragRef.current = null;
@@ -258,102 +297,226 @@ export default function MobileEdgeDrawer() {
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
       >
-        {ITEMS.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className="flex items-center"
+        {/* Footer cluster: nav buttons + points + caps + user identity.
+            Pinned to the bottom of the drawer via marginTop:auto. Nav buttons
+            sit at the top of this cluster, just above the points/caps
+            section, so they're inside thumb reach. */}
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
+          {ITEMS.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center"
+                style={{
+                  height: 44,
+                  gap: 12,
+                  padding: "0 16px",
+                  color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
+                  background: active ? "var(--color-active-highlight-bg)" : "transparent",
+                  borderLeft: `2px solid ${active ? "var(--color-active-highlight)" : "transparent"}`,
+                  textDecoration: "none",
+                  lineHeight: 1,
+                  transition: "background 0.18s, color 0.18s",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
+                  {item.label === "To Do" ? <TasksIcon />
+                    : item.label === "Routines" ? <RecurringIcon />
+                    : item.label === "Avatar" ? <AvatarIcon />
+                    : <ArchiveIcon />}
+                </span>
+                <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {hasToken && balance !== null && (() => {
+            const regSubmitted = Math.min(dailySubmitted - recurringSubmittedToday, REGULAR_CAP);
+            const recSubmitted = Math.min(recurringSubmittedToday, RECURRING_CAP);
+            const regPct = Math.round((regSubmitted / REGULAR_CAP) * 100);
+            const recPct = Math.round((recSubmitted / RECURRING_CAP) * 100);
+            const regCapped = regSubmitted >= REGULAR_CAP;
+            const recCapped = recSubmitted >= RECURRING_CAP;
+            return (
+              <div style={{ padding: "12px 14px 10px", borderTop: "1px solid var(--color-border-soft)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 9, color: "var(--color-fg-subtle)", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600 }}>Points</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-fg)" }}>
+                    {balance.toLocaleString()}
+                    {unsubmittedPoints > 0 && (
+                      <span style={{ color: "var(--color-warning)", marginLeft: 6 }}>
+                        +{unsubmittedPoints.toLocaleString()}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <CapBar label="Regular" cur={regSubmitted} cap={REGULAR_CAP} pct={regPct} capped={regCapped} colorVar="--color-active-highlight" />
+                <CapBar label="Routines" cur={recSubmitted} cap={RECURRING_CAP} pct={recPct} capped={recCapped} colorVar="--color-active-highlight-alt" />
+              </div>
+            );
+          })()}
+
+          {/* User identity row — clicking the avatar opens a popup with
+              Theme + Sign Out anchored to the row's top edge. */}
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              borderTop: "1px solid var(--color-border-soft)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              aria-label="Account menu"
               style={{
-                height: 44,
-                gap: 12,
-                padding: "0 16px",
-                color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
-                background: active ? "var(--color-active-highlight-bg)" : "transparent",
-                borderLeft: `2px solid ${active ? "var(--color-active-highlight)" : "transparent"}`,
-                textDecoration: "none",
-                lineHeight: 1,
-                transition: "background 0.18s, color 0.18s",
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                overflow: "hidden",
+                background: "#3e3f42",
+                border: "1px solid #555659",
+                color: "#ddd",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: 0,
               }}
             >
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
-                {item.label === "To Do" ? <TasksIcon /> : item.label === "Routines" ? <RecurringIcon /> : <ArchiveIcon />}
-              </span>
-              <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
-                {item.label}
-              </span>
+              {profilePictureUrl ? (
+                <Image src={profilePictureUrl} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} unoptimized />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+                </svg>
+              )}
+            </button>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                color: "var(--color-fg)",
+                fontSize: 12,
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {username ?? "Guest"}
+            </span>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                color: "var(--color-fg-muted)",
+                flexShrink: 0,
+              }}
+            >
+              <SettingsIcon />
             </Link>
-          );
-        })}
 
-        {/* Footer: avatar — username — settings cog. Pinned to bottom. */}
-        <div
-          style={{
-            marginTop: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 14px",
-            borderTop: "1px solid var(--color-border-soft)",
-          }}
-        >
-          <div
-            aria-hidden
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: "50%",
-              overflow: "hidden",
-              background: "#3e3f42",
-              border: "1px solid #555659",
-              color: "#ddd",
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {profilePictureUrl ? (
-              <Image src={profilePictureUrl} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} unoptimized />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
-                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
-              </svg>
+            {accountMenuOpen && (
+              <>
+                {/* Click-outside catcher — sits below the menu but above page content. */}
+                <div
+                  onClick={() => setAccountMenuOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 41 }}
+                />
+                <div
+                  role="menu"
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    right: 10,
+                    bottom: "calc(100% + 4px)",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 4,
+                    boxShadow: "var(--shadow-popover)",
+                    overflow: "hidden",
+                    zIndex: 42,
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { toggleTheme(); }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--color-fg-muted)",
+                      fontSize: 11,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>Theme</span>
+                    <span style={{ color: "var(--color-active-highlight)", fontWeight: 600 }}>
+                      {theme === "dark" ? "Dark" : "Light"}
+                    </span>
+                  </button>
+                  {hasToken && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        setOpen(false);
+                        localStorage.removeItem("auth_token");
+                        window.location.replace("/");
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "10px 14px",
+                        background: "transparent",
+                        border: "none",
+                        borderTop: "1px solid var(--color-border-soft)",
+                        color: "var(--color-fg-muted)",
+                        fontSize: 11,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      Sign Out
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              color: "var(--color-fg)",
-              fontSize: 12,
-              fontWeight: 500,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {username ?? "Guest"}
-          </span>
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            onClick={() => setOpen(false)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 28,
-              height: 28,
-              color: "var(--color-fg-muted)",
-              flexShrink: 0,
-            }}
-          >
-            <SettingsIcon />
-          </Link>
         </div>
       </nav>
     </>,
@@ -390,6 +553,33 @@ function ArchiveIcon() {
     </svg>
   );
 }
+function AvatarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
+    </svg>
+  );
+}
+function CapBar({ label, cur, cap, pct, capped, colorVar }: { label: string; cur: number; cap: number; pct: number; capped: boolean; colorVar: string }) {
+  const fill = capped ? "var(--color-success)" : pct >= 75 ? "var(--color-warning)" : `var(${colorVar})`;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <span style={{ fontSize: 9, color: "var(--color-fg-subtle)", letterSpacing: "0.18em", textTransform: "uppercase" }}>
+          {label}
+        </span>
+        <span style={{ fontSize: 9, color: capped ? "var(--color-success)" : "var(--color-fg-muted)", letterSpacing: "0.05em", fontWeight: 600 }}>
+          {cur} / {cap}
+        </span>
+      </div>
+      <div style={{ width: "100%", height: 3, borderRadius: 999, overflow: "hidden", background: "var(--color-track)" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: fill, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

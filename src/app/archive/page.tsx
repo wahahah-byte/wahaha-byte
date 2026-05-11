@@ -9,7 +9,7 @@ import { MOCK_TASKS } from "@/lib/mockTasks";
 import DesktopShell from "@/components/DesktopShell";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
-import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
+import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
 
 const PAGE_SIZE = 25;
 
@@ -244,6 +244,7 @@ export default function ArchivePage() {
         navItems={[
           { href: "/", label: "To Do", icon: <NavIconList /> },
           { href: "/recurring", label: "Routines", icon: <NavIconRepeat /> },
+          { href: "/avatar", label: "Avatar", icon: <NavIconAvatar /> },
         ]}
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive />, active: true },

@@ -25,7 +25,6 @@ export interface TaskDto {
   status: string;
   pointValue: number;
   dueDate: string | null;
-  startDate?: string | null;
   createdAt: string;
   completedAt: string | null;
   isRecurring: boolean;
@@ -55,7 +54,6 @@ export interface CreateTaskRequest {
   status?: string;
   pointValue?: number;
   dueDate?: string;
-  startDate?: string;
   isRecurring?: boolean;
   recurrenceRule?: string;
   hasCounter?: boolean;
@@ -73,7 +71,6 @@ export interface UpdateTaskRequest {
   status: string;
   pointValue: number;
   dueDate?: string;
-  startDate?: string;
   completedAt?: string;
   isRecurring: boolean;
   recurrenceRule?: string;

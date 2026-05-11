@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { TaskDto, Subtask } from "@/lib/api/tasks";
 import { subtasksApi } from "@/lib/api/subtasks";
 import ThreadSubtaskRow from "@/components/ThreadSubtaskRow";
-import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, todayLocalKey, getRangeProgress, isCycleClosed } from "@/lib/dateUtils";
+import { canCheckInNow, getNextOccurrenceLabel, getUnlockInfo, parseLocalDate, isOverdue, todayLocalKey, isCycleClosed } from "@/lib/dateUtils";
 import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
@@ -830,50 +830,29 @@ function TaskRowImpl({
                 lineHeight: 1,
               }}
             >
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-                <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <polyline points="4,4.5 1.5,2 4,0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <polyline points="4,2 2,4 4,6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M2 4H6.5A2.5 2.5 0 0 1 6.5 9H4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
               Undo
             </button>
           ) : (
-            (() => {
-              const rangeProgress = getRangeProgress(task.startDate, task.dueDate);
-              return (
-                <div className="flex flex-col items-center" style={{ lineHeight: 1.15 }}>
-                  <div className="flex items-center gap-1">
-                    {(overdueRegular || overdueRecurring) && (
-                      <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
-                    )}
-                    <span
-                      className="text-[12px]"
-                      style={{
-                        color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
-                        fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
-                      }}
-                    >
-                      {task.dueDate
-                        ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                        : "—"}
-                    </span>
-                  </div>
-                  {rangeProgress && (
-                    <span
-                      style={{
-                        fontSize: 7,
-                        letterSpacing: "0.18em",
-                        textTransform: "uppercase",
-                        color: "var(--color-fg-subtle)",
-                        fontVariantNumeric: "tabular-nums",
-                        marginTop: 1,
-                      }}
-                    >
-                      Day {rangeProgress.day}/{rangeProgress.total}
-                    </span>
-                  )}
-                </div>
-              );
-            })()
+            <div className="flex items-center gap-1">
+              {(overdueRegular || overdueRecurring) && (
+                <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+              )}
+              <span
+                className="text-[12px]"
+                style={{
+                  color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
+                  fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
+                }}
+              >
+                {task.dueDate
+                  ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : "—"}
+              </span>
+            </div>
           )}
         </div>
 

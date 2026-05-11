@@ -155,7 +155,10 @@ export default function TaskDetailModal({
   // per-cycle progress (which subtasks are checked, set counters) isn't
   // mutated after the cycle's been finalised by a check-in.
   const subtasksReadOnly = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
-  useEffect(() => { setSubtasksState(task.subtasks ?? []); }, [task.taskId, task.subtasks]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSubtasksState(task.subtasks ?? []);
+  }, [task.taskId, task.subtasks]);
 
   function commitSubtasks(next: Subtask[]) {
     setSubtasksState(next);
@@ -286,7 +289,10 @@ export default function TaskDetailModal({
     return d;
   }
 
-  const titleLocked = (Date.now() - new Date(task.createdAt).getTime()) > 24 * 60 * 60 * 1000;
+  // Computed once per mount via the useState lazy initializer so we don't
+  // call the impure Date.now() in the render body. The lock window is 24h
+  // from creation, so it doesn't need to update mid-session anyway.
+  const [titleLocked] = useState(() => (Date.now() - new Date(task.createdAt).getTime()) > 24 * 60 * 60 * 1000);
 
   const [isEditing, setIsEditing] = useState(initialEditMode ?? false);
   const [isSaving, setIsSaving] = useState(false);
@@ -518,7 +524,10 @@ export default function TaskDetailModal({
     };
   }, [task.taskId]);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!task.isRecurring) return;
@@ -1236,7 +1245,7 @@ export default function TaskDetailModal({
 
               {task.status === "pending" && task.isRecurring && onCheckIn && !isMobile && (
                 <ActionBtn
-                  onClick={onCheckIn}
+                  onClick={() => { onCheckIn(); onClose(); }}
                   disabled={isActing}
                   color="var(--color-active-highlight-alt)"
                   hoverBg="var(--color-active-highlight-alt-bg)"
@@ -1300,9 +1309,9 @@ export default function TaskDetailModal({
                   hoverBg="var(--color-warning-bg)"
                   label="Undo"
                   icon={
-                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <path d="M7 2H4C2.3 2 1 3.3 1 5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" />
-                      <polyline points="4,4.5 1.5,2 4,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <polyline points="4,2 2,4 4,6" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <path d="M2 4H6.5A2.5 2.5 0 0 1 6.5 9H4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                     </svg>
                   }
                 />
@@ -1382,7 +1391,7 @@ export default function TaskDetailModal({
             <SlideToCheckIn
               label="Slide to check in"
               disabled={isActing}
-              onConfirm={onCheckIn}
+              onConfirm={() => { onCheckIn(); onClose(); }}
             />
           </div>
         )}
@@ -1419,7 +1428,6 @@ function Field({ label, children, className }: { label: string; children: React.
   );
 }
 
-const HISTORY_PAGE_SIZE = 30;
 const HEATMAP_WEEKS = 12;
 // Idle window before a buffered +/- delta auto-flushes to the API.
 const QUICK_LOG_DEBOUNCE_MS = 1500;

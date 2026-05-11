@@ -26,6 +26,7 @@ const SLOT_Z: Record<string, number> = {
   BACK: 10,
   BODY: 50,
   FEET: 70,
+  HAIR: 80,     // Renders behind HEAD/HAT (z=120) so a helmet sits on top.
   FACE: 90,
   HAND: 130,
   HEAD: 120,

@@ -1,7 +1,7 @@
 import { authedGet, authedPost, authedPatch, authedDelete } from "./client";
 
 // Mirrors backend ItemSlot enum — keep in sync with C# Models/Domain/AvatarItems.cs.
-export type ItemSlot = "HEAD" | "BODY" | "HAND" | "FACE" | "BACK" | "FEET";
+export type ItemSlot = "HEAD" | "HAIR" | "BODY" | "HAND" | "FACE" | "BACK" | "FEET";
 export type Rarity = "COMMON" | "UNCOMMON" | "RARE" | "EPIC" | "LEGENDARY";
 
 export interface AvatarItemDto {
@@ -34,6 +34,11 @@ export interface AvatarItemDto {
   // is equipped. Use for full-coverage helmets / masks where hair would
   // otherwise poke through. Mock-data only — backend ignores.
   coversHair?: boolean;
+  // RE-style inventory footprint. Null falls back to 1x1 in the avatar
+  // page's getItemSize() — kept nullable so older rows without a stored
+  // size still render.
+  gridCols?: number | null;
+  gridRows?: number | null;
 }
 
 export interface UserInventoryDto {
@@ -42,6 +47,11 @@ export interface UserInventoryDto {
   itemId: number;
   acquiredAt: string;
   isEquipped: boolean;
+  // (x, y) grid position assigned by the avatar page's drag-and-drop layout.
+  // Null when the row was never positioned — the client auto-places it on
+  // first load.
+  positionX?: number | null;
+  positionY?: number | null;
   avatarItem?: AvatarItemDto | null;
 }
 
@@ -66,9 +76,15 @@ export const avatarApi = {
     return authedGet<PagedResult<AvatarItemDto>>(`/api/AvatarItems${qs ? `?${qs}` : ""}`);
   },
   getEquipped: () => authedGet<UserInventoryDto[]>(`/api/UserInventory/equipped`),
+  // Full inventory for the current user (paged). Used by the avatar page to
+  // tell which catalogue items the user already owns vs needs to acquire.
+  getInventory: (pageNumber = 1, pageSize = 200) =>
+    authedGet<PagedResult<UserInventoryDto>>(`/api/UserInventory?pageNumber=${pageNumber}&pageSize=${pageSize}`),
   acquire: (itemId: number, isEquipped = false) =>
     authedPost<UserInventoryDto>(`/api/UserInventory`, { itemId, isEquipped }),
   equip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/equip`),
   unequip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/unequip`),
+  setPosition: (inventoryId: number, positionX: number | null, positionY: number | null) =>
+    authedPatch<void>(`/api/UserInventory/${inventoryId}/position`, { positionX, positionY }),
   release: (inventoryId: number) => authedDelete<void>(`/api/UserInventory/${inventoryId}`),
 };

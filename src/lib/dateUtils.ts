@@ -105,26 +105,6 @@ export function getUnlockInfo(dueDate: string | null): { date: string; relative:
   return { date: dateStr, relative, days: diffDays };
 }
 
-// For range tasks (those with both a startDate and dueDate), compute the
-// inclusive current-day-out-of-total position. Day clamps to [0, total] so a
-// pre-start range reads "0/N" and a post-end range reads "N/N". Returns null
-// when either bound is missing or the range is non-positive.
-export function getRangeProgress(
-  startDate: string | null | undefined,
-  dueDate: string | null | undefined,
-): { day: number; total: number } | null {
-  if (!startDate || !dueDate) return null;
-  const start = parseLocalDate(startDate);
-  const end = parseLocalDate(dueDate);
-  const total = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  if (total <= 0) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayRaw = Math.round((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  const day = Math.max(0, Math.min(total, dayRaw));
-  return { day, total };
-}
-
 // True when the current recurrence cycle has already been completed and the
 // next window hasn't opened yet. After a check-in the server advances
 // dueDate strictly past today and stamps lastCheckInDate; that pair is the

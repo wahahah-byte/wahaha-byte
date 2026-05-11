@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import AuthHeader from "@/components/AuthHeader";
 import HeaderNav from "@/components/HeaderNav";
 import MobileEdgeDrawer from "@/components/MobileEdgeDrawer";
 import { PointsProvider } from "@/context/PointsContext";
@@ -72,9 +71,6 @@ export default function RootLayout({
             </div>
           </div>
 
-          <div className="hide-on-desktop flex items-center gap-2 sm:gap-3">
-            <AuthHeader />
-          </div>
         </header>
         <ToastBanner />
         {children}

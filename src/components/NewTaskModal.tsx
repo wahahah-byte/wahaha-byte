@@ -40,8 +40,6 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
   const [dueDate, setDueDate] = useState<Date | null>(
     initialRecurring ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null,
   );
-  const [isRange, setIsRange] = useState(false);
-  const [startDate, setStartDate] = useState<Date | null>(null);
   const [isRecurring, setIsRecurring] = useState(initialRecurring);
   const [recurrenceRule, setRecurrenceRule] = useState("daily");
   const [hasCounter, setHasCounter] = useState(false);
@@ -72,11 +70,6 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
     if (!title.trim()) { setError("Title is required."); return; }
     const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     if (dueDate && dueDate < todayMidnight) { setError("Due date cannot be in the past."); return; }
-    if (isRange) {
-      if (!startDate) { setError("Pick a start date."); return; }
-      if (!dueDate) { setError("Pick an end date."); return; }
-      if (dueDate < startDate) { setError("End date must be on or after start date."); return; }
-    }
     setSubmitting(true);
     setError(null);
     const fmt = (d: Date) =>
@@ -88,7 +81,6 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
       priority,
       pointValue,
       dueDate: dueDate ? fmt(dueDate) : undefined,
-      startDate: isRange && startDate ? fmt(startDate) : undefined,
       isRecurring,
       recurrenceRule: isRecurring ? recurrenceRule : undefined,
       hasCounter: isRecurring ? hasCounter : false,
@@ -240,44 +232,10 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
         ) : (
           <div className="flex flex-col gap-3 mb-3 mt-1">
             <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
-                  {isRange ? (isRecurring ? "Start / End" : "Range") : isRecurring ? "First Due" : "Due"}
-                </span>
-                <button
-                  onClick={() => {
-                    setIsRange((v) => {
-                      const next = !v;
-                      if (!next) setStartDate(null);
-                      else if (!startDate && dueDate) setStartDate(dueDate);
-                      return next;
-                    });
-                  }}
-                  className="text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
-                  style={{
-                    background: isRange ? "var(--color-active-highlight-bg)" : "transparent",
-                    color: isRange ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
-                    border: `1px solid ${isRange ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
-                    borderRadius: "999px",
-                    fontWeight: isRange ? 600 : 400,
-                    padding: "2px 8px",
-                  }}
-                >
-                  Range
-                </button>
-              </div>
-              {isRange ? (
-                <div className="flex gap-2">
-                  <div className="flex-1 min-w-0">
-                    <DatePicker value={startDate} onChange={setStartDate} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <DatePicker value={dueDate} onChange={setDueDate} />
-                  </div>
-                </div>
-              ) : (
-                <DatePicker value={dueDate} onChange={setDueDate} />
-              )}
+              <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
+                {isRecurring ? "First Due" : "Due"}
+              </span>
+              <DatePicker value={dueDate} onChange={setDueDate} />
             </div>
 
             <div className="flex gap-3">
