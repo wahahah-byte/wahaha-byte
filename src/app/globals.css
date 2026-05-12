@@ -1349,6 +1349,15 @@ textarea::placeholder {
   transition: background-color 0.12s ease, box-shadow 0.12s ease;
 }
 .re-cell:hover:not(:disabled) {
-  background-color: rgba(60, 95, 110, 0.55) !important;
-  box-shadow: inset 0 0 0 1px rgba(190, 230, 240, 0.65) !important;
+  background-color: rgba(60, 65, 70, 0.85) !important;
+  box-shadow: inset 0 0 0 1px rgba(235, 240, 245, 0.9) !important;
+}
+/* Yellow look pinned while a card is being dragged. The `.re-cell` class is
+   removed from the dragged element so its `:hover` rule can't override these
+   values — but we keep `!important` for safety against future cascade changes. */
+.is-dragging,
+.is-dragging:hover:not(:disabled) {
+  /* Match the auth-header's top accent. `-bg` is the same hue at low alpha. */
+  background-color: var(--color-active-highlight-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--color-active-highlight) !important;
 }

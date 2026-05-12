@@ -198,6 +198,16 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   </span>
                 </button>
                 <a
+                  href="/avatar"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
+                  style={{ color: "var(--color-fg-muted)", background: "transparent", textDecoration: "none" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Avatar
+                </a>
+                <a
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"

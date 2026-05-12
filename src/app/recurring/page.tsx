@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { tasksApi, TaskDto, TaskFilterParams } from "@/lib/api/tasks";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import TaskRow from "@/components/TaskRow";
@@ -11,7 +10,7 @@ import { useLogCounter } from "@/hooks/useLogCounter";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
-import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
+import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
 import { canCheckInNow, isOverdue, parseLocalDate, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
@@ -69,9 +68,7 @@ function Recurring() {
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
   const { beginRestart, clearRestart, isRestart } = useOverdueRestart();
   const [counterPromptTask, setCounterPromptTask] = useState<TaskDto | null>(null);
-  type GroupMode = RoutineGroupMode;
   const [groupMode, setGroupMode] = useState<RoutineGroupMode>("none");
-  type SortMode = RoutineSortMode;
   const [sortMode, setSortMode] = useState<RoutineSortMode>("due");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const isDesktop = useDesktopLayout();
@@ -120,6 +117,9 @@ function Recurring() {
       setTasks(MOCK_RECURRING);
       setLoading(false);
     }
+    // searchParams is only read once on mount; URL changes are handled
+    // through applyFilter which both pushes to history and updates state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refetch = useCallback(async () => {
@@ -163,7 +163,7 @@ function Recurring() {
   const handleRestartOverdue = useCallback((t: TaskDto) => {
     beginRestart(t);
     setDetailTask(t);
-  }, []);
+  }, [beginRestart]);
 
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
@@ -466,7 +466,6 @@ function Recurring() {
         navItems={[
           { href: "/", label: "To Do", icon: <NavIconList /> },
           { href: "/recurring", label: "Routines", icon: <NavIconRepeat />, active: true },
-          { href: "/avatar", label: "Avatar", icon: <NavIconAvatar /> },
         ]}
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },

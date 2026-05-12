@@ -14,7 +14,6 @@ const ITEMS = [
   { href: "/", label: "To Do" },
   { href: "/recurring", label: "Routines" },
   { href: "/archive", label: "Archive" },
-  { href: "/avatar", label: "Avatar" },
 ] as const;
 
 const DRAWER_WIDTH = 220;      // wide enough for icon + uppercase label side-by-side
@@ -325,7 +324,6 @@ export default function MobileEdgeDrawer() {
                 <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
                   {item.label === "To Do" ? <TasksIcon />
                     : item.label === "Routines" ? <RecurringIcon />
-                    : item.label === "Avatar" ? <AvatarIcon />
                     : <ArchiveIcon />}
                 </span>
                 <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
@@ -483,6 +481,25 @@ export default function MobileEdgeDrawer() {
                       {theme === "dark" ? "Dark" : "Light"}
                     </span>
                   </button>
+                  <Link
+                    href="/avatar"
+                    role="menuitem"
+                    onClick={() => { setAccountMenuOpen(false); setOpen(false); }}
+                    style={{
+                      width: "100%",
+                      display: "block",
+                      padding: "10px 14px",
+                      borderTop: "1px solid var(--color-border-soft)",
+                      color: "var(--color-fg-muted)",
+                      fontSize: 11,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Avatar
+                  </Link>
                   {hasToken && (
                     <button
                       type="button"
@@ -550,14 +567,6 @@ function ArchiveIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  );
-}
-function AvatarIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
     </svg>
   );
 }

@@ -1,20 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
-import { subtasksApi } from "@/lib/api/subtasks";
 import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
 import GoalStepper from "@/components/GoalStepper";
-import SubtaskRow from "@/components/SubtaskRow";
-import { currentStreakTier } from "@/components/TierUpBanner";
+import SubtasksSection from "@/components/SubtasksSection";
+import HeatmapStrip from "@/components/HeatmapStrip";
+import StreakDisplay from "@/components/StreakDisplay";
+import { useQuickLog } from "@/hooks/useQuickLog";
 import SlideToCheckIn from "@/components/SlideToCheckIn";
 import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
 import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
-import { dateKey, isCycleClosed } from "@/lib/dateUtils";
+import { dateKey } from "@/lib/dateUtils";
 
 const PRIORITIES = [
   { label: "Low",    value: "low",    color: "var(--color-success)", bg: "var(--color-success-bg)" },
@@ -144,137 +145,6 @@ export default function TaskDetailModal({
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
 
-  const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
-  const [subtasks, setSubtasksState] = useState<Subtask[]>(task.subtasks ?? []);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
-  const [newSubtaskSets, setNewSubtaskSets] = useState("");
-  const [newSubtaskReps, setNewSubtaskReps] = useState("");
-  const [addingSubtask, setAddingSubtask] = useState(false);
-  const isFitness = task.category === "Fitness";
-  // Subtasks are frozen for the remainder of a closed cycle so a routine's
-  // per-cycle progress (which subtasks are checked, set counters) isn't
-  // mutated after the cycle's been finalised by a check-in.
-  const subtasksReadOnly = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSubtasksState(task.subtasks ?? []);
-  }, [task.taskId, task.subtasks]);
-
-  function commitSubtasks(next: Subtask[]) {
-    setSubtasksState(next);
-    onSubtasksChange?.(next);
-  }
-
-  function nextLocalId(): number {
-    const min = subtasks.reduce((m, s) => Math.min(m, s.subtaskId), 0);
-    return Math.min(min, 0) - 1;
-  }
-
-  async function handleToggleSubtask(s: Subtask) {
-    const snapshot = subtasks;
-    const next = snapshot.map((x) => x.subtaskId === s.subtaskId ? { ...x, completed: !x.completed } : x);
-    commitSubtasks(next);
-    if (!isAuthenticated || s.subtaskId < 0) return;
-    const { error } = await subtasksApi.update(s.subtaskId, { completed: !s.completed });
-    if (error) commitSubtasks(snapshot);
-  }
-
-  async function handleDeleteSubtask(s: Subtask) {
-    const snapshot = subtasks;
-    const next = snapshot.filter((x) => x.subtaskId !== s.subtaskId);
-    commitSubtasks(next);
-    if (!isAuthenticated || s.subtaskId < 0) return;
-    const { error } = await subtasksApi.delete(s.subtaskId);
-    if (error) commitSubtasks(snapshot);
-  }
-
-  async function handleAddSubtask() {
-    const title = newSubtaskTitle.trim();
-    if (!title || addingSubtask || task.status === "completed") return;
-    setAddingSubtask(true);
-    const snapshot = subtasks;
-    const sortOrder = (snapshot[snapshot.length - 1]?.sortOrder ?? -1) + 1;
-    const setsTarget = newSubtaskSets.trim() && Number(newSubtaskSets) > 0
-      ? Number(newSubtaskSets) : null;
-    const repsTarget = newSubtaskReps.trim() && Number(newSubtaskReps) > 0
-      ? Number(newSubtaskReps) : null;
-    const optimistic: Subtask = {
-      subtaskId: nextLocalId(),
-      taskId: task.taskId,
-      title,
-      completed: false,
-      sortOrder,
-      createdAt: new Date().toISOString(),
-      setsTarget,
-      repsTarget,
-      setsCompleted: setsTarget != null ? 0 : null,
-    };
-    const optimisticList = [...snapshot, optimistic];
-    commitSubtasks(optimisticList);
-    setNewSubtaskTitle("");
-    setNewSubtaskSets("");
-    setNewSubtaskReps("");
-    if (!isAuthenticated) { setAddingSubtask(false); return; }
-    const { data, error } = await subtasksApi.create(task.taskId, {
-      title,
-      setsTarget,
-      repsTarget,
-    });
-    setAddingSubtask(false);
-    if (error) {
-      commitSubtasks(snapshot);
-      return;
-    }
-    commitSubtasks(optimisticList.map((x) => x.subtaskId === optimistic.subtaskId ? data! : x));
-  }
-
-  async function handleUpdateSubtask(s: Subtask, fields: { title?: string; setsTarget?: number | null; repsTarget?: number | null }) {
-    if (Object.keys(fields).length === 0) return;
-    const snapshot = subtasks;
-    // If the user shrinks setsTarget below their current setsCompleted, clamp
-    // setsCompleted so the displayed "done/target" stays sensible.
-    const next = snapshot.map((x) => {
-      if (x.subtaskId !== s.subtaskId) return x;
-      const merged = { ...x, ...fields };
-      if (fields.setsTarget !== undefined) {
-        const target = fields.setsTarget;
-        if (target == null) merged.setsCompleted = null;
-        else if ((merged.setsCompleted ?? 0) > target) merged.setsCompleted = target;
-      }
-      return merged;
-    });
-    commitSubtasks(next);
-    if (!isAuthenticated || s.subtaskId < 0) return;
-    const updatedRow = next.find((x) => x.subtaskId === s.subtaskId)!;
-    const apiFields: { title?: string; setsTarget?: number | null; repsTarget?: number | null; setsCompleted?: number | null } = { ...fields };
-    if (fields.setsTarget !== undefined && updatedRow.setsCompleted !== s.setsCompleted) {
-      apiFields.setsCompleted = updatedRow.setsCompleted ?? null;
-    }
-    const { error } = await subtasksApi.update(s.subtaskId, apiFields);
-    if (error) commitSubtasks(snapshot);
-  }
-
-  async function handleIncrementSet(s: Subtask) {
-    if (s.setsTarget == null) return;
-    const currentDone = s.setsCompleted ?? 0;
-    if (currentDone >= s.setsTarget) return;
-    const nextDone = currentDone + 1;
-    const nextCompleted = nextDone >= s.setsTarget;
-    const snapshot = subtasks;
-    const next = snapshot.map((x) => x.subtaskId === s.subtaskId
-      ? { ...x, setsCompleted: nextDone, completed: nextCompleted || x.completed }
-      : x);
-    commitSubtasks(next);
-    if (!isAuthenticated || s.subtaskId < 0) return;
-    const { error } = await subtasksApi.update(s.subtaskId, {
-      setsCompleted: nextDone,
-      ...(nextCompleted && !s.completed ? { completed: true } : {}),
-    });
-    if (error) commitSubtasks(snapshot);
-  }
-
-  const subtaskDoneCount = subtasks.filter((s) => s.completed).length;
-
   function todayMidnight() {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -397,132 +267,21 @@ export default function TaskDetailModal({
     return Array.from(byId.values());
   }, [heatmapHistory, task.recentCycles]);
 
-  // The +/- counter buffer lives here (rather than inside QuickLogStepper) so
-  // the heatmap on the sibling pager card can read it too. Without that,
-  // avatar and heatmap drift by pendingLog for the duration of an in-flight
-  // flush. Each tap re-renders the modal, but display value math is set up
-  // so that no intermediate render shows the wrong sum (see the debounce
-  // effect's commentary for the keep-pendingLog-till-API-responds invariant).
-  const [pendingLog, setPendingLog] = useState(0);
-  const pendingLogRef = useRef(0);
-  useEffect(() => { pendingLogRef.current = pendingLog; }, [pendingLog]);
-
-  // How much of pendingLog is already mid-flight (sent to the server but not
-  // yet reflected via parent appendCycle + our local decrement). Used to
-  // compute the un-flushed remainder so concurrent taps during an in-flight
-  // flush don't double-send or under-send.
-  const inFlightSentRef = useRef(0);
-
-  // Mirror onFlushQuickLog in a ref so long-lived effect cleanups don't capture
-  // a stale prop reference.
-  const flushRef = useRef(onFlushQuickLog);
-  useEffect(() => { flushRef.current = onFlushQuickLog; });
-
-  // Today's committed counter sum (used to compute the displayed total and
-  // for the - button's clamp). Also fed to HeatmapStrip alongside pendingLog
-  // via pendingTodayDelta so both stay in sync.
   const todayKey = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0);
     return dateKey(d);
   }, []);
-  const cycleSumToday = useMemo(() => {
-    let sum = 0;
-    for (const c of heatmapCycles) {
-      if (c.checkInDate.split("T")[0] === todayKey && typeof c.counterValue === "number") {
-        sum += c.counterValue;
-      }
-    }
-    return sum;
-  }, [heatmapCycles, todayKey]);
 
-  // Discard any buffered +/- log before delegating to the parent's delete
-  // handler. Without this, the modal's unmount cleanup would flush the
-  // remainder against a task that's about to be (or already has been) deleted,
-  // surfacing a misleading "Couldn't save log" toast.
-  const handleDeleteClick = useCallback(() => {
-    pendingLogRef.current = 0;
-    inFlightSentRef.current = 0;
-    setPendingLog(0);
-    onDelete?.();
-  }, [onDelete]);
-
-  const handleStepperIncrement = useCallback(() => {
-    setPendingLog((p) => p + 1);
-  }, []);
-  const handleStepperDecrement = useCallback(() => {
-    // Clamp against cycleSumToday so rapid taps can't drive the displayed
-    // total below 0. The disabled prop on the - button reflects the
-    // last-rendered state, which can lag on fast tap bursts.
-    setPendingLog((p) => (cycleSumToday + p - 1 < 0 ? p : p - 1));
-  }, [cycleSumToday]);
-
-  // Flush any un-sent buffered delta on unmount or task change so a buffered
-  // correction isn't lost. Subtract whatever's already mid-flight — that
-  // portion has its own in-flight handler and shouldn't be sent twice.
-  useEffect(() => {
-    const tid = task.taskId;
-    return () => {
-      const remainder = pendingLogRef.current - inFlightSentRef.current;
-      if (remainder !== 0) flushRef.current?.(tid, remainder);
-      pendingLogRef.current = 0;
-      inFlightSentRef.current = 0;
-    };
-  }, [task.taskId]);
-
-  // Debounced auto-flush. Keep pendingLog at its full value for the duration
-  // of the API roundtrip; the displayed sum is cycleSumToday + pendingLog,
-  // and during the in-flight period cycleSumToday hasn't moved yet so the
-  // display stays stable. When the response lands, the parent's appendCycle
-  // adds the cycle (cycleSumToday += delta) and we immediately subtract
-  // delta from pendingLog inside the same render (flushSync) — both moves
-  // cancel out, so the displayed total is unchanged. No flicker.
-  useEffect(() => {
-    if (!flushRef.current) return;
-    const remainder = pendingLog - inFlightSentRef.current;
-    if (remainder === 0) return;
-    const tid = task.taskId;
-    const timer = setTimeout(async () => {
-      const delta = pendingLogRef.current - inFlightSentRef.current;
-      if (delta === 0) return;
-      inFlightSentRef.current += delta;
-      try {
-        const result = await flushRef.current?.(tid, delta);
-        if (!result) {
-          // Failure: pendingLog stays so the user can retry. Drop the
-          // in-flight reservation so future debounce cycles can re-send.
-          inFlightSentRef.current -= delta;
-          return;
-        }
-        flushSync(() => {
-          setPendingLog((p) => p - delta);
-        });
-        inFlightSentRef.current -= delta;
-      } catch {
-        inFlightSentRef.current -= delta;
-      }
-    }, QUICK_LOG_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [pendingLog, task.taskId]);
-
-  // Tab/page-close safety net via keepalive fetch. State updates here are
-  // best-effort — on actual unload they're discarded harmlessly.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const tid = task.taskId;
-    const flush = () => {
-      const remainder = pendingLogRef.current - inFlightSentRef.current;
-      if (remainder === 0) return;
-      inFlightSentRef.current += remainder;
-      flushRef.current?.(tid, remainder, { keepalive: true });
-    };
-    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
-    window.addEventListener("pagehide", flush);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [task.taskId]);
+  // +/- buffered counter for routines (debounced flush, in-flight bookkeeping,
+  // page-close keepalive). State lives at modal scope so the avatar and the
+  // heatmap on the sibling pager card stay in lockstep — see useQuickLog.
+  const {
+    pendingLog,
+    cycleSumToday,
+    handleStepperIncrement,
+    handleStepperDecrement,
+    handleDeleteClick,
+  } = useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete });
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -990,56 +749,7 @@ export default function TaskDetailModal({
               )}
             </div>
 
-            {/* Streak / bonus — segmented pixel bar showing progress to the next tier */}
-            {(currentStreakCount ?? 0) >= 3 && (() => {
-              const c = currentStreakCount ?? 0;
-              const multiplier = c >= 30 ? 2.0 : c >= 14 ? 1.8 : c >= 7 ? 1.5 : 1.2;
-              const nextTier = c >= 30 ? null : c >= 14 ? { at: 30, mult: 2.0 } : c >= 7 ? { at: 14, mult: 1.8 } : { at: 7, mult: 1.5 };
-              const tierStart = c >= 14 ? 14 : c >= 7 ? 7 : 3;
-              const SEGMENTS = 12;
-              const filled = nextTier
-                ? Math.max(1, Math.min(SEGMENTS, Math.round(((c - tierStart) / (nextTier.at - tierStart)) * SEGMENTS)))
-                : SEGMENTS;
-              const fmt = (m: number) => Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1);
-              return (
-                <div className="flex flex-col gap-1.5" style={{ color: "var(--color-active-highlight-alt)" }}>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="inline-flex items-baseline gap-1.5">
-                      <span style={{ fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
-                        {currentStreakTier(c)?.label ?? "TIER 1"}
-                      </span>
-                      <span style={{ opacity: 0.5 }}>·</span>
-                      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{c}</span>
-                      {longestStreakCount != null && longestStreakCount > c && (
-                        <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>/ {longestStreakCount}</span>
-                      )}
-                      <span style={{ marginLeft: 6, fontWeight: 600 }}>{fmt(multiplier)}×</span>
-                    </span>
-                    {nextTier ? (
-                      <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>
-                        {nextTier.at - c} → {fmt(nextTier.mult)}×
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
-                        Max
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex" style={{ gap: 2 }} aria-hidden>
-                    {Array.from({ length: SEGMENTS }).map((_, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          flex: 1,
-                          height: 6,
-                          background: i < filled ? "var(--color-active-highlight-alt)" : "var(--color-border-soft)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            <StreakDisplay currentStreakCount={currentStreakCount} longestStreakCount={longestStreakCount} />
 
             {task.description && (
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-fg-muted)" }}>
@@ -1096,81 +806,7 @@ export default function TaskDetailModal({
               />
             )}
 
-            {/* Subtasks — hidden entirely when completed and there's nothing to read */}
-            {(task.status !== "completed" || subtasks.length > 0) && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                    Subtasks
-                  </span>
-                  {subtasks.length > 0 && (
-                    <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em" }}>
-                      {subtaskDoneCount}/{subtasks.length} done
-                    </span>
-                  )}
-                </div>
-                {subtasks.map((s) => (
-                  <SubtaskRow
-                    key={s.subtaskId}
-                    subtask={s}
-                    readOnly={subtasksReadOnly}
-                    showSetsReps={isFitness}
-                    onToggle={() => handleToggleSubtask(s)}
-                    onDelete={() => handleDeleteSubtask(s)}
-                    onIncrementSet={() => handleIncrementSet(s)}
-                    onUpdate={(fields) => handleUpdateSubtask(s, fields)}
-                  />
-                ))}
-                {task.status !== "completed" && !subtasksReadOnly && (
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center" style={{ color: "var(--color-fg-subtle)", fontSize: "12px", lineHeight: 1 }}>+</span>
-                    <input
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                      }}
-                      placeholder={isFitness ? "Exercise…" : "Add subtask…"}
-                      disabled={addingSubtask}
-                      className="flex-1 text-xs outline-none bg-transparent"
-                      style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
-                    />
-                    {isFitness && (
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="1"
-                          value={newSubtaskSets}
-                          onChange={(e) => setNewSubtaskSets(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                          }}
-                          placeholder="sets"
-                          aria-label="Sets"
-                          className="num-input-themed"
-                        />
-                        <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="1"
-                          value={newSubtaskReps}
-                          onChange={(e) => setNewSubtaskReps(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
-                          }}
-                          placeholder="reps"
-                          aria-label="Reps"
-                          className="num-input-themed"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            <SubtasksSection task={task} onChange={onSubtasksChange} />
           </div>
         )}
 
@@ -1427,260 +1063,3 @@ function Field({ label, children, className }: { label: string; children: React.
     </div>
   );
 }
-
-const HEATMAP_WEEKS = 12;
-// Idle window before a buffered +/- delta auto-flushes to the API.
-const QUICK_LOG_DEBOUNCE_MS = 1500;
-const CELL_SIZE = 14;
-const CELL_GAP = 3;
-const LABEL_COL = 22;
-// Empty / 4 filled levels — driven via opacity on the highlight color.
-const LEVEL_OPACITY = [0, 0.30, 0.55, 0.80, 1.0];
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }: { rule: string; hasCounter: boolean; cycles: CheckInCycleDto[]; pendingTodayDelta?: number }) {
-  // GitHub-style 7×N grid: rows are days-of-week (Sun..Sat), columns are weeks
-  // oldest-on-left. Today always sits in the rightmost column at row=todayDow;
-  // any cells in that column past today render invisibly so the grid keeps shape.
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayKey = dateKey(today);
-  const todayDow = today.getDay(); // 0=Sun..6=Sat
-
-  const start = new Date(today);
-  start.setDate(start.getDate() - todayDow - (HEATMAP_WEEKS - 1) * 7);
-
-  type Cell = { date: Date; key: string; dow: number; isFuture: boolean; isWeekend: boolean };
-  const columns: Cell[][] = [];
-  for (let c = 0; c < HEATMAP_WEEKS; c++) {
-    const col: Cell[] = [];
-    for (let r = 0; r < 7; r++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + c * 7 + r);
-      col.push({
-        date: d,
-        key: dateKey(d),
-        dow: r,
-        isFuture: d.getTime() > today.getTime(),
-        isWeekend: r === 0 || r === 6,
-      });
-    }
-    columns.push(col);
-  }
-
-  // A day can have multiple cycles (a check-in plus one or more logs), so
-  // aggregate per date: sum counterValue across all cycles that day, and track
-  // presence separately so non-counter tasks still light up the cell.
-  const dayByDate = new Map<string, { sum: number; hasValue: boolean }>();
-  for (const c of cycles) {
-    const key = c.checkInDate.split("T")[0];
-    const entry = dayByDate.get(key) ?? { sum: 0, hasValue: false };
-    if (typeof c.counterValue === "number") {
-      entry.sum += c.counterValue;
-      entry.hasValue = true;
-    }
-    dayByDate.set(key, entry);
-  }
-  // Fold the buffered +/- delta into today's cell so the heatmap mirrors the
-  // avatar total during the in-flight window. Without this the avatar can
-  // display X+1 while the heatmap still reads X for the duration of the
-  // debounce + API roundtrip.
-  if (pendingTodayDelta !== 0) {
-    const entry = dayByDate.get(todayKey) ?? { sum: 0, hasValue: false };
-    entry.sum += pendingTodayDelta;
-    entry.hasValue = true;
-    dayByDate.set(todayKey, entry);
-  }
-  const maxValue = Math.max(
-    1,
-    ...Array.from(dayByDate.values()).map((d) => d.sum),
-  );
-
-  function levelFor(cell: Cell): number {
-    const day = dayByDate.get(cell.key);
-    if (!day) return 0;
-    if (!hasCounter) return 4;
-    const v = day.sum;
-    if (v <= 0) return 1;
-    const ratio = v / maxValue;
-    if (ratio < 0.34) return 1;
-    if (ratio < 0.67) return 2;
-    if (ratio < 1.0) return 3;
-    return 4;
-  }
-
-  // Tally over the visible window. For "weekdays" tasks, weekends aren't
-  // expected check-in days so they shouldn't count against the denominator.
-  const visibleCells = columns.flat().filter((c) => !c.isFuture);
-  const totalExpected = rule === "weekdays"
-    ? visibleCells.filter((c) => !c.isWeekend).length
-    : visibleCells.length;
-  const checkedCount = visibleCells.reduce((n, c) => (dayByDate.has(c.key) ? n + 1 : n), 0);
-
-  // Month label per column — only shown when the month changes from the column to its left.
-  const monthLabels: (string | null)[] = columns.map((col, ci) => {
-    const m = col[0].date.getMonth();
-    if (ci === 0) return MONTHS_SHORT[m];
-    return m !== columns[ci - 1][0].date.getMonth() ? MONTHS_SHORT[m] : null;
-  });
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase" }}>
-          Last {HEATMAP_WEEKS} weeks
-        </span>
-        <span style={{ color: "var(--color-fg-subtle)", fontSize: "9px", letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>
-          {checkedCount}/{totalExpected}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <div
-          role="img"
-          aria-label={`Check-in heatmap for the last ${HEATMAP_WEEKS} weeks: ${checkedCount} of ${totalExpected}`}
-          style={{
-            display: "grid",
-            gridTemplateColumns: `${LABEL_COL}px repeat(${HEATMAP_WEEKS}, ${CELL_SIZE}px)`,
-            gridTemplateRows: `10px repeat(7, ${CELL_SIZE}px)`,
-            columnGap: CELL_GAP,
-            rowGap: CELL_GAP,
-          }}
-        >
-          {/* Top-left corner spacer */}
-          <div style={{ gridColumn: 1, gridRow: 1 }} />
-
-          {/* Month labels along the top. Allow overflow so a label can extend past
-              its single-column track without clipping the next column's start. */}
-          {monthLabels.map((m, c) => (
-            <div
-              key={`m-${c}`}
-              style={{
-                gridColumn: c + 2,
-                gridRow: 1,
-                fontSize: 8,
-                color: "var(--color-fg-subtle)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                lineHeight: "10px",
-                whiteSpace: "nowrap",
-                overflow: "visible",
-              }}
-            >
-              {m ?? ""}
-            </div>
-          ))}
-
-          {/* Day-of-week labels (Mon/Wed/Fri only — matches GitHub's compact style) */}
-          {[0, 1, 2, 3, 4, 5, 6].map((r) => (
-            <div
-              key={`d-${r}`}
-              style={{
-                gridColumn: 1,
-                gridRow: r + 2,
-                fontSize: 8,
-                color: "var(--color-fg-subtle)",
-                letterSpacing: "0.05em",
-                lineHeight: `${CELL_SIZE}px`,
-                textAlign: "right",
-                paddingRight: 2,
-              }}
-            >
-              {r === 1 ? "Mon" : r === 3 ? "Wed" : r === 5 ? "Fri" : ""}
-            </div>
-          ))}
-
-          {/* Cells: 7 rows × HEATMAP_WEEKS cols */}
-          {columns.flatMap((col, c) =>
-            col.map((cell, r) => {
-              if (cell.isFuture) {
-                return (
-                  <div
-                    key={cell.key}
-                    style={{ gridColumn: c + 2, gridRow: r + 2, visibility: "hidden" }}
-                  />
-                );
-              }
-              const isWeekendOff = rule === "weekdays" && cell.isWeekend;
-              const day = dayByDate.get(cell.key);
-              const checked = !!day;
-              const level = levelFor(cell);
-              const isToday = cell.key === todayKey;
-              const value = day?.hasValue ? day.sum : null;
-              const tooltip = isWeekendOff && !checked
-                ? `${fmtCycleDate(cell.key)} · off-day`
-                : `${fmtCycleDate(cell.key)}${
-                    checked
-                      ? hasCounter
-                        ? value != null ? ` · ${value.toLocaleString()}` : " · checked in"
-                        : " · checked in"
-                      : " · no check-in"
-                  }`;
-              return (
-                <div
-                  key={cell.key}
-                  title={tooltip}
-                  style={{
-                    gridColumn: c + 2,
-                    gridRow: r + 2,
-                    borderRadius: 2,
-                    background: checked
-                      ? "var(--color-active-highlight-alt)"
-                      : isWeekendOff
-                        ? "transparent"
-                        : "var(--color-border-soft)",
-                    opacity: checked ? LEVEL_OPACITY[level] : 1,
-                    border: isWeekendOff && !checked
-                      ? "1px dashed var(--color-border-faint)"
-                      : undefined,
-                    // Inset ring on today so the highlight stays inside the cell —
-                    // an outset outline gets clipped by DetailPager's overflow: hidden.
-                    boxShadow: isToday
-                      ? "inset 0 0 0 1.5px var(--color-active-highlight)"
-                      : undefined,
-                  }}
-                />
-              );
-            }),
-          )}
-        </div>
-      </div>
-
-      {/* Legend — meaningful only when intensity varies (counter tasks). */}
-      {hasCounter && (
-        <div
-          className="flex items-center self-end"
-          style={{
-            gap: 4,
-            fontSize: 8,
-            color: "var(--color-fg-subtle)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}
-        >
-          <span>Less</span>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--color-border-soft)" }} />
-          {[1, 2, 3, 4].map((lvl) => (
-            <span
-              key={lvl}
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "var(--color-active-highlight-alt)",
-                opacity: LEVEL_OPACITY[lvl],
-              }}
-            />
-          ))}
-          <span>More</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function fmtCycleDate(iso: string): string {
-  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-

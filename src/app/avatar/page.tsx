@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChibiAvatar from "@/components/ChibiAvatar";
@@ -76,9 +76,8 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
     case "HAIR":
     case "FACE":
     case "FEET":
-      return { cols: 1, rows: 1 };
     case "BODY":
-      return { cols: 1, rows: 2 };
+      return { cols: 1, rows: 1 };
     case "HAND":
       return cat === "weapon" ? { cols: 2, rows: 1 } : { cols: 1, rows: 1 };
     case "BACK":
@@ -122,15 +121,11 @@ function hasRealAsset(url: string | null | undefined): boolean {
 // plus the 1px gap rendered by the grid container. Used by the snap-to-grid
 // drag modifier so the dragged item jumps exactly cell-to-cell.
 const SNAP_STEP = CELL_PX + 1;
-
-// dnd-kit modifier that rounds the drag delta to the nearest cell step,
-// causing the dragged card to follow the same snapping rhythm as the
-// preview overlay rather than free-tracking the cursor.
-const snapToGrid: Modifier = ({ transform }) => ({
-  ...transform,
-  x: Math.round(transform.x / SNAP_STEP) * SNAP_STEP,
-  y: Math.round(transform.y / SNAP_STEP) * SNAP_STEP,
-});
+// Hysteresis threshold for the snap modifier. The dragged card only flips
+// to the next cell once the cursor has moved past 70% of the cell step
+// from the last snapped position — eliminates the back-and-forth flicker
+// when the cursor hovers near a cell boundary.
+const SNAP_HYSTERESIS = SNAP_STEP * 0.7;
 
 // Custom dnd-kit collision detector that snaps to the cell closest to the
 // active item's TOP-LEFT corner (rather than the cell under the cursor).
@@ -174,10 +169,10 @@ function rectFits(
   for (const row of rows) {
     if (row.inventoryId === skipId) continue;
     if (row.positionX == null || row.positionY == null) continue;
-    const base = getItemSize(row.avatarItem!);
-    const rot = rotations.has(row.inventoryId);
-    const oCols = rot ? base.rows : base.cols;
-    const oRows = rot ? base.cols : base.rows;
+    const { cols: oCols, rows: oRows } = sizeFor(
+      row.avatarItem!,
+      rotations.has(row.inventoryId),
+    );
     const ox = row.positionX;
     const oy = row.positionY;
     const overlap = x < ox + oCols && x + cols > ox && y < oy + oRows && y + height > oy;
@@ -190,21 +185,59 @@ function rectFits(
 // scanning the grid row-by-row for the first cell where the item's footprint
 // fits without colliding with already-placed items. Items that can't fit
 // stay positionless and are skipped from the grid render.
+// Whether the user can rotate (Q/E) this item while dragging it. Square
+// (1×1) footprints have nothing to flip, so rotation is a no-op for them.
+function canRotate(item: AvatarItemDto): boolean {
+  const { cols, rows } = getItemSize(item);
+  return cols !== rows;
+}
+
+// Effective grid footprint of an item given its current rotation state.
+// All rotatable items swap cols/rows when flipped 90°.
+function sizeFor(item: AvatarItemDto, rotated: boolean): { cols: number; rows: number } {
+  const base = getItemSize(item);
+  if (!rotated) return base;
+  return { cols: base.rows, rows: base.cols };
+}
+
+// True if the row's persisted position keeps its (rotation-aware) footprint
+// inside the grid. Catches the case where an item's gridCols/gridRows was
+// changed in the backend after the position was saved — the old position
+// may now extend past the grid edge. Honours the persisted `isRotated`
+// flag so a rotated 2×1 at the right edge stays valid.
+function hasValidPlacement(row: UserInventoryDto): boolean {
+  if (row.positionX == null || row.positionY == null) return false;
+  if (!row.avatarItem) return false;
+  const { cols, rows } = sizeFor(row.avatarItem, !!row.isRotated);
+  return row.positionX >= 0
+    && row.positionY >= 0
+    && row.positionX + cols <= GRID_COLS
+    && row.positionY + rows <= GRID_ROWS;
+}
+
 function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
-  // Auto-placement runs on freshly-loaded inventory before any rotation
-  // could be applied, so pass an empty rotations set to rectFits.
-  const noRotations = new Set<number>();
+  // Build a rotations set from the persisted `isRotated` flags so the
+  // collision check inside rectFits uses each row's actual footprint
+  // (rotated rows have swapped cols/rows).
+  const persistedRotations = new Set<number>(
+    rows.filter((r) => r.isRotated).map((r) => r.inventoryId),
+  );
+  // Strip persisted positions that no longer fit inside the grid (e.g.
+  // an item's size grew after a backend migration). Those rows fall back
+  // into the "needs placement" queue and get a fresh slot.
   const placed: UserInventoryDto[] = rows
-    .filter((r) => r.positionX != null && r.positionY != null)
+    .filter(hasValidPlacement)
     .slice();
   const result: UserInventoryDto[] = [...placed];
   for (const row of rows) {
-    if (row.positionX != null && row.positionY != null) continue;
-    const size = getItemSize(row.avatarItem!);
+    if (hasValidPlacement(row)) continue;
+    // Re-placement honours the item's persisted rotation so a rotated
+    // polearm gets a slot that fits its rotated footprint.
+    const size = sizeFor(row.avatarItem!, !!row.isRotated);
     let assigned: { x: number; y: number } | null = null;
     outer: for (let y = 0; y < GRID_ROWS; y++) {
       for (let x = 0; x < GRID_COLS; x++) {
-        if (rectFits(result, null, x, y, size.cols, size.rows, noRotations)) {
+        if (rectFits(result, null, x, y, size.cols, size.rows, persistedRotations)) {
           assigned = { x, y };
           break outer;
         }
@@ -212,7 +245,7 @@ function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
     }
     const next = assigned
       ? { ...row, positionX: assigned.x, positionY: assigned.y }
-      : row;
+      : { ...row, positionX: null, positionY: null };
     result.push(next);
   }
   return result;
@@ -266,6 +299,8 @@ export default function AvatarPage() {
       const hairRows = rows.filter((r) => r.avatarItem?.slot === "HAIR");
       const placed = [...autoPlace(equipRows), ...autoPlace(hairRows)];
       setInventory(placed);
+      // Hydrate the local rotation state from whatever the backend persisted.
+      setRotations(new Set(placed.filter((r) => r.isRotated).map((r) => r.inventoryId)));
       // Persist any positions that were newly assigned by autoPlace so
       // subsequent reloads return the same layout. Fire-and-forget.
       for (const row of placed) {
@@ -306,7 +341,47 @@ export default function AvatarPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
   );
 
+  // Last snapped (x, y) the dragged card was rendered at, in drag-delta
+  // pixels. Carried across pointer moves to add hysteresis to the snap
+  // modifier so the card doesn't flicker between two cells when the
+  // cursor hovers near a boundary. Reset on every drag start.
+  const lastSnapRef = useRef({ x: 0, y: 0 });
+  const snapToGrid = useCallback<Modifier>(({ transform }) => {
+    const last = lastSnapRef.current;
+    let x = last.x;
+    let y = last.y;
+    if (Math.abs(transform.x - last.x) >= SNAP_HYSTERESIS) {
+      x = Math.round(transform.x / SNAP_STEP) * SNAP_STEP;
+    }
+    if (Math.abs(transform.y - last.y) >= SNAP_HYSTERESIS) {
+      y = Math.round(transform.y / SNAP_STEP) * SNAP_STEP;
+    }
+    // Clamp the snap within the grid so the dragged box can't translate
+    // outside the inventory bounds. Uses the moving item's current position
+    // and (rotation-aware) size to compute the allowed delta range.
+    if (activeDragId != null) {
+      const moving = inventory.find((r) => r.inventoryId === activeDragId);
+      if (
+        moving?.avatarItem
+        && moving.positionX != null
+        && moving.positionY != null
+      ) {
+        const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(activeDragId));
+        const minX = -moving.positionX * SNAP_STEP;
+        const maxX = (GRID_COLS - moving.positionX - cols) * SNAP_STEP;
+        const minY = -moving.positionY * SNAP_STEP;
+        const maxY = (GRID_ROWS - moving.positionY - rows) * SNAP_STEP;
+        x = Math.max(minX, Math.min(maxX, x));
+        y = Math.max(minY, Math.min(maxY, y));
+      }
+    }
+    lastSnapRef.current = { x, y };
+    return { ...transform, x, y };
+  }, [activeDragId, inventory, rotations]);
+  const modifiers = useMemo(() => [snapToGrid], [snapToGrid]);
+
   const onDragStart = useCallback((event: DragStartEvent) => {
+    lastSnapRef.current = { x: 0, y: 0 };
     const id = event.active.id;
     if (typeof id === "number") setActiveDragId(id);
   }, []);
@@ -327,41 +402,60 @@ export default function AvatarPage() {
     const y = Number(match[2]);
     const moving = inventory.find((r) => r.inventoryId === invId);
     if (!moving?.avatarItem) return;
-    const base = getItemSize(moving.avatarItem);
-    const rot = rotations.has(invId);
-    const cols = rot ? base.rows : base.cols;
-    const rows = rot ? base.cols : base.rows;
+    const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(invId));
     // Only collide against items in the same tab — hair items share grid
     // coordinates with equipment but live in a separate view.
     const movingIsHair = moving.avatarItem.slot === "HAIR";
     const sameTab = inventory.filter((r) => (r.avatarItem?.slot === "HAIR") === movingIsHair);
     if (!rectFits(sameTab, invId, x, y, cols, rows, rotations)) return;
-    if (moving.positionX === x && moving.positionY === y) return;
+    const rotated = rotations.has(invId);
+    if (moving.positionX === x && moving.positionY === y && moving.isRotated === rotated) return;
     setInventory((prev) => prev.map((row) =>
-      row.inventoryId === invId ? { ...row, positionX: x, positionY: y } : row));
-    avatarApi.setPosition(invId, x, y).then(({ error }) => {
+      row.inventoryId === invId ? { ...row, positionX: x, positionY: y, isRotated: rotated } : row));
+    avatarApi.setPosition(invId, x, y, rotated).then(({ error }) => {
       if (error) setError(error);
     });
   }, [inventory, rotations, setError]);
 
   // Q/E toggles rotation on the item currently being dragged. The handler is
   // installed only while a drag is active so the keys behave normally when
-  // the user isn't interacting with the grid. Rotation is ephemeral state.
+  // the user isn't interacting with the grid. Each toggle persists immediately
+  // so a cancelled drag still keeps the new orientation.
   useEffect(() => {
     if (activeDragId == null) return;
+    const dragging = inventory.find((r) => r.inventoryId === activeDragId);
+    // Skip the listener entirely for items that can't rotate — 1×1
+    // footprints and BODY-slot (sweater/torso) items keep their shape.
+    if (!dragging?.avatarItem || !canRotate(dragging.avatarItem)) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "q" && e.key !== "Q" && e.key !== "e" && e.key !== "E") return;
+      // Browser fires keydown repeatedly while a key is held (~30Hz). Each
+      // repeat would toggle rotation again, so the box flickers between
+      // shapes and lands wherever the last fire happens to be. Only respond
+      // to the first event per physical press.
+      if (e.repeat) return;
       e.preventDefault();
+      const newRotated = !rotations.has(activeDragId);
       setRotations((prev) => {
         const n = new Set(prev);
-        if (n.has(activeDragId)) n.delete(activeDragId);
-        else n.add(activeDragId);
+        if (newRotated) n.add(activeDragId);
+        else n.delete(activeDragId);
         return n;
       });
+      setInventory((prev) => prev.map((r) =>
+        r.inventoryId === activeDragId ? { ...r, isRotated: newRotated } : r));
+      // Fire-and-forget — keeps the rotation pinned even if the user
+      // releases the mouse outside the grid (drag-cancel).
+      avatarApi.setPosition(
+        activeDragId,
+        dragging.positionX ?? null,
+        dragging.positionY ?? null,
+        newRotated,
+      );
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [activeDragId]);
+  }, [activeDragId, inventory, rotations]);
 
   async function onCardClick(inv: UserInventoryDto) {
     if (busyIds.has(inv.inventoryId)) return;
@@ -492,15 +586,18 @@ export default function AvatarPage() {
                     type="button"
                     onClick={() => setActiveTab(tab)}
                     style={{
-                      padding: "5px 10px",
+                      padding: "5px 12px",
                       fontSize: 10,
-                      letterSpacing: "0.14em",
+                      letterSpacing: "0.18em",
                       textTransform: "uppercase",
                       fontWeight: 600,
-                      borderRadius: 2,
-                      border: "1px solid rgba(120, 150, 160, 0.55)",
-                      background: active ? "rgba(80, 110, 120, 0.65)" : "transparent",
-                      color: active ? "#fff" : "var(--color-fg-subtle)",
+                      borderRadius: 0,
+                      // RE4-style flat tab: bright hairline border, very
+                      // dark transparent fill when active; muted text when
+                      // inactive.
+                      border: "1px solid rgba(220, 230, 235, 0.55)",
+                      background: active ? "rgba(40, 44, 48, 0.85)" : "rgba(20, 22, 24, 0.55)",
+                      color: active ? "rgba(235, 240, 245, 0.95)" : "rgba(170, 180, 185, 0.6)",
                       cursor: "pointer",
                     }}
                   >
@@ -522,7 +619,7 @@ export default function AvatarPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={topLeftCellCollision}
-              modifiers={[snapToGrid]}
+              modifiers={modifiers}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDragCancel={onDragCancel}
@@ -534,15 +631,20 @@ export default function AvatarPage() {
               <div
                 style={{
                   padding: 1,
-                  background: "rgba(80, 110, 120, 0.45)",
-                  border: "1px solid rgba(120, 150, 160, 0.55)",
-                  borderRadius: 2,
+                  // RE4-style: very dark transparent grid background with a
+                  // bright hairline outer border — almost monochrome, no
+                  // blue tint.
+                  background: "rgba(200, 210, 215, 0.18)",
+                  border: "1px solid rgba(220, 230, 235, 0.6)",
+                  borderRadius: 0,
                   display: "grid",
                   gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL_PX}px)`,
                   gridTemplateRows: `repeat(${GRID_ROWS}, ${CELL_PX}px)`,
                   gap: 1,
                   width: "fit-content",
-                  margin: "0 auto",
+                  // Left-aligned so the grid's left edge lines up with the
+                  // tab strip's leftmost tab. Was centred before.
+                  margin: 0,
                 }}
               >
                 {/* Drop-target underlay — every cell is a droppable so the
@@ -563,6 +665,7 @@ export default function AvatarPage() {
                       busy={busyIds.has(inv.inventoryId)}
                       failed={failedIds.has(inv.avatarItem!.itemId)}
                       rotated={rotations.has(inv.inventoryId)}
+                      dimmed={activeDragId != null && activeDragId !== inv.inventoryId}
                       onCardClick={onCardClick}
                       onImageError={(itemId) => setFailedIds((prev) => {
                         if (prev.has(itemId)) return prev;
@@ -594,8 +697,10 @@ function DropCell({ x, y }: { x: number; y: number }) {
       style={{
         gridColumnStart: x + 1,
         gridRowStart: y + 1,
-        background: "rgba(18, 28, 34, 0.85)",
-        boxShadow: "inset 0 0 12px rgba(0, 0, 0, 0.45)",
+        // Desaturated dark fill with a soft inner vignette — matches the
+        // RE4-style attaché-case pocket look.
+        background: "rgba(28, 30, 32, 0.65)",
+        boxShadow: "inset 0 0 18px rgba(0, 0, 0, 0.55)",
       }}
     />
   );
@@ -606,6 +711,7 @@ interface DraggableItemProps {
   busy: boolean;
   failed: boolean;
   rotated: boolean;
+  dimmed: boolean;
   onCardClick: (inv: UserInventoryDto) => void;
   onImageError: (itemId: number) => void;
 }
@@ -613,13 +719,11 @@ interface DraggableItemProps {
 // Single inventory card. Drag handles come from dnd-kit's useDraggable. The
 // card is rendered ON TOP of the drop-cell underlay using explicit
 // gridColumnStart / gridRowStart from inv.positionX / inv.positionY.
-function DraggableItem({ inv, busy, failed, rotated, onCardClick, onImageError }: DraggableItemProps) {
+function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImageError }: DraggableItemProps) {
   const item = inv.avatarItem!;
-  const baseSize = getItemSize(item);
-  // 90° rotation swaps the grid footprint.
-  const size = rotated
-    ? { cols: baseSize.rows, rows: baseSize.cols }
-    : baseSize;
+  // Effective footprint — accounts for rotation, except BODY items which
+  // keep their native shape so the box doesn't morph on Q/E.
+  const size = sizeFor(item, rotated);
   const isEquipped = inv.isEquipped;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inv.inventoryId,
@@ -632,26 +736,32 @@ function DraggableItem({ inv, busy, failed, rotated, onCardClick, onImageError }
       onClick={() => { if (!isDragging) onCardClick(inv); }}
       disabled={busy}
       title={item.description ?? item.name}
-      className="re-cell"
+      // Drop the `re-cell` class while dragging so its `:hover` rule (which
+      // forces a blue background via !important) can never match. The
+      // `is-dragging` class pins the yellow look on its own.
+      className={isDragging ? "is-dragging" : "re-cell"}
       style={{
         gridColumnStart: (inv.positionX ?? 0) + 1,
         gridColumnEnd: `span ${size.cols}`,
         gridRowStart: (inv.positionY ?? 0) + 1,
         gridRowEnd: `span ${size.rows}`,
         background: isDragging
-          ? "#a8a862"
+          ? "var(--color-active-highlight-bg)"
           : isEquipped
-            ? "rgba(70, 130, 145, 0.55)"
-            : "rgba(18, 28, 34, 0.85)",
+            ? "rgba(48, 52, 56, 0.85)"
+            : "rgba(28, 30, 32, 0.85)",
         boxShadow: isDragging
-          ? "inset 0 0 0 1px rgba(220, 220, 140, 0.9)"
+          ? "inset 0 0 0 2px var(--color-active-highlight)"
           : isEquipped
-            ? "inset 0 0 0 1px rgba(160, 220, 235, 0.85)"
-            : "inset 0 0 12px rgba(0, 0, 0, 0.45)",
+            ? "inset 0 0 0 1px rgba(230, 235, 240, 0.9)"
+            : "inset 0 0 18px rgba(0, 0, 0, 0.55)",
         border: "none",
         padding: 0,
         cursor: busy ? "wait" : (isDragging ? "grabbing" : "grab"),
-        opacity: busy ? 0.5 : 1,
+        // Dim non-dragged cards while a drag is in progress so the yellow
+        // dragged item is unambiguous even when the cursor hovers over a
+        // different equipped (blue) card after the snap.
+        opacity: busy ? 0.5 : dimmed ? 0.35 : 1,
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
@@ -685,7 +795,10 @@ function DraggableItem({ inv, busy, failed, rotated, onCardClick, onImageError }
                 CARD_TRANSFORM_OVERRIDE[filename]
                 ?? SLOT_TRANSFORM[item.slot]
                 ?? "scale(1.4)";
-              if (!rotated) return base;
+              // BODY items: rotate only the box footprint, not the sprite —
+              // the sweater pixel stays vertically oriented even when the
+              // grid box flips horizontal.
+              if (!rotated || item.slot === "BODY") return base;
               // Per-asset rotated override wins so off-center sprites can be
               // re-calibrated for the flipped orientation. Otherwise keep
               // just the scale (drops translate, which is in pre-rotation
@@ -712,8 +825,10 @@ function DraggableItem({ inv, busy, failed, rotated, onCardClick, onImageError }
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "rgba(160, 220, 235, 0.95)",
-            boxShadow: "0 0 6px rgba(160, 220, 235, 0.9)",
+            // Small bright accent on equipped cards — RE4 uses subdued
+            // off-white markers on owned items.
+            background: "rgba(235, 240, 245, 0.95)",
+            boxShadow: "0 0 5px rgba(235, 240, 245, 0.7)",
           }}
         />
       )}

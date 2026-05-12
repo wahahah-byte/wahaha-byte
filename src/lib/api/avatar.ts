@@ -52,6 +52,8 @@ export interface UserInventoryDto {
   // first load.
   positionX?: number | null;
   positionY?: number | null;
+  // 90° rotation persisted across reloads. Toggled by Q/E while dragging.
+  isRotated?: boolean;
   avatarItem?: AvatarItemDto | null;
 }
 
@@ -84,7 +86,18 @@ export const avatarApi = {
     authedPost<UserInventoryDto>(`/api/UserInventory`, { itemId, isEquipped }),
   equip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/equip`),
   unequip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/unequip`),
-  setPosition: (inventoryId: number, positionX: number | null, positionY: number | null) =>
-    authedPatch<void>(`/api/UserInventory/${inventoryId}/position`, { positionX, positionY }),
+  setPosition: (
+    inventoryId: number,
+    positionX: number | null,
+    positionY: number | null,
+    isRotated?: boolean,
+  ) =>
+    authedPatch<void>(`/api/UserInventory/${inventoryId}/position`, {
+      positionX,
+      positionY,
+      // Omit when undefined so the backend keeps the existing value
+      // (lets older callers update just the position).
+      ...(isRotated === undefined ? {} : { isRotated }),
+    }),
   release: (inventoryId: number) => authedDelete<void>(`/api/UserInventory/${inventoryId}`),
 };
