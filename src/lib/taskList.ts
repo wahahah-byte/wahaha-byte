@@ -24,12 +24,36 @@ export function chunkListItems(items: (TaskDto | Sep)[]): Chunk[] {
   return chunks;
 }
 
+// Sort applied to the Completed task list. Three tiers from top to bottom:
+//   Tier 0 (top): unsubmitted — task.submitted === false, no pointsAwarded,
+//     not in this session's submittedTaskIds. Action still required.
+//   Tier 1 (middle): older submitted — backend says submitted/pointsAwarded
+//     but NOT submitted in this session. These are completed-and-filed rows
+//     from a previous session.
+//   Tier 2 (very bottom): just submitted this session — id is in
+//     submittedTaskIds. The freshest "I just filed this" rows sink past the
+//     older submitted rows so the user can see exactly what they just did at
+//     the end of the list.
+// Within each tier we sort by completedAt desc (newest first) so the order
+// is deterministic.
 export const completedSort =
   (submittedTaskIds: Set<string>) =>
   (a: TaskDto, b: TaskDto) => {
-    const aUndo = a.submitted === false && !a.pointsAwarded && !submittedTaskIds.has(a.taskId);
-    const bUndo = b.submitted === false && !b.pointsAwarded && !submittedTaskIds.has(b.taskId);
-    return (bUndo ? 1 : 0) - (aUndo ? 1 : 0);
+    const tier = (t: TaskDto): 0 | 1 | 2 => {
+      if (submittedTaskIds.has(t.taskId)) return 2;
+      if (t.submitted === true || !!t.pointsAwarded) return 1;
+      return 0;
+    };
+    const aTier = tier(a);
+    const bTier = tier(b);
+    if (aTier !== bTier) return aTier - bTier;
+    // Tie-breaker within a tier: completedAt desc (newest first). Null
+    // completedAt is rare for status==="completed" but falls last in its
+    // tier when present.
+    if (a.completedAt && b.completedAt) return b.completedAt.localeCompare(a.completedAt);
+    if (a.completedAt) return -1;
+    if (b.completedAt) return 1;
+    return 0;
   };
 
 const byDueDate = (a: TaskDto, b: TaskDto) => {

@@ -40,12 +40,17 @@ export default function SubmitBar({
 
   return (
     <>
-      {/* Desktop: full bar pinned to viewport bottom */}
+      {/* Desktop: bar pinned to bottom of the main column. left/right are
+          set entirely in CSS (.submit-bar-desktop) — putting them inline
+          would override the @media-query left/right values the class
+          uses to skip the sidebar + detail columns at desktop-shell
+          breakpoints, so the bar would still paint over the sidebar's
+          user/balance strip. */}
       <div
-        className="hidden sm:block"
+        className="hidden sm:block submit-bar-desktop"
         style={{
           position: "fixed",
-          bottom: 0, left: 0, right: 0,
+          bottom: 0,
           zIndex: 50,
           transform: visible ? "translateY(0)" : "translateY(100%)",
           opacity: visible ? 1 : 0,
@@ -53,7 +58,14 @@ export default function SubmitBar({
           pointerEvents: visible ? "auto" : "none",
           background: "var(--color-surface)",
           borderTop: "1px solid var(--color-warning-border)",
-          boxShadow: "0 -6px 32px rgba(0,0,0,0.55)",
+          // Top shadow only — the box-shadow blur (originally 32px) bled
+          // to the right past the bar's edge and onto the detail panel
+          // underneath. clip-path inset(top right bottom left) with
+          // negative top lets the shadow expand upward by 16px while
+          // clipping the other three sides flush with the bar. Blur and
+          // opacity also dialed down for a less heavy drop.
+          boxShadow: "0 -3px 14px rgba(0, 0, 0, 0.28)",
+          clipPath: "inset(-16px 0 0 0)",
         }}
       >
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between gap-6">

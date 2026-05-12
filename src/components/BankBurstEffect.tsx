@@ -3,151 +3,148 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-const COIN_COUNT = 9;
-
-interface CoinDef {
-  spawnSpread: number;
-  rot: number;
-  delay: number;
-  arcLift: number;
+interface Props {
+  active: boolean;
+  // Points awarded for this submission. Drives the "+N" popup that floats out
+  // of the balance chip. Omit (or pass 0) to skip the popup.
+  amount?: number;
 }
 
-const COINS: CoinDef[] = Array.from({ length: COIN_COUNT }, (_, i) => {
-  const center = (COIN_COUNT - 1) / 2;
-  const offset = i - center;
-  return {
-    spawnSpread: Math.round(offset * 5 + (i % 2 === 0 ? 3 : -3)),
-    rot: i % 2 === 0 ? 540 : -540,
-    delay: i * 22,
-    arcLift: 32 + Math.abs(offset) * 6,
-  };
-});
+// How long the effect should keep rendering after being triggered. Must
+// outlast the longest CSS animation defined in globals.css:
+//   underline-fade: 1.8s (no delay)
+//   popup-fade:     0.3s delay + 1.45s = 1.75s
+// 1900ms gives a ~100ms safety pad so the final opacity-0 keyframe is held
+// briefly before unmount — otherwise React rips the popup out the instant
+// the animation's last frame fires and the eye sees it pop instead of fade.
+const PLAY_DURATION_MS = 1900;
 
-interface Anchor {
-  spawnX: number;
-  spawnY: number;
-  dx: number;
-  dy: number;
-  uid: string;
-}
-
-export default function BankBurstEffect({ active }: { active: boolean }) {
-  const triggerRef = useRef<HTMLDivElement | null>(null);
-  const styleRef = useRef<HTMLStyleElement | null>(null);
-  const [anchor, setAnchor] = useState<Anchor | null>(null);
+// Ledger-stamp variant of the submit animation. The original coin-burst
+// fired nine projectiles toward the balance counter — gimmicky in rapid
+// banking. Subsequent iterations went too loud, too jittery, too snappy;
+// this pass is the quiet read: a 1px green underline drifts L→R across the
+// row's bottom edge and lifts off as it fades, while a "+N" popup glides
+// up out of the balance chip and tapers to 0 simultaneously. Total run is
+// ~1.85s end-to-end with linear-easing fades so nothing snaps shut.
+//
+// Lifetime: the parent (useTaskSubmission) flips `active` back to false at
+// ~900ms — well before our animations finish. To stop React from unmounting
+// the popup mid-fade, we keep our own `playing` state that latches true on
+// active→true, then clears on a timer matched to the animation length.
+// `active` is effectively a one-shot trigger, not a render gate.
+export default function BankBurstEffect({ active, amount = 0 }: Props) {
+  const [playing, setPlaying] = useState(false);
+  const [balanceCenter, setBalanceCenter] = useState<{ x: number; y: number } | null>(null);
+  // Captured `amount` from the trigger so re-renders during the play window
+  // don't show "+0" if the parent has already cleared its point state.
+  const [snapshotAmount, setSnapshotAmount] = useState(0);
+  // Holds the pending cleanup timer + the chip we attached the glow class
+  // to, so a re-trigger inside the play window can cancel the previous
+  // cleanup and replay cleanly instead of yanking the glow mid-pulse.
+  const stopTimerRef = useRef<number | null>(null);
+  const glowTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!active) {
-      setAnchor(null);
-      return;
+    if (!active) return;
+
+    // Re-trigger: cancel any in-flight cleanup first so a previous run
+    // doesn't strip the glow class out from under the new run.
+    if (stopTimerRef.current !== null) {
+      window.clearTimeout(stopTimerRef.current);
+      glowTargetRef.current?.classList.remove("bank-stamp-glow");
     }
 
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-
-    const tr = trigger.getBoundingClientRect();
-    const spawnX = tr.left + tr.width / 2;
-    const spawnY = tr.top + tr.height / 2;
-
+    // The balance chip only renders for authenticated users (see
+    // AuthHeader's early-return on !hasToken). On the static demo / GitHub
+    // Pages, querySelector returns null — we still want the row underline
+    // to play, just without the balance glow + +N popup attached to a
+    // non-existent target. Earlier code bailed here on null and the entire
+    // animation went unrendered.
     const target = document.querySelector('[data-coin-target="balance"]') as HTMLElement | null;
-    let dx = 0;
-    let dy = -180;
     if (target) {
-      const targRect = target.getBoundingClientRect();
-      dx = targRect.left + targRect.width / 2 - spawnX;
-      dy = targRect.top + targRect.height / 2 - spawnY;
+      const rect = target.getBoundingClientRect();
+      setBalanceCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      target.classList.add("bank-stamp-glow");
+      glowTargetRef.current = target;
+    } else {
+      setBalanceCenter(null);
+      glowTargetRef.current = null;
     }
 
-    const uid = `bb${Math.random().toString(36).slice(2, 8)}`;
+    setSnapshotAmount(amount);
+    setPlaying(true);
 
-    const el = document.createElement("style");
-    let css = `@keyframes ${uid}-flash {
-      0%   { opacity: 0; }
-      20%  { opacity: 0.18; }
-      100% { opacity: 0; }
-    }`;
+    stopTimerRef.current = window.setTimeout(() => {
+      setPlaying(false);
+      setBalanceCenter(null);
+      glowTargetRef.current?.classList.remove("bank-stamp-glow");
+      stopTimerRef.current = null;
+      glowTargetRef.current = null;
+    }, PLAY_DURATION_MS);
+  }, [active, amount]);
 
-    COINS.forEach((c, i) => {
-      const finalDX = dx - c.spawnSpread;
-      const finalDY = dy;
-      const arcMidX = finalDX * 0.55;
-      const arcMidY = finalDY * 0.55 - c.arcLift;
-      const liftY = -10 - Math.abs(c.spawnSpread) * 0.2;
+  // Final unmount cleanup — yanks any pending timer + lingering glow so a
+  // navigation away during the play window doesn't leak the class.
+  useEffect(() => () => {
+    if (stopTimerRef.current !== null) {
+      window.clearTimeout(stopTimerRef.current);
+    }
+    glowTargetRef.current?.classList.remove("bank-stamp-glow");
+  }, []);
 
-      css += `@keyframes ${uid}-coin${i} {
-        0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0; }
-        8%   { transform: translate(${Math.round(c.spawnSpread * 0.2)}px, ${Math.round(liftY)}px) rotate(${Math.round(c.rot * 0.04)}deg) scale(1.05); opacity: 1; }
-        55%  { transform: translate(${Math.round(arcMidX)}px, ${Math.round(arcMidY)}px) rotate(${Math.round(c.rot * 0.55)}deg) scale(0.85); opacity: 1; }
-        92%  { opacity: 0.85; }
-        100% { transform: translate(${Math.round(finalDX)}px, ${Math.round(finalDY)}px) rotate(${c.rot}deg) scale(0.2); opacity: 0; }
-      }`;
-    });
-
-    el.textContent = css;
-    document.head.appendChild(el);
-    styleRef.current = el;
-
-    setAnchor({ spawnX, spawnY, dx, dy, uid });
-
-    return () => {
-      if (styleRef.current) {
-        document.head.removeChild(styleRef.current);
-        styleRef.current = null;
-      }
-    };
-  }, [active]);
+  if (!playing) return null;
 
   return (
     <>
-      <div ref={triggerRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        {active && anchor && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 28,
-              pointerEvents: "none",
-              background: "var(--color-success)",
-              opacity: 0,
-              animation: `${anchor.uid}-flash 0.45s ease-out forwards`,
-            }}
-          />
-        )}
-      </div>
+      {/* Row underline — 1px success-coloured bar pinned to the row's
+          bottom edge, glides L→R then drifts up + fades. The host TaskRow
+          wraps this component in a position:relative container, so inset
+          works against the row. */}
+      <div
+        aria-hidden
+        className="bank-stamp-underline"
+        style={{
+          position: "absolute",
+          left: 0,
+          bottom: 0,
+          height: 1,
+          // Full success colour as the source; intensity is controlled by
+          // the bank-stamp-underline-fade keyframes (peak 0.55) so layering
+          // a low-alpha rgba on top would make the bar disappear entirely.
+          // Halo stays small + soft to bleed rather than glow.
+          background: "var(--color-success)",
+          boxShadow: "0 0 3px rgba(74, 222, 128, 0.22)",
+          pointerEvents: "none",
+          zIndex: 28,
+        }}
+      />
 
-      {active && anchor && typeof document !== "undefined" &&
+      {/* +N popup — portaled to body so it floats above sidebars/headers.
+          Skipped when the snapshotted amount is 0 so an undo-then-redo
+          flow with stale state doesn't render a "+0". */}
+      {balanceCenter && snapshotAmount > 0 && typeof document !== "undefined" &&
         createPortal(
-          <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999 }}>
-            {COINS.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  left: `${anchor.spawnX + c.spawnSpread}px`,
-                  top: `${anchor.spawnY}px`,
-                  marginLeft: "-5px",
-                  marginTop: "-6px",
-                  opacity: 0,
-                  willChange: "transform, opacity",
-                  animation: `${anchor.uid}-coin${i} 0.78s cubic-bezier(0.42, 0, 0.6, 1) ${c.delay}ms forwards`,
-                }}
-              >
-                <svg width="11" height="13" viewBox="0 0 10 12" fill="none" shapeRendering="crispEdges">
-                  <path
-                    d="M3 2 H7 V3 H8 V4 H9 V8 H8 V9 H7 V10 H3 V9 H2 V8 H1 V4 H2 V3 H3 Z"
-                    style={{ fill: "var(--color-warning)" }}
-                  />
-                  <rect
-                    x="4"
-                    y="5"
-                    width="2"
-                    height="2"
-                    style={{ fill: "var(--color-bg)" }}
-                    opacity="0.4"
-                  />
-                </svg>
-              </div>
-            ))}
+          <div
+            aria-hidden
+            className="bank-stamp-popup"
+            style={{
+              position: "fixed",
+              left: balanceCenter.x,
+              top: balanceCenter.y,
+              pointerEvents: "none",
+              zIndex: 9999,
+              // Brand green stays so the text is legible; the
+              // bank-stamp-popup-fade keyframes peak at 0.7 so the +N reads
+              // as a soft drift rather than a bright pop.
+              color: "var(--color-success)",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              whiteSpace: "nowrap",
+              textShadow: "0 0 4px rgba(74, 222, 128, 0.22)",
+            }}
+          >
+            +{snapshotAmount.toLocaleString()}
           </div>,
           document.body
         )}

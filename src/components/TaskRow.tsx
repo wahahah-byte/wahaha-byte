@@ -59,7 +59,12 @@ interface TaskRowProps {
 
 function TaskRowImpl({
   task, activeFilter, advancing, pausing, slashingId,
-  filingIds, recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
+  // recentlyFiledIds is still passed by all parent pages (page.tsx, archive,
+  // recurring) but is no longer consumed — the filed-badge-enter pop animation
+  // it drove was removed because it doubled up with the BankBurstEffect on
+  // submit. Underscored to silence the unused-var lint without touching the
+  // four call sites.
+  filingIds, recentlyFiledIds: _recentlyFiledIds, errorIds, selectedIds, submittedTaskIds,
   recurringPopup, penalizedTaskIds, onRestartOverdue, onAdvance, onCheckIn, onPause, onDelete,
   onToggleSelect, onOpenDetail, onArchive, onUnarchive, onSubtasksChange, onUndoCheckIn, onLog,
   isOpenInDetail,
@@ -858,8 +863,15 @@ function TaskRowImpl({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
           {isSubmitted ? (
+            // filed-badge-enter (a scale+opacity pop-in on the submitted-state
+            // coin-stack badge) used to fire ~900ms after the click, right as
+            // the row greys out — which read as the submit animation playing
+            // a second time on top of the BankBurstEffect underline that's
+            // still mid-fade. BankBurstEffect now owns the submit-feedback
+            // motion entirely; the badge just renders in place when the row
+            // transitions to submitted.
             <div
-              className={`flex items-center gap-0.5${recentlyFiledIds.has(task.taskId) ? " filed-badge-enter" : ""}`}
+              className="flex items-center gap-0.5"
               style={{
                 gridColumn: "1 / -1",
                 justifySelf: "center",
@@ -932,50 +944,26 @@ function TaskRowImpl({
       </div>
 
       {slashingId === task.taskId && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
-          <svg
-            viewBox="0 0 100 60"
-            preserveAspectRatio="none"
-            shapeRendering="crispEdges"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", filter: "drop-shadow(0 0 3px rgba(239,68,68,0.8))" }}
-          >
-            {Array.from({ length: 20 }).map((_, i) => {
-              const fills = ["#ff1f1f", "#dc2626", "#b91c1c", "#ff5252"];
-              const x = 2 + i * 5;
-              const yOffset = i % 4 === 0 ? -1 : i % 5 === 0 ? 1 : 0;
-              return (
-                <rect
-                  key={`s-${i}`}
-                  x={x}
-                  y={27 + yOffset}
-                  width={4}
-                  height={6}
-                  fill={fills[i % fills.length]}
-                  className="slash-pixel"
-                  style={{ animationDelay: `${i * 12}ms` }}
-                />
-              );
-            })}
-            {[
-              { x: 12, y: 22, c: "#ff5252" },
-              { x: 28, y: 36, c: "#b91c1c" },
-              { x: 46, y: 21, c: "#ff1f1f" },
-              { x: 64, y: 37, c: "#dc2626" },
-              { x: 82, y: 23, c: "#ff5252" },
-            ].map((p, i) => (
-              <rect
-                key={`d-${i}`}
-                x={p.x}
-                y={p.y}
-                width={2}
-                height={2}
-                fill={p.c}
-                className="slash-pixel"
-                style={{ animationDelay: `${80 + i * 30}ms` }}
-              />
-            ))}
-          </svg>
-        </div>
+        // Danger underline — same motion vocabulary as the BankBurstEffect
+        // submit underline but tinted with the danger colour. Draws L→R
+        // across the row's bottom edge, then fades while drifting up. The
+        // previous pixel-slash overlay (20 red rects fading in/out in
+        // stepped frames) was replaced to match the submit feedback's
+        // cream feel.
+        <div
+          aria-hidden
+          className="row-delete-underline"
+          style={{
+            position: "absolute",
+            left: 0,
+            bottom: 0,
+            height: 1,
+            background: "var(--color-danger)",
+            boxShadow: "0 0 3px rgba(239, 68, 68, 0.28)",
+            pointerEvents: "none",
+            zIndex: 25,
+          }}
+        />
       )}
 
       {hasError && (
@@ -1140,7 +1128,7 @@ function TaskRowImpl({
         </button>
       </div>
 
-      <BankBurstEffect active={isFiling} />
+      <BankBurstEffect active={isFiling} amount={task.pointValue} />
     </div>
 
     {expanded && task.subtasks && task.subtasks.length > 0 && (

@@ -645,14 +645,14 @@ textarea::placeholder {
     z-index: 12;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.15s ease-out, transform 0.18s ease-out;
-    transform: translateY(4px);
+    /* No transition on opacity/transform — the user prefers the toolbar
+       to snap in/out on hover rather than fade + slide, so any state
+       change is committed instantly. */
   }
 
   .task-row-wrapper:hover .row-toolbar {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(0);
   }
 
   .task-row-wrapper[data-revealed="true"] .row-toolbar,
@@ -1122,6 +1122,33 @@ textarea::placeholder {
   }
 }
 
+/* Desktop SubmitBar — without these rules, the bar's fixed positioning
+   spans the entire viewport bottom, including the desktop-shell sidebar
+   (which has the user/balance strip pinned at its bottom) and the detail
+   panel on the right. Defaults full-width below 880px (no desktop shell)
+   and constrains the bar to the main column at the breakpoints the shell
+   activates (880px + 1100px) so the side strips stay visible underneath.
+   Defined in CSS rather than inline style on the element so the @media
+   overrides actually win — inline styles beat class rules. */
+.submit-bar-desktop {
+  left: 0;
+  right: 0;
+}
+
+@media (min-width: 880px) {
+  .submit-bar-desktop {
+    left: 200px;
+    right: 300px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .submit-bar-desktop {
+    left: 240px;
+    right: 380px;
+  }
+}
+
 @keyframes subtask-thread-in {
   from {
     opacity: 0;
@@ -1166,43 +1193,34 @@ textarea::placeholder {
   animation: datepicker-slide-from-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-@keyframes pixel-slash {
-  0% {
-    opacity: 0;
-  }
-
-  15% {
-    opacity: 1;
-  }
-
-  60% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-.slash-pixel {
+/* Delete underline — mirrors the BankBurstEffect submit underline so submit
+   and delete share one motion vocabulary. Draw + fade are split into two
+   parallel animations (same as the bank-stamp variant) so width gets a
+   buttery cubic glide while opacity gets a long linear taper with a 3px
+   upward drift at the end. Renamed (not reused via the bank-stamp class)
+   so the colour intent ("danger" vs "success") is explicit at the call
+   site, but the underlying keyframes are the bank-stamp-underline ones —
+   they're colour-independent (they animate only width/opacity/transform). */
+.row-delete-underline {
   opacity: 0;
-  animation: pixel-slash 0.36s steps(4, end) forwards;
+  animation:
+    bank-stamp-underline-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards,
+    bank-stamp-underline-fade 1.6s linear forwards;
 }
-
 
 @keyframes row-delete {
+  /* Hold full height while the danger underline glides across, then
+     collapse the row during the underline's fade-out tail — same two-phase
+     shape as the submit feedback, just with a collapse appended. easeInOut
+     cubic on the keyframe transitions matches the cream feel set by the
+     submit animation. */
   0% {
     opacity: 1;
     max-height: 64px;
   }
 
-  25% {
-    opacity: 0.9;
-    max-height: 64px;
-  }
-
-  60% {
-    opacity: 0.2;
+  55% {
+    opacity: 1;
     max-height: 64px;
   }
 
@@ -1211,12 +1229,13 @@ textarea::placeholder {
     max-height: 0;
     margin-bottom: 0;
     padding-bottom: 0;
+    padding-top: 0;
   }
 }
 
 .task-row-deleting {
   overflow: hidden;
-  animation: row-delete 0.55s ease-out forwards;
+  animation: row-delete 1.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
 
 @keyframes toast-banner {
@@ -1329,6 +1348,82 @@ textarea::placeholder {
 .recurring-pts-popup {
   animation: recurring-pts-popup 1.1s cubic-bezier(0.22, 0.7, 0.4, 1) forwards;
   pointer-events: none;
+}
+
+/* Bank-stamp animation — two restrained beats: a thin success-coloured
+   underline draws L→R across the submitted row's bottom edge ("row signed
+   off"), then the balance chip ring-pulses with a +N popup floating up out
+   of it ("balance updated"). Earlier iterations tried a full-row green
+   wash + gradient sweep ("large green stamp") and a stepped chunky cadence
+   that matched pixel-slash — both read too jittery for the submit flow.
+   This pass goes the other direction: long durations + smooth cubic-bezier
+   curves for a creamy ease-in-out feel. ~1.6s end-to-end. */
+/* Underline split into two parallel animations so width (the draw) can
+   keep its buttery cubic curve while opacity (the fade) gets a long
+   linear-ish ease — running both on one keyframe with cubic-bezier made
+   the fade-out hold full, snap through the middle, and linger near zero
+   which read as the bar "suddenly disappearing." Peak opacity is
+   intentionally ≤0.55 so the success green never goes full saturation —
+   matches the muted ledger feel the user asked for. */
+@keyframes bank-stamp-underline-draw {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+@keyframes bank-stamp-underline-fade {
+  0%   { opacity: 0; transform: translateY(0); }
+  14%  { opacity: 0.55; transform: translateY(0); }
+  28%  { opacity: 0.55; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-3px); }
+}
+
+.bank-stamp-underline {
+  opacity: 0;
+  /* Two reasons for the linear fade + translateY: linear keeps opacity
+     dropping at a constant rate (no curve-induced snap), and the bar
+     drifts 3px upward during the fade so the eye tracks motion rather
+     than fixating on the last opacity step — that "lift off the page"
+     blur is what makes the end read as fading instead of disappearing. */
+  animation:
+    bank-stamp-underline-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards,
+    bank-stamp-underline-fade 1.8s linear forwards;
+}
+
+@keyframes bank-stamp-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+  45%  { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.20); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+
+.bank-stamp-glow {
+  border-radius: 4px;
+  /* Material standard ease — slow start, decisive rise, gentle settle. */
+  animation: bank-stamp-glow 0.85s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+}
+
+/* Popup rise + fade share the exact same duration so they finish together
+   — the +N is always moving while it fades, never sits still at the top.
+   The hold-then-decline pattern is gone: opacity peaks briefly at 16%,
+   then linearly tapers all the way to zero over the remaining 84% while
+   the popup keeps drifting upward. End result reads as "drifts off and
+   thins out" instead of "rises, then evaporates." */
+@keyframes bank-stamp-popup-rise {
+  0%   { transform: translate(-50%, -30%) scale(0.92); }
+  16%  { transform: translate(-50%, -100%) scale(1); }
+  100% { transform: translate(-50%, -230%) scale(0.94); }
+}
+
+@keyframes bank-stamp-popup-fade {
+  0%   { opacity: 0; }
+  16%  { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+.bank-stamp-popup {
+  opacity: 0;
+  animation:
+    bank-stamp-popup-rise 1.45s cubic-bezier(0.22, 0.61, 0.36, 1) 0.3s forwards,
+    bank-stamp-popup-fade 1.45s linear 0.3s forwards;
 }
 
 .bg-scanlines {

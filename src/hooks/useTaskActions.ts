@@ -393,7 +393,11 @@ export function useTaskActions({
       setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       setSlashingId(id);
-      await new Promise((r) => setTimeout(r, 550));
+      // Outlast the row-delete animation (1.6s) so the danger underline glides
+    // + fades + the row collapses fully before the task is yanked from the
+    // list. The previous 550ms matched the old chunky stepped row-delete; the
+    // submit-style cream redesign needs a longer window.
+    await new Promise((r) => setTimeout(r, 1600));
       setSlashingId(null);
       setTasks((prev) => prev.filter((t) => t.taskId !== id));
       return;
@@ -403,7 +407,11 @@ export function useTaskActions({
     if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
     setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    await new Promise((r) => setTimeout(r, 550));
+    // Outlast the row-delete animation (1.6s) so the danger underline glides
+    // + fades + the row collapses fully before the task is yanked from the
+    // list. The previous 550ms matched the old chunky stepped row-delete; the
+    // submit-style cream redesign needs a longer window.
+    await new Promise((r) => setTimeout(r, 1600));
     setSlashingId(null);
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
     const { error } = await deletePromise;
