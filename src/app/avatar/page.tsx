@@ -31,7 +31,12 @@ import {
 // fit the new shape are re-placed by autoPlace.
 const GRID_DESKTOP = { cols: 7, rows: 5 } as const;
 const GRID_MOBILE = { cols: 5, rows: 7 } as const;
-const CELL_PX = 64;
+// Desktop cells stay at the comfortable 64px the layout was designed around.
+// Mobile cells are shrunk to 56px so the 5-wide grid (5×56 + gaps ≈ 286px)
+// fits inside a 320px viewport's content area without triggering a horizontal
+// scrollbar — 64px overflows on the narrowest common phone widths.
+const CELL_PX_DESKTOP = 64;
+const CELL_PX_MOBILE = 56;
 
 // CSS transform applied to the inventory-card image so the sprite is zoomed
 // in and roughly centered on the actual item content. Each item PNG covers
@@ -123,13 +128,15 @@ function hasRealAsset(url: string | null | undefined): boolean {
 
 // Step between adjacent grid cells in screen pixels — equals the cell size
 // plus the 1px gap rendered by the grid container. Used by the snap-to-grid
-// drag modifier so the dragged item jumps exactly cell-to-cell.
-const SNAP_STEP = CELL_PX + 1;
-// Hysteresis threshold for the snap modifier. The dragged card only flips
+// drag modifier so the dragged item jumps exactly cell-to-cell. Cell size
+// differs between desktop and mobile, so the snap step is computed inside
+// the component (see snapToGrid below) rather than living here as a module
+// constant.
+// Hysteresis fraction for the snap modifier: the dragged card only flips
 // to the next cell once the cursor has moved past 70% of the cell step
 // from the last snapped position — eliminates the back-and-forth flicker
 // when the cursor hovers near a cell boundary.
-const SNAP_HYSTERESIS = SNAP_STEP * 0.7;
+const SNAP_HYSTERESIS_FRACTION = 0.7;
 
 // Custom dnd-kit collision detector that snaps to the cell closest to the
 // active item's TOP-LEFT corner (rather than the cell under the cursor).
@@ -281,6 +288,13 @@ export default function AvatarPage() {
   const { setError } = useToast();
   const isDesktop = useDesktopLayout();
   const { cols: gridCols, rows: gridRows } = isDesktop ? GRID_DESKTOP : GRID_MOBILE;
+  // Active cell size and derived snap step. Mobile uses a smaller cell so
+  // the grid fits inside narrow phone viewports without horizontal scroll;
+  // the snap step must follow it so drag positioning lines up cell-to-cell
+  // at the rendered size.
+  const cellPx = isDesktop ? CELL_PX_DESKTOP : CELL_PX_MOBILE;
+  const snapStep = cellPx + 1;
+  const snapHysteresis = snapStep * SNAP_HYSTERESIS_FRACTION;
 
   // Per-viewport position caches. Each shape (desktop 7×5, mobile 5×7) keeps
   // its own canonical layout so flipping between them never destroys the
@@ -465,11 +479,11 @@ export default function AvatarPage() {
     const last = lastSnapRef.current;
     let x = last.x;
     let y = last.y;
-    if (Math.abs(transform.x - last.x) >= SNAP_HYSTERESIS) {
-      x = Math.round(transform.x / SNAP_STEP) * SNAP_STEP;
+    if (Math.abs(transform.x - last.x) >= snapHysteresis) {
+      x = Math.round(transform.x / snapStep) * snapStep;
     }
-    if (Math.abs(transform.y - last.y) >= SNAP_HYSTERESIS) {
-      y = Math.round(transform.y / SNAP_STEP) * SNAP_STEP;
+    if (Math.abs(transform.y - last.y) >= snapHysteresis) {
+      y = Math.round(transform.y / snapStep) * snapStep;
     }
     // Clamp the snap within the grid so the dragged box can't translate
     // outside the inventory bounds. Uses the moving item's current position
@@ -482,17 +496,17 @@ export default function AvatarPage() {
         && moving.positionY != null
       ) {
         const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(activeDragId));
-        const minX = -moving.positionX * SNAP_STEP;
-        const maxX = (gridCols - moving.positionX - cols) * SNAP_STEP;
-        const minY = -moving.positionY * SNAP_STEP;
-        const maxY = (gridRows - moving.positionY - rows) * SNAP_STEP;
+        const minX = -moving.positionX * snapStep;
+        const maxX = (gridCols - moving.positionX - cols) * snapStep;
+        const minY = -moving.positionY * snapStep;
+        const maxY = (gridRows - moving.positionY - rows) * snapStep;
         x = Math.max(minX, Math.min(maxX, x));
         y = Math.max(minY, Math.min(maxY, y));
       }
     }
     lastSnapRef.current = { x, y };
     return { ...transform, x, y };
-  }, [activeDragId, inventory, rotations, gridCols, gridRows]);
+  }, [activeDragId, inventory, rotations, gridCols, gridRows, snapStep, snapHysteresis]);
   const modifiers = useMemo(() => [snapToGrid], [snapToGrid]);
 
   const onDragStart = useCallback((event: DragStartEvent) => {
@@ -667,8 +681,18 @@ export default function AvatarPage() {
           </p>
         </section>
 
-        {/* Inventory grid — only items the user owns. Click to equip/unequip. */}
-        <section className="flex flex-col gap-3" style={{ flex: isDesktop ? "1 1 auto" : undefined, minWidth: 0 }}>
+        {/* Inventory grid — only items the user owns. Click to equip/unequip.
+            On mobile the section's children (header, tab strip, grid wrapper)
+            are centred on the cross-axis so the tab buttons sit directly
+            above the centred grid instead of hugging the left edge. */}
+        <section
+          className="flex flex-col gap-3"
+          style={{
+            flex: isDesktop ? "1 1 auto" : undefined,
+            minWidth: 0,
+            alignItems: isDesktop ? undefined : "center",
+          }}
+        >
           <h2
             style={{
               color: "var(--color-fg-subtle)",
@@ -730,8 +754,25 @@ export default function AvatarPage() {
             >
               {/* Horizontally scrollable as a defense if a future shape
                   exceeds the content area. With the current 7×5 / 5×7
-                  layouts no scroll is needed. */}
-              <div style={{ overflowX: "auto", paddingBottom: 4, margin: "0 -8px", padding: "0 8px 6px" }}>
+                  layouts no scroll is needed. data-edge-drawer-block opts
+                  the inventory grid out of MobileEdgeDrawer's right-swipe
+                  open gesture — without it, dragging an item rightward
+                  on mobile both moves the card AND pulls open the nav
+                  drawer. Desktop keeps the -8px negative margin so the
+                  grid's left edge can sit flush with the tab strip; mobile
+                  drops it and the horizontal padding so the wrapper's
+                  intrinsic width equals the grid's, which lets the parent
+                  section's align-items:center centre everything cleanly
+                  without producing an overflow scrollbar. */}
+              <div
+                data-edge-drawer-block
+                style={{
+                  overflowX: "auto",
+                  paddingBottom: 4,
+                  margin: isDesktop ? "0 -8px" : 0,
+                  padding: isDesktop ? "0 8px 6px" : "0 0 6px",
+                }}
+              >
               <div
                 style={{
                   padding: 1,
@@ -742,13 +783,15 @@ export default function AvatarPage() {
                   border: "1px solid rgba(220, 230, 235, 0.6)",
                   borderRadius: 0,
                   display: "grid",
-                  gridTemplateColumns: `repeat(${gridCols}, ${CELL_PX}px)`,
-                  gridTemplateRows: `repeat(${gridRows}, ${CELL_PX}px)`,
+                  gridTemplateColumns: `repeat(${gridCols}, ${cellPx}px)`,
+                  gridTemplateRows: `repeat(${gridRows}, ${cellPx}px)`,
                   gap: 1,
                   width: "fit-content",
-                  // Left-aligned so the grid's left edge lines up with the
-                  // tab strip's leftmost tab. Was centred before.
-                  margin: 0,
+                  // Desktop: left-aligned so the grid's left edge lines up
+                  // with the tab strip's leftmost tab. Mobile: horizontally
+                  // centred in the page so the narrower 5×7 grid sits in
+                  // the middle of the screen rather than hugging the left.
+                  margin: isDesktop ? 0 : "0 auto",
                 }}
               >
                 {/* Drop-target underlay — every cell is a droppable so the
