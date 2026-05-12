@@ -69,6 +69,12 @@ const SLOT_TRANSFORM: Record<string, string> = {
 // otherwise render small inside its 2×1 card.
 const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(3%, -10%)",
+  // Seraph hair is drawn ~11 source pixels left of canvas center (the same
+  // shift ChibiAvatar applies via offsetX: 11 to align it with the chibi's
+  // head). The slot default has no translateX, so without this override the
+  // hair sits slightly left of card center. 2.8% on the element width, with
+  // scale(1.7) magnification, lands canvas-x 117 on the cell's centre line.
+  "hair_seraph_wave_brown.png": "scale(1.7) translate(2.8%, 20%)",
 };
 
 // Per-asset overrides for the *rotated* card transform. Translate happens
