@@ -2,6 +2,8 @@
 // with custom artwork later — these are rough recognizable silhouettes drawn
 // from string-based pixel grids so they render crisp and tint with currentColor.
 
+import { assetPath } from "./assetPath";
+
 // All icons are drawn on a 10×10 grid so they render at the same visual
 // size. Strokes are 2 pixels wide (or solid silhouettes) — no 1-pixel-wide
 // diagonals that disappear at 12 px.
@@ -197,7 +199,12 @@ export function CategoryIcon({ category, size = 12, color = "currentColor" }: Pr
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        // Route through assetPath() so the prefix is applied on static builds.
+        // Without this, `/icons/Foo.png` 404s on GitHub Pages (and any other
+        // host that serves the app under a sub-path) because next.config.ts'
+        // basePath only rewrites bundle URLs and next/image — plain <img src>
+        // is left untouched and needs the prefix added manually.
+        src={assetPath(src)}
         alt=""
         width={size}
         height={size}
