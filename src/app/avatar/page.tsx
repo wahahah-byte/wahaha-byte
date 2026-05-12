@@ -43,9 +43,19 @@ const CELL_PX_MOBILE = 56;
 // the full 256×384 chibi canvas, so the item sits in a slot-specific region
 // of that canvas — we scale up and translate to bring that region into the
 // card's center. translateY is a percentage of the image height.
-const SLOT_TRANSFORM: Record<ItemSlot, string> = {
+//
+// Typed as Record<string, string> (not Record<ItemSlot, string>) because
+// mock items can use planned granular slots that aren't in the current
+// ItemSlot enum — e.g. HAIR_FRONT, WEAPON_BACK, CAPE. Without entries for
+// those, the lookup returns undefined and the fallback "scale(1.4)" drops
+// the translateY, leaving items (notably the hair sprite) rendered at the
+// top of their card instead of centered.
+const SLOT_TRANSFORM: Record<string, string> = {
   HEAD:  "scale(1.7) translateY(22%)",
   HAIR:  "scale(1.7) translateY(20%)",
+  // Planned granular hair slots map to the same canvas region as HAIR.
+  HAIR_FRONT: "scale(1.7) translateY(20%)",
+  HAIR_BACK:  "scale(1.7) translateY(20%)",
   FACE:  "scale(1.7) translateY(12%)",
   BODY:  "scale(1.4) translateY(-4%)",
   HAND:  "scale(1.4) translateY(-6%)",
