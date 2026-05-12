@@ -7,7 +7,7 @@ import ChibiAvatar from "@/components/ChibiAvatar";
 import DemoModeBanner from "@/components/DemoModeBanner";
 import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
-import { avatarApi, type AvatarItemDto, type UserInventoryDto, type ItemSlot } from "@/lib/api/avatar";
+import { avatarApi, type AvatarItemDto, type UserInventoryDto } from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import {
@@ -80,6 +80,14 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
 const CARD_TRANSFORM_ROTATED_OVERRIDE: Record<string, string> = {
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(10%, 3%) rotate(90deg)",
 };
+
+// True for any slot that belongs in the hair tab. The backend currently
+// only exposes the bare "HAIR" enum, but mock items can use the planned
+// granular variants ("HAIR_FRONT", "HAIR_BACK") — without recognising
+// those, the static demo files them under the equipment tab instead.
+function isHairSlot(slot: string | undefined | null): boolean {
+  return slot === "HAIR" || slot === "HAIR_FRONT" || slot === "HAIR_BACK";
+}
 
 // Resident-Evil-style inventory: items take up a different number of grid
 // cells depending on what they are. The backend now stores gridCols/gridRows
@@ -405,8 +413,8 @@ export default function AvatarPage() {
       // 3. autoPlace anything still missing on the incoming grid shape.
       const targetCols = mode === "desktop" ? GRID_DESKTOP.cols : GRID_MOBILE.cols;
       const targetRows = mode === "desktop" ? GRID_DESKTOP.rows : GRID_MOBILE.rows;
-      const equipRows = seeded.filter((r) => r.avatarItem?.slot !== "HAIR");
-      const hairRows = seeded.filter((r) => r.avatarItem?.slot === "HAIR");
+      const equipRows = seeded.filter((r) => !isHairSlot(r.avatarItem?.slot));
+      const hairRows = seeded.filter((r) => isHairSlot(r.avatarItem?.slot));
       const placed = [
         ...autoPlace(equipRows, targetCols, targetRows),
         ...autoPlace(hairRows, targetCols, targetRows),
@@ -466,8 +474,8 @@ export default function AvatarPage() {
   const visibleInventory = useMemo(
     () => inventory.filter((inv) =>
       activeTab === "hair"
-        ? inv.avatarItem?.slot === "HAIR"
-        : inv.avatarItem?.slot !== "HAIR",
+        ? isHairSlot(inv.avatarItem?.slot)
+        : !isHairSlot(inv.avatarItem?.slot),
     ),
     [inventory, activeTab],
   );
@@ -544,8 +552,8 @@ export default function AvatarPage() {
     const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(invId));
     // Only collide against items in the same tab — hair items share grid
     // coordinates with equipment but live in a separate view.
-    const movingIsHair = moving.avatarItem.slot === "HAIR";
-    const sameTab = inventory.filter((r) => (r.avatarItem?.slot === "HAIR") === movingIsHair);
+    const movingIsHair = isHairSlot(moving.avatarItem.slot);
+    const sameTab = inventory.filter((r) => isHairSlot(r.avatarItem?.slot) === movingIsHair);
     if (!rectFits(sameTab, invId, x, y, cols, rows, rotations, gridCols, gridRows)) return;
     const rotated = rotations.has(invId);
     if (moving.positionX === x && moving.positionY === y && moving.isRotated === rotated) return;
