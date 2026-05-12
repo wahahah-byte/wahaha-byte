@@ -247,6 +247,12 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     offsetX: 6,
     offsetY: -8,
     renderScale: 1.25,
+    // The backend persists gridCols/gridRows per item; the mock must mirror
+    // those values or the static-demo inventory falls back to getItemSize's
+    // slot heuristic, which doesn't recognise WEAPON_FRONT (a planned
+    // granular slot not in the base ItemSlot enum) and treats it as 1×1.
+    gridCols: 2,
+    gridRows: 1,
   },
   {
     itemId: 2005,
