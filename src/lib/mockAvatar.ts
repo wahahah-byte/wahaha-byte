@@ -248,6 +248,28 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     offsetY: -8,
     renderScale: 1.25,
   },
+  {
+    itemId: 2005,
+    name: "Casual Hoodie",
+    category: "outerwear",
+    slot: "BODY",
+    rarity: "COMMON",
+    cost: 50,
+    description: "A casual grey hoodie.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hoodie_casual_grey.png",
+    isAvailable: true,
+  },
+  {
+    itemId: 2006,
+    name: "Flower Crown",
+    category: "headwear",
+    slot: "HEAD",
+    rarity: "RARE",
+    cost: 120,
+    description: "A delicate crown of pixel flowers.",
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hat_crown_flower.png",
+    isAvailable: true,
+  },
 ];
 
 const itemById = new Map(MOCK_AVATAR_ITEMS.map((i) => [i.itemId, i]));
@@ -277,4 +299,32 @@ export function buildMockEquipped(): UserInventoryDto[] {
       return inv;
     })
     .filter((x): x is UserInventoryDto => x !== null);
+}
+
+// Demo-mode inventory: every PNG-backed mock item is "owned", with the same
+// four items pre-equipped as buildMockEquipped(). Powers the unauthenticated
+// avatar page so visitors can experiment with the drag-drop grid and the
+// equip/unequip flow without hitting the API.
+export function buildMockInventory(): UserInventoryDto[] {
+  const now = new Date().toISOString();
+  const equippedSet = new Set(MOCK_EQUIPPED_IDS);
+  return MOCK_AVATAR_ITEMS
+    .filter((item) => item.previewAssetUrl)
+    .map((item, i) => {
+      const { art: _art, ...dto } = item;
+      void _art;
+      const inv: UserInventoryDto = {
+        inventoryId: 9100 + i,
+        userId: "00000000-0000-0000-0000-000000000000",
+        itemId: dto.itemId,
+        acquiredAt: now,
+        isEquipped: equippedSet.has(dto.itemId),
+        avatarItem: dto,
+        // Positions left null so the avatar page's autoPlace assigns slots
+        // based on whichever grid shape (desktop 7×5 / mobile 5×7) is active.
+        positionX: null,
+        positionY: null,
+      };
+      return inv;
+    });
 }

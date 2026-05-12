@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChibiAvatar from "@/components/ChibiAvatar";
+import DemoModeBanner from "@/components/DemoModeBanner";
+import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
 import { avatarApi, type AvatarItemDto, type UserInventoryDto, type ItemSlot } from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
@@ -22,11 +24,13 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 
-// Fixed grid dimensions for the inventory. RE-style positional placement
-// uses explicit (x, y) cells; auto-fill responsiveness goes away. Landscape
-// shape (more columns than rows) matches the RE5/RE6 attaché-case feel.
-const GRID_COLS = 7;
-const GRID_ROWS = 5;
+// Grid dimensions for the inventory. Desktop is landscape (7×5) for the
+// RE5/RE6 attaché-case feel; mobile flips to portrait (5×7) so the grid
+// fits the narrower viewport without horizontal scroll. Total cells stay
+// at 35 so identical inventories fit on both shapes — items that don't
+// fit the new shape are re-placed by autoPlace.
+const GRID_DESKTOP = { cols: 7, rows: 5 } as const;
+const GRID_MOBILE = { cols: 5, rows: 7 } as const;
 const CELL_PX = 64;
 
 // CSS transform applied to the inventory-card image so the sprite is zoomed
@@ -164,8 +168,10 @@ function rectFits(
   cols: number,
   height: number,
   rotations: Set<number>,
+  gridCols: number,
+  gridRows: number,
 ): boolean {
-  if (x < 0 || y < 0 || x + cols > GRID_COLS || y + height > GRID_ROWS) return false;
+  if (x < 0 || y < 0 || x + cols > gridCols || y + height > gridRows) return false;
   for (const row of rows) {
     if (row.inventoryId === skipId) continue;
     if (row.positionX == null || row.positionY == null) continue;
@@ -205,17 +211,17 @@ function sizeFor(item: AvatarItemDto, rotated: boolean): { cols: number; rows: n
 // changed in the backend after the position was saved — the old position
 // may now extend past the grid edge. Honours the persisted `isRotated`
 // flag so a rotated 2×1 at the right edge stays valid.
-function hasValidPlacement(row: UserInventoryDto): boolean {
+function hasValidPlacement(row: UserInventoryDto, gridCols: number, gridRows: number): boolean {
   if (row.positionX == null || row.positionY == null) return false;
   if (!row.avatarItem) return false;
   const { cols, rows } = sizeFor(row.avatarItem, !!row.isRotated);
   return row.positionX >= 0
     && row.positionY >= 0
-    && row.positionX + cols <= GRID_COLS
-    && row.positionY + rows <= GRID_ROWS;
+    && row.positionX + cols <= gridCols
+    && row.positionY + rows <= gridRows;
 }
 
-function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
+function autoPlace(rows: UserInventoryDto[], gridCols: number, gridRows: number): UserInventoryDto[] {
   // Build a rotations set from the persisted `isRotated` flags so the
   // collision check inside rectFits uses each row's actual footprint
   // (rotated rows have swapped cols/rows).
@@ -226,18 +232,18 @@ function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
   // an item's size grew after a backend migration). Those rows fall back
   // into the "needs placement" queue and get a fresh slot.
   const placed: UserInventoryDto[] = rows
-    .filter(hasValidPlacement)
+    .filter((r) => hasValidPlacement(r, gridCols, gridRows))
     .slice();
   const result: UserInventoryDto[] = [...placed];
   for (const row of rows) {
-    if (hasValidPlacement(row)) continue;
+    if (hasValidPlacement(row, gridCols, gridRows)) continue;
     // Re-placement honours the item's persisted rotation so a rotated
     // polearm gets a slot that fits its rotated footprint.
     const size = sizeFor(row.avatarItem!, !!row.isRotated);
     let assigned: { x: number; y: number } | null = null;
-    outer: for (let y = 0; y < GRID_ROWS; y++) {
-      for (let x = 0; x < GRID_COLS; x++) {
-        if (rectFits(result, null, x, y, size.cols, size.rows, persistedRotations)) {
+    outer: for (let y = 0; y < gridRows; y++) {
+      for (let x = 0; x < gridCols; x++) {
+        if (rectFits(result, null, x, y, size.cols, size.rows, persistedRotations, gridCols, gridRows)) {
           assigned = { x, y };
           break outer;
         }
@@ -274,47 +280,156 @@ export default function AvatarPage() {
   const [failedIds, setFailedIds] = useState<Set<number>>(new Set());
   const { setError } = useToast();
   const isDesktop = useDesktopLayout();
+  const { cols: gridCols, rows: gridRows } = isDesktop ? GRID_DESKTOP : GRID_MOBILE;
+
+  // Per-viewport position caches. Each shape (desktop 7×5, mobile 5×7) keeps
+  // its own canonical layout so flipping between them never destroys the
+  // arrangement the user built on either one. The desktop cache is seeded
+  // from backend positions on first load; the mobile cache is populated on
+  // its first activation by autoPlace on top of the desktop layout — items
+  // that fit keep their (x, y), items that don't get the top-most free slot.
+  const desktopPositionsRef = useRef<Map<number, { x: number; y: number; rotated: boolean }>>(new Map());
+  const mobilePositionsRef = useRef<Map<number, { x: number; y: number; rotated: boolean }>>(new Map());
+  const lastModeRef = useRef<"desktop" | "mobile" | null>(null);
+  // Flipped once the initial inventory load resolves so the per-mode swap
+  // effect knows it's safe to run.
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const token = !!localStorage.getItem("auth_token");
     setHasToken(token);
     if (!token) {
+      // Demo mode — populate inventory from the mock catalogue. Positions
+      // are left null; the per-mode swap effect runs autoPlace for the
+      // active viewport and caches the result. Equip/unequip and
+      // setPosition calls below are guarded so nothing hits the backend.
+      const rows = buildMockInventory().map((row) => ({
+        ...row,
+        avatarItem: applyHints(row.avatarItem!),
+      }));
+      setInventory(rows);
+      setInventoryLoaded(true);
       setLoading(false);
       return;
     }
-    // Only fetch the user's inventory — the grid shows what they own, not the
-    // full catalogue. Items missing a renderable asset or an `avatarItem`
-    // join are filtered out so the grid only contains things that actually
-    // render on the chibi.
     avatarApi.getInventory(1, 200).then(({ data, error }) => {
       if (error) setError(error);
       const rows = (data?.data ?? [])
         .filter((row) => row.avatarItem?.previewAssetUrl)
         .map((row) => ({ ...row, avatarItem: applyHints(row.avatarItem!) }));
-      // Hair lives in its own grid, so auto-place each tab's rows
-      // independently. Otherwise a hair item at (0,0) would block an
-      // equipment item at (0,0) even though they're never on screen together.
-      const equipRows = rows.filter((r) => r.avatarItem?.slot !== "HAIR");
-      const hairRows = rows.filter((r) => r.avatarItem?.slot === "HAIR");
-      const placed = [...autoPlace(equipRows), ...autoPlace(hairRows)];
-      setInventory(placed);
-      // Hydrate the local rotation state from whatever the backend persisted.
-      setRotations(new Set(placed.filter((r) => r.isRotated).map((r) => r.inventoryId)));
-      // Persist any positions that were newly assigned by autoPlace so
-      // subsequent reloads return the same layout. Fire-and-forget.
-      for (const row of placed) {
-        const original = rows.find((r) => r.inventoryId === row.inventoryId);
-        if (!original) continue;
-        const xChanged = original.positionX !== row.positionX;
-        const yChanged = original.positionY !== row.positionY;
-        if ((xChanged || yChanged) && row.positionX != null && row.positionY != null) {
-          avatarApi.setPosition(row.inventoryId, row.positionX, row.positionY);
+      // Seed the desktop cache from the persisted backend positions so the
+      // swap effect can treat the cache as the source of truth uniformly.
+      for (const row of rows) {
+        if (row.positionX != null && row.positionY != null) {
+          desktopPositionsRef.current.set(row.inventoryId, {
+            x: row.positionX, y: row.positionY, rotated: !!row.isRotated,
+          });
         }
       }
+      setInventory(rows);
+      setRotations(new Set(rows.filter((r) => r.isRotated).map((r) => r.inventoryId)));
+      setInventoryLoaded(true);
       setLoading(false);
     });
   }, [setError]);
+
+  // Per-mode swap. Fires when the viewport flips (or on first inventory
+  // load). Snapshots the outgoing layout into its cache, then restores the
+  // incoming layout from its cache and runs autoPlace for anything missing.
+  // Newly-assigned desktop positions are persisted to the backend so the
+  // user's first-ever layout sticks across reloads; mobile is session-only.
+  useEffect(() => {
+    if (!inventoryLoaded) return;
+    const mode: "desktop" | "mobile" = isDesktop ? "desktop" : "mobile";
+    const previousMode = lastModeRef.current;
+    if (previousMode === mode) return;
+    // Update the ref now so any concurrent reads (e.g. the sync-cache effect
+    // firing on the resulting setInventory) target the new mode's cache.
+    lastModeRef.current = mode;
+
+    setInventory((prev) => {
+      if (prev.length === 0) return prev;
+
+      // 1. Snapshot the rendered positions into the OUTGOING cache so the
+      //    user's edits on the previous viewport are preserved when they
+      //    flip back.
+      const outgoing = previousMode === "desktop"
+        ? desktopPositionsRef.current
+        : previousMode === "mobile"
+          ? mobilePositionsRef.current
+          : null;
+      if (outgoing) {
+        for (const r of prev) {
+          if (r.positionX != null && r.positionY != null) {
+            outgoing.set(r.inventoryId, { x: r.positionX, y: r.positionY, rotated: !!r.isRotated });
+          } else {
+            outgoing.delete(r.inventoryId);
+          }
+        }
+      }
+
+      // 2. Restore each row's position from the INCOMING cache; items with
+      //    no cached entry fall through to autoPlace below.
+      const incoming = mode === "desktop" ? desktopPositionsRef.current : mobilePositionsRef.current;
+      const seeded = prev.map((r) => {
+        const c = incoming.get(r.inventoryId);
+        if (c) return { ...r, positionX: c.x, positionY: c.y, isRotated: c.rotated };
+        return { ...r, positionX: null, positionY: null };
+      });
+
+      // 3. autoPlace anything still missing on the incoming grid shape.
+      const targetCols = mode === "desktop" ? GRID_DESKTOP.cols : GRID_MOBILE.cols;
+      const targetRows = mode === "desktop" ? GRID_DESKTOP.rows : GRID_MOBILE.rows;
+      const equipRows = seeded.filter((r) => r.avatarItem?.slot !== "HAIR");
+      const hairRows = seeded.filter((r) => r.avatarItem?.slot === "HAIR");
+      const placed = [
+        ...autoPlace(equipRows, targetCols, targetRows),
+        ...autoPlace(hairRows, targetCols, targetRows),
+      ];
+
+      // 4. Write back to the incoming cache so future flips restore exactly
+      //    this layout, and record which items got brand-new positions —
+      //    those are the only ones we persist to the backend (and only on
+      //    desktop, since the backend column stores the desktop layout).
+      const newlyAssigned: Array<{ id: number; x: number; y: number; rotated: boolean }> = [];
+      for (const r of placed) {
+        if (r.positionX == null || r.positionY == null) continue;
+        const hadCache = incoming.has(r.inventoryId);
+        incoming.set(r.inventoryId, { x: r.positionX, y: r.positionY, rotated: !!r.isRotated });
+        if (!hadCache && mode === "desktop") {
+          newlyAssigned.push({ id: r.inventoryId, x: r.positionX, y: r.positionY, rotated: !!r.isRotated });
+        }
+      }
+
+      if (hasToken && newlyAssigned.length > 0) {
+        for (const a of newlyAssigned) {
+          avatarApi.setPosition(a.id, a.x, a.y, a.rotated);
+        }
+      }
+
+      // 5. Sync the rotation Set so the keyboard handler stays in lockstep
+      //    with the rendered orientation.
+      setRotations(new Set(placed.filter((r) => r.isRotated).map((r) => r.inventoryId)));
+
+      return placed;
+    });
+  }, [isDesktop, inventoryLoaded, hasToken]);
+
+  // Keep the active mode's cache in sync on every inventory change (drag,
+  // rotate, equip won't touch position). Without this, edits made between
+  // viewport flips would be lost when the swap effect reads the cache.
+  useEffect(() => {
+    if (!inventoryLoaded || lastModeRef.current === null) return;
+    const cache = lastModeRef.current === "desktop" ? desktopPositionsRef.current : mobilePositionsRef.current;
+    for (const r of inventory) {
+      if (r.positionX != null && r.positionY != null) {
+        cache.set(r.inventoryId, { x: r.positionX, y: r.positionY, rotated: !!r.isRotated });
+      } else {
+        cache.delete(r.inventoryId);
+      }
+    }
+  }, [inventory, inventoryLoaded]);
 
   // The chibi only renders items that are flagged equipped.
   const equipped = useMemo(
@@ -368,16 +483,16 @@ export default function AvatarPage() {
       ) {
         const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(activeDragId));
         const minX = -moving.positionX * SNAP_STEP;
-        const maxX = (GRID_COLS - moving.positionX - cols) * SNAP_STEP;
+        const maxX = (gridCols - moving.positionX - cols) * SNAP_STEP;
         const minY = -moving.positionY * SNAP_STEP;
-        const maxY = (GRID_ROWS - moving.positionY - rows) * SNAP_STEP;
+        const maxY = (gridRows - moving.positionY - rows) * SNAP_STEP;
         x = Math.max(minX, Math.min(maxX, x));
         y = Math.max(minY, Math.min(maxY, y));
       }
     }
     lastSnapRef.current = { x, y };
     return { ...transform, x, y };
-  }, [activeDragId, inventory, rotations]);
+  }, [activeDragId, inventory, rotations, gridCols, gridRows]);
   const modifiers = useMemo(() => [snapToGrid], [snapToGrid]);
 
   const onDragStart = useCallback((event: DragStartEvent) => {
@@ -407,15 +522,18 @@ export default function AvatarPage() {
     // coordinates with equipment but live in a separate view.
     const movingIsHair = moving.avatarItem.slot === "HAIR";
     const sameTab = inventory.filter((r) => (r.avatarItem?.slot === "HAIR") === movingIsHair);
-    if (!rectFits(sameTab, invId, x, y, cols, rows, rotations)) return;
+    if (!rectFits(sameTab, invId, x, y, cols, rows, rotations, gridCols, gridRows)) return;
     const rotated = rotations.has(invId);
     if (moving.positionX === x && moving.positionY === y && moving.isRotated === rotated) return;
     setInventory((prev) => prev.map((row) =>
       row.inventoryId === invId ? { ...row, positionX: x, positionY: y, isRotated: rotated } : row));
+    // Mobile keeps its layout in the in-memory cache only; persisting mobile
+    // coords would clobber the desktop position on the backend.
+    if (!hasToken || !isDesktop) return;
     avatarApi.setPosition(invId, x, y, rotated).then(({ error }) => {
       if (error) setError(error);
     });
-  }, [inventory, rotations, setError]);
+  }, [inventory, rotations, setError, gridCols, gridRows, hasToken, isDesktop]);
 
   // Q/E toggles rotation on the item currently being dragged. The handler is
   // installed only while a drag is active so the keys behave normally when
@@ -444,6 +562,9 @@ export default function AvatarPage() {
       });
       setInventory((prev) => prev.map((r) =>
         r.inventoryId === activeDragId ? { ...r, isRotated: newRotated } : r));
+      // Mobile rotation is session-only; the backend column tracks the
+      // desktop layout exclusively.
+      if (!hasToken || !isDesktop) return;
       // Fire-and-forget — keeps the rotation pinned even if the user
       // releases the mouse outside the grid (drag-cancel).
       avatarApi.setPosition(
@@ -455,20 +576,24 @@ export default function AvatarPage() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [activeDragId, inventory, rotations]);
+  }, [activeDragId, inventory, rotations, hasToken, isDesktop]);
 
   async function onCardClick(inv: UserInventoryDto) {
     if (busyIds.has(inv.inventoryId)) return;
     setBusyIds((prev) => new Set(prev).add(inv.inventoryId));
     try {
       if (inv.isEquipped) {
-        const { error } = await avatarApi.unequip(inv.inventoryId);
-        if (error) { setError(error); return; }
+        if (hasToken) {
+          const { error } = await avatarApi.unequip(inv.inventoryId);
+          if (error) { setError(error); return; }
+        }
         setInventory((prev) => prev.map((row) =>
           row.inventoryId === inv.inventoryId ? { ...row, isEquipped: false } : row));
       } else {
-        const { error } = await avatarApi.equip(inv.inventoryId);
-        if (error) { setError(error); return; }
+        if (hasToken) {
+          const { error } = await avatarApi.equip(inv.inventoryId);
+          if (error) { setError(error); return; }
+        }
         const slot = inv.avatarItem?.slot;
         // Mirror the backend's slot uniqueness locally so the UI updates
         // without a refetch — equipping flips this row on and any other
@@ -489,29 +614,6 @@ export default function AvatarPage() {
   }
 
   if (!isMounted) return null;
-
-  if (!hasToken) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-bg)" }}>
-        <div className="flex flex-col items-center gap-3">
-          <p style={{ color: "var(--color-fg-muted)", fontSize: 12 }}>Sign in to customize your avatar.</p>
-          <Link
-            href="/login"
-            className="text-[10px] tracking-widest uppercase font-semibold"
-            style={{
-              color: "var(--color-fg)",
-              border: "1px solid var(--color-border-hairline)",
-              borderRadius: 999,
-              padding: "6px 14px",
-              textDecoration: "none",
-            }}
-          >
-            Log in
-          </Link>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen" style={{ background: "var(--color-bg)" }}>
@@ -535,6 +637,8 @@ export default function AvatarPage() {
           </h1>
           <span style={{ width: 40 }} aria-hidden />
         </header>
+
+        {!hasToken && <DemoModeBanner className="" />}
 
         {/* Two-column split on desktop, stacked column on mobile. The flex
             wrapper switches direction at the 880px breakpoint. */}
@@ -624,9 +728,9 @@ export default function AvatarPage() {
               onDragEnd={onDragEnd}
               onDragCancel={onDragCancel}
             >
-              {/* Wrap in a horizontally scrollable container so the
-                  landscape grid (wider than the mobile content area) can
-                  scroll instead of overflowing the page. */}
+              {/* Horizontally scrollable as a defense if a future shape
+                  exceeds the content area. With the current 7×5 / 5×7
+                  layouts no scroll is needed. */}
               <div style={{ overflowX: "auto", paddingBottom: 4, margin: "0 -8px", padding: "0 8px 6px" }}>
               <div
                 style={{
@@ -638,8 +742,8 @@ export default function AvatarPage() {
                   border: "1px solid rgba(220, 230, 235, 0.6)",
                   borderRadius: 0,
                   display: "grid",
-                  gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL_PX}px)`,
-                  gridTemplateRows: `repeat(${GRID_ROWS}, ${CELL_PX}px)`,
+                  gridTemplateColumns: `repeat(${gridCols}, ${CELL_PX}px)`,
+                  gridTemplateRows: `repeat(${gridRows}, ${CELL_PX}px)`,
                   gap: 1,
                   width: "fit-content",
                   // Left-aligned so the grid's left edge lines up with the
@@ -650,9 +754,9 @@ export default function AvatarPage() {
                 {/* Drop-target underlay — every cell is a droppable so the
                     user can release an item anywhere on the grid. Items
                     render on top via gridColumnStart/gridRowStart. */}
-                {Array.from({ length: GRID_COLS * GRID_ROWS }).map((_, i) => {
-                  const x = i % GRID_COLS;
-                  const y = Math.floor(i / GRID_COLS);
+                {Array.from({ length: gridCols * gridRows }).map((_, i) => {
+                  const x = i % gridCols;
+                  const y = Math.floor(i / gridCols);
                   return <DropCell key={`cell-${x}-${y}`} x={x} y={y} />;
                 })}
 

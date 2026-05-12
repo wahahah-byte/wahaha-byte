@@ -301,6 +301,34 @@ export default function MobileEdgeDrawer() {
             sit at the top of this cluster, just above the points/caps
             section, so they're inside thumb reach. */}
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
+          {!hasToken && (() => {
+            const active = pathname === "/avatar";
+            return (
+              <Link
+                href="/avatar"
+                onClick={() => setOpen(false)}
+                className="flex items-center"
+                style={{
+                  height: 44,
+                  gap: 12,
+                  padding: "0 16px",
+                  color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
+                  background: active ? "var(--color-active-highlight-bg)" : "transparent",
+                  borderLeft: `2px solid ${active ? "var(--color-active-highlight)" : "transparent"}`,
+                  textDecoration: "none",
+                  lineHeight: 1,
+                  transition: "background 0.18s, color 0.18s",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
+                  <AvatarIcon />
+                </span>
+                <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
+                  Avatar
+                </span>
+              </Link>
+            );
+          })()}
           {ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -567,6 +595,14 @@ function ArchiveIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+function AvatarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   );
 }

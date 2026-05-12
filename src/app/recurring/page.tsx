@@ -10,7 +10,7 @@ import { useLogCounter } from "@/hooks/useLogCounter";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
-import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
+import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
 import { canCheckInNow, isOverdue, parseLocalDate, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
@@ -33,9 +33,9 @@ const MOCK_RECURRING: TaskDto[] = ([
   { taskId: "r3", userId: "demo", title: "Weekly review & planning", description: "Review last week, plan the next", category: "Productivity", priority: "high", status: "pending", pointValue: 5, dueDate: "2026-05-08", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "weekly", submitted: false, currentStreakCount: 5, longestStreakCount: 5 },
   { taskId: "r4", userId: "demo", title: "Monthly budget review", description: null, category: "Finance", priority: "high", status: "pending", pointValue: 5, dueDate: "2026-05-15", createdAt: "2026-01-01T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "monthly", submitted: false },
   // Streak tier showcase
-  { taskId: "r5", userId: "demo", title: "10-minute meditation", description: "Sit, breathe, settle", category: "Wellness", priority: "medium", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-04-04T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 31, longestStreakCount: 31 },
+  { taskId: "r5", userId: "demo", title: "10-minute meditation", description: "Sit, breathe, settle", category: "Health", priority: "medium", status: "pending", pointValue: 3, dueDate: "2026-05-05", createdAt: "2026-04-04T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 31, longestStreakCount: 31 },
   { taskId: "r6", userId: "demo", title: "Spanish — Duolingo", description: "Maintain the streak", category: "Learning", priority: "medium", status: "pending", pointValue: 2, dueDate: "2026-05-05", createdAt: "2026-04-12T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 22, longestStreakCount: 22, hasCounter: true, counterUnit: "words", counterGoal: 40 },
-  { taskId: "r7", userId: "demo", title: "Floss", description: "One more day to 2.0x", category: "Wellness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-05T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 29, longestStreakCount: 29 },
+  { taskId: "r7", userId: "demo", title: "Floss", description: "One more day to 2.0x", category: "Health", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-05T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 29, longestStreakCount: 29 },
   { taskId: "r8", userId: "demo", title: "5-min stretch", description: null, category: "Fitness", priority: "low", status: "pending", pointValue: 1, dueDate: "2026-05-05", createdAt: "2026-04-29T00:00:00Z", completedAt: null, isRecurring: true, recurrenceRule: "daily", submitted: false, currentStreakCount: 6, longestStreakCount: 9 },
 ] as TaskDto[]).map(withMockCycles);
 
@@ -469,6 +469,7 @@ function Recurring() {
         ]}
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },
+          ...(!isAuthenticated ? [{ href: "/avatar", label: "Avatar", icon: <NavIconAvatar /> }] : []),
         ]}
         filterGroups={buildSidebarFilterGroups({
           statusTitle: "View",
