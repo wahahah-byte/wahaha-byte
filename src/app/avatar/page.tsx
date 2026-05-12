@@ -751,6 +751,14 @@ export default function AvatarPage() {
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDragCancel={onDragCancel}
+              // dnd-kit's default auto-scroll engages whenever the dragged
+              // item's rect approaches the edge of any scrollable ancestor
+              // — on mobile the page itself is taller than the viewport,
+              // so dragging a card downward toward the thumb-rest area
+              // makes the whole page scroll uncontrollably. The grid fits
+              // entirely in view and never needs scrolling during a drag,
+              // so we opt out completely.
+              autoScroll={false}
             >
               {/* Horizontally scrollable as a defense if a future shape
                   exceeds the content area. With the current 7×5 / 5×7
