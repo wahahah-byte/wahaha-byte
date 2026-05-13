@@ -9,7 +9,13 @@ import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
 import { boundsTransformFor, useClientBounds } from "@/lib/cardTransform";
 import { clearEquippedAvatarCache, primeEquippedAvatarCache } from "@/hooks/useEquippedAvatar";
-import { avatarApi, type AvatarItemDto, type UserInventoryDto } from "@/lib/api/avatar";
+import {
+  avatarApi,
+  type AvatarItemDto,
+  type ItemSlot,
+  type PagedResult,
+  type UserInventoryDto,
+} from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { useUserRoles } from "@/hooks/useUserRoles";
@@ -367,6 +373,63 @@ function hasValidPlacement(row: UserInventoryDto, gridCols: number, gridRows: nu
     && row.positionY + rows <= gridRows;
 }
 
+// Convert a list of AvatarItemDto rows from the live catalog into the shape
+// the avatar page expects (UserInventoryDto). Used in demo mode so the static
+// build can reflect the actual catalogue — including blobs that the backend
+// renamed on upload — instead of a hardcoded mock with drift-prone URLs.
+// One item from each showcase slot is pre-equipped so the chibi renders
+// dressed; the rest sit in the inventory grid for the user to try.
+function buildInventoryFromCatalog(items: AvatarItemDto[]): UserInventoryDto[] {
+  const now = new Date().toISOString();
+  const showcaseSlots: ItemSlot[][] = [
+    ["HAT", "HEAD"],
+    ["TOP", "BODY"],
+    ["HAIR_FRONT", "HAIR"],
+    ["WEAPON_FRONT", "HAND", "WEAPON_BACK"],
+  ];
+  const equippedIds = new Set<number>();
+  for (const group of showcaseSlots) {
+    const match = items.find((it) => group.includes(it.slot) && !equippedIds.has(it.itemId));
+    if (match) equippedIds.add(match.itemId);
+  }
+  return items.map((item, i) => ({
+    inventoryId: 9100 + i,
+    userId: "00000000-0000-0000-0000-000000000000",
+    itemId: item.itemId,
+    acquiredAt: now,
+    isEquipped: equippedIds.has(item.itemId),
+    avatarItem: applyHints(item),
+    positionX: null,
+    positionY: null,
+  }));
+}
+
+// Demo-mode inventory loader. Tries the live catalogue endpoint first so the
+// static-export demo picks up backend renames automatically; falls back to the
+// hardcoded mock on any failure (CORS, network, app stopped, empty response).
+// Static export can't use the `/backend` dev rewrite, so this fetches the API
+// directly via NEXT_PUBLIC_API_URL — make sure backend CORS allows the
+// GitHub Pages origin or the call will fail and we'll quietly fall back.
+async function loadDemoInventory(): Promise<UserInventoryDto[]> {
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+  if (apiUrl) {
+    try {
+      const res = await fetch(`${apiUrl}/api/AvatarItems?pageSize=200`);
+      if (res.ok) {
+        const page: PagedResult<AvatarItemDto> = await res.json();
+        const items = (page.data ?? []).filter((it) => it.previewAssetUrl);
+        if (items.length > 0) return buildInventoryFromCatalog(items);
+      }
+    } catch {
+      // Swallow — fall through to the hardcoded mock.
+    }
+  }
+  return buildMockInventory().map((row) => ({
+    ...row,
+    avatarItem: applyHints(row.avatarItem!),
+  }));
+}
+
 function autoPlace(rows: UserInventoryDto[], gridCols: number, gridRows: number): UserInventoryDto[] {
   // Build a rotations set from the persisted `isRotated` flags so the
   // collision check inside rectFits uses each row's actual footprint
@@ -457,17 +520,17 @@ export default function AvatarPage() {
     const token = !!localStorage.getItem("auth_token");
     setHasToken(token);
     if (!token) {
-      // Demo mode — populate inventory from the mock catalogue. Positions
-      // are left null; the per-mode swap effect runs autoPlace for the
-      // active viewport and caches the result. Equip/unequip and
-      // setPosition calls below are guarded so nothing hits the backend.
-      const rows = buildMockInventory().map((row) => ({
-        ...row,
-        avatarItem: applyHints(row.avatarItem!),
-      }));
-      setInventory(rows);
-      setInventoryLoaded(true);
-      setLoading(false);
+      // Demo mode — try the live catalogue first so blob renames on upload
+      // surface automatically; fall back to the hardcoded mock if the API
+      // is unreachable. Positions stay null; the per-mode swap effect runs
+      // autoPlace for the active viewport and caches the result. Equip /
+      // unequip and setPosition calls below are guarded so nothing hits
+      // the backend in this mode.
+      loadDemoInventory().then((rows) => {
+        setInventory(rows);
+        setInventoryLoaded(true);
+        setLoading(false);
+      });
       return;
     }
     avatarApi.getInventory(1, 200).then(({ data, error }) => {
