@@ -184,23 +184,6 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
       ],
     },
   },
-  // First blob-backed item — asset lives in Azure Blob Storage.
-  // Slot is HEAD (current backend enum); when the granular HAT slot ships,
-  // change this to "HAT" — the SLOT_Z map already covers both.
-  {
-    itemId: 2001,
-    name: "Alien Neo Helmet",
-    category: "headwear",
-    slot: "HEAD",
-    rarity: "UNCOMMON",
-    cost: 75,
-    description: "A futuristic alien helmet.",
-    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hat_alien_neo.png",
-    isAvailable: true,
-    coversHair: true,
-    renderScale: 1.2,
-    offsetY: 10,
-  },
   {
     itemId: 2002,
     name: "Sweater",
@@ -255,17 +238,6 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     gridRows: 1,
   },
   {
-    itemId: 2005,
-    name: "Casual Hoodie",
-    category: "outerwear",
-    slot: "BODY",
-    rarity: "COMMON",
-    cost: 50,
-    description: "A casual grey hoodie.",
-    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/hoodie_casual_grey.png",
-    isAvailable: true,
-  },
-  {
     itemId: 2006,
     name: "Flower Crown",
     category: "headwear",
@@ -284,7 +256,7 @@ export function mockItem(id: number) { return itemById.get(id) ?? null; }
 // Default mock equipped set. PNG-backed items show on the ChibiAvatar; the
 // legacy pixel-rect items are kept in case anything still uses PixelAvatar
 // but won't render here (no previewAssetUrl).
-export const MOCK_EQUIPPED_IDS: number[] = [2001, 2002, 2003, 2004];
+export const MOCK_EQUIPPED_IDS: number[] = [2002, 2003, 2004];
 
 export function buildMockEquipped(): UserInventoryDto[] {
   const now = new Date().toISOString();
