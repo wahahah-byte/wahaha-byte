@@ -223,7 +223,14 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     rarity: "EPIC",
     cost: 500,
     description: "An alien cyber polearm crackling with energy.",
-    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_polearm_alien_cyber.png",
+    // Matches the backend's slug-based naming convention (introduced when
+    // the API switched away from GUID blob names). The old
+    // `weapon_polearm_alien_cyber.png` URL is now 404 since the asset was
+    // re-uploaded under the new scheme.
+    previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_front_cyber_polearm.png",
+    // Back-layer shaft (the portion that passes behind the chibi body).
+    // ChibiAvatar composes both layers when an item provides a secondary.
+    secondaryAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_front_cyber_polearm_back.png",
     isAvailable: true,
     sourceWidth: 384,
     sourceHeight: 384,
