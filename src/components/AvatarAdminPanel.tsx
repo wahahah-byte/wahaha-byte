@@ -263,17 +263,8 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter by name / category / slot"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: "6px 10px",
-                background: "var(--color-input)",
-                border: "1px solid var(--color-border-hairline)",
-                borderRadius: 2,
-                color: "var(--color-fg)",
-                fontSize: 11,
-                outline: "none",
-              }}
+              className="themed-form-input"
+              style={{ flex: 1, minWidth: 0, fontSize: 11 }}
             />
             <button
               type="button"
@@ -436,9 +427,12 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
       <div
         style={{
           width: 80, height: 80,
-          background: "rgba(0,0,0,0.25)",
+          // Lighter than the previous 0.25 black so the PNG silhouette
+          // stands out against a softer panel-coloured backdrop rather
+          // than a hard near-black square.
+          background: "rgba(255, 255, 255, 0.06)",
           border: "1px solid var(--color-border-hairline)",
-          borderRadius: 2,
+          borderRadius: 8,
           overflow: "hidden",
           display: "flex",
           alignItems: "center",
@@ -654,13 +648,7 @@ function GrantItemModal({ item, onClose, onSubmit }: GrantModalProps) {
               maxLength={100}
               placeholder="user@example.com"
               autoFocus
-              style={{
-                width: "100%", padding: "6px 8px",
-                background: "var(--color-input)",
-                border: "1px solid var(--color-border-hairline)",
-                borderRadius: 2, color: "var(--color-fg)",
-                fontSize: 12, outline: "none",
-              }}
+              className="themed-form-input"
             />
           </label>
 

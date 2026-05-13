@@ -4,6 +4,14 @@
    anything still using inline hex stays dark-only until ported. */
 :root,
 [data-theme="dark"] {
+  /* Tells the browser to render native form widgets (and their popups —
+     <select> dropdown, scrollbars, date pickers, autofill chrome) in
+     dark mode. Without this, the OS-level <select> popup renders with a
+     white background and white border, ignoring our CSS-themed option
+     colours. Has to live on the same selector that switches the theme
+     tokens so it flips with light/dark mode. */
+  color-scheme: dark;
+
   --background: #1e1f22;
   --foreground: #ededed;
 
@@ -67,6 +75,8 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
+
   --background: #eef0f3;
   --foreground: #1a1a1a;
 
@@ -816,6 +826,93 @@ textarea::placeholder {
   gap: 10px;
 }
 
+/* Strip the browser's native up/down spinner buttons from every number
+   input. The default chrome (light-grey ▲▼ stack) clashes with the dark
+   theme everywhere it shows up — admin form, render-hint fields, future
+   numeric inputs. Specific components that need a themed +/- pair (e.g.
+   .goal-stepper) build their own buttons; this rule just kills the
+   browser-supplied ones so a bare number input visually matches a text
+   input. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+/* Themed form input — shared by the avatar-item create/edit modal and
+   the grant modal so every text/number/url field in those forms picks up
+   the same look: rounded corners that match the panel chrome (6px),
+   theme-coloured background/border, and a clear active-highlight focus
+   state. Replaces the previous inline `inputStyle` which had no :focus
+   styling (the inputs looked identical focused vs blurred). */
+.themed-form-input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--color-input);
+  color: var(--color-input-fg, var(--color-fg));
+  border: 1px solid var(--color-border-hairline);
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.themed-form-input::placeholder {
+  color: var(--color-fg-subtle);
+}
+
+.themed-form-input:hover:not(:focus):not(:disabled) {
+  border-color: var(--color-border);
+}
+
+.themed-form-input:focus {
+  /* `--color-active-highlight-border` is a pale near-white that reads as
+     a flashy outline against the dark panel — use the normal `--color-border`
+     (mid-dark grey) on focus instead so the active field is still
+     distinguishable from the resting state but doesn't glow. The bg
+     tint keeps a soft "you're typing here" cue. */
+  border-color: var(--color-border);
+  background: var(--color-active-highlight-bg);
+}
+
+.themed-form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* <select> needs its own (transitionless, hover-less) treatment because
+   opening the native dropdown popup transfers focus to the popup itself
+   — the underlying select loses :focus, then regains it when the popup
+   closes. With a transition active, each focus flip plays out as a
+   fading border/background change, which strung together reads as
+   flicker. Killing the transition makes any unavoidable state change
+   instant; dropping :hover removes one more state the focus shuffle can
+   slip through. */
+select.themed-form-input {
+  transition: none;
+}
+select.themed-form-input:hover:not(:focus):not(:disabled) {
+  border-color: var(--color-border-hairline);
+}
+
+/* <option> elements inside a themed <select> don't inherit the parent's
+   background/color — the OS renders the dropdown popup with its own
+   widget chrome, which lands as white-on-white in dark mode and is
+   unreadable. Setting these explicitly keeps the popup legible in
+   browsers that honour option styling (Chrome, Firefox, Edge); Safari
+   ignores it and falls back to its native popup, which is fine.
+   `<optgroup>` gets the same treatment so the group header isn't white. */
+select.themed-form-input option,
+select.themed-form-input optgroup {
+  background: var(--color-input);
+  color: var(--color-input-fg, var(--color-fg));
+}
+
 /* Counter goal stepper — themed alternative to browser-default spin buttons.
    The input + / − buttons live in a single bordered shell that picks up
    --color-active-highlight on hover/focus. */
@@ -1455,4 +1552,20 @@ textarea::placeholder {
   /* Match the auth-header's top accent. `-bg` is the same hue at low alpha. */
   background-color: var(--color-active-highlight-bg) !important;
   box-shadow: inset 0 0 0 2px var(--color-active-highlight) !important;
+}
+
+/* Streak-chip pop — one-shot scale + brightness pulse fired when the
+   row's currentStreakCount just incremented. Replaces the louder
+   setSuccess toast that used to fire from useTaskActions whenever the
+   bonus multiplier kicked in: the multiplier itself stays visible
+   passively in the StreakDisplay's chip inside the task-detail modal,
+   so this animation is purely a moment-of-action ping. */
+@keyframes streak-chip-pop {
+  0%   { transform: scale(1);    opacity: 0.85; filter: brightness(1); }
+  35%  { transform: scale(1.22); opacity: 1;    filter: brightness(1.35); }
+  70%  { transform: scale(1.04); opacity: 1;    filter: brightness(1.15); }
+  100% { transform: scale(1);    opacity: 0.85; filter: brightness(1); }
+}
+.streak-chip-pop {
+  animation: streak-chip-pop 0.75s cubic-bezier(0.22, 1, 0.36, 1);
 }

@@ -8,6 +8,7 @@ import DemoModeBanner from "@/components/DemoModeBanner";
 import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
 import { boundsTransformFor, useClientBounds } from "@/lib/cardTransform";
+import { clearEquippedAvatarCache, primeEquippedAvatarCache } from "@/hooks/useEquippedAvatar";
 import { avatarApi, type AvatarItemDto, type UserInventoryDto } from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
@@ -593,6 +594,16 @@ export default function AvatarPage() {
     [inventory],
   );
 
+  // Share equipped with the TaskDetailModal cache — the modal pulls
+  // through useEquippedAvatar(), which would otherwise fetch its own
+  // copy from /api/UserInventory/equipped on first open. Priming here
+  // means once the user has loaded /avatar, the modal opens with the
+  // chibi already populated, no fetch flicker.
+  useEffect(() => {
+    if (!hasToken) return;
+    primeEquippedAvatarCache(equipped);
+  }, [equipped, hasToken]);
+
   // Items in the currently-visible tab. The grid render and the inventory
   // count both key off this so hair is hidden until the user switches tabs.
   const visibleInventory = useMemo(
@@ -769,6 +780,10 @@ export default function AvatarPage() {
           return row;
         }));
       }
+      // Equip state changed — drop the equipped-items cache so the next
+      // TaskDetailModal open re-fetches and shows the same chibi the
+      // /avatar page is currently displaying.
+      clearEquippedAvatarCache();
     } finally {
       setBusyIds((prev) => {
         const n = new Set(prev);

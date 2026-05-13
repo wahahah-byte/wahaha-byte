@@ -359,13 +359,13 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
-              style={inputStyle}
+              className="themed-form-input"
             />
           </Field>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <Field label="Slot *">
-              <select value={slot} onChange={(e) => setSlot(e.target.value as ItemSlot)} style={inputStyle}>
+              <select value={slot} onChange={(e) => setSlot(e.target.value as ItemSlot)} className="themed-form-input">
                 <optgroup label="Granular (preferred)">
                   {GRANULAR_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </optgroup>
@@ -375,7 +375,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
               </select>
             </Field>
             <Field label="Rarity *">
-              <select value={rarity} onChange={(e) => setRarity(e.target.value as Rarity)} style={inputStyle}>
+              <select value={rarity} onChange={(e) => setRarity(e.target.value as Rarity)} className="themed-form-input">
                 {RARITIES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </Field>
@@ -389,7 +389,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                 onChange={(e) => setCategory(e.target.value)}
                 maxLength={50}
                 list="avatar-item-categories"
-                style={inputStyle}
+                className="themed-form-input"
               />
               {/* Datalist refreshes when slot changes — admins typing in the
                   category field get suggestions appropriate to whatever slot
@@ -405,7 +405,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                 value={cost}
                 onChange={(e) => setCost(e.target.value)}
                 min={0}
-                style={inputStyle}
+                className="themed-form-input"
               />
             </Field>
           </div>
@@ -416,7 +416,8 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               maxLength={255}
               rows={2}
-              style={{ ...inputStyle, resize: "vertical", minHeight: 38 }}
+              className="themed-form-input"
+              style={{ resize: "vertical", minHeight: 38 }}
             />
           </Field>
 
@@ -454,7 +455,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                   onChange={(e) => setPreviewAssetUrl(e.target.value)}
                   maxLength={255}
                   placeholder="https://…/avatar-items/hat.png"
-                  style={inputStyle}
+                  className="themed-form-input"
                 />
               </Field>
               <label
@@ -507,7 +508,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                   onChange={(e) => setSecondaryAssetUrl(e.target.value)}
                   maxLength={255}
                   placeholder="https://…/avatar-items/hair_seraph_back.png"
-                  style={inputStyle}
+                  className="themed-form-input"
                 />
               </Field>
             )
@@ -583,7 +584,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                       value={offsetX}
                       onChange={(e) => setOffsetX(e.target.value)}
                       placeholder="0"
-                      style={inputStyle}
+                      className="themed-form-input"
                     />
                   </Field>
                   <Field label="Offset Y (src px)">
@@ -592,7 +593,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                       value={offsetY}
                       onChange={(e) => setOffsetY(e.target.value)}
                       placeholder="0"
-                      style={inputStyle}
+                      className="themed-form-input"
                     />
                   </Field>
                 </div>
@@ -627,7 +628,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                       onChange={(e) => setSourceWidth(e.target.value)}
                       placeholder="256"
                       min={0}
-                      style={inputStyle}
+                      className="themed-form-input"
                     />
                   </Field>
                   <Field label="Source height (px)">
@@ -637,7 +638,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                       onChange={(e) => setSourceHeight(e.target.value)}
                       placeholder="384"
                       min={0}
-                      style={inputStyle}
+                      className="themed-form-input"
                     />
                   </Field>
                 </div>
@@ -741,17 +742,6 @@ function ModeTab({ active, onClick, label }: { active: boolean; onClick: () => v
     </button>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "6px 8px",
-  background: "var(--color-input)",
-  border: "1px solid var(--color-border-hairline)",
-  borderRadius: 2,
-  color: "var(--color-fg)",
-  fontSize: 12,
-  outline: "none",
-};
 
 const smallBtnStyle: React.CSSProperties = {
   padding: "4px 8px",

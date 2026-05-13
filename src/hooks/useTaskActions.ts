@@ -6,7 +6,18 @@ import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
 import { getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
-import { tierForStreak, type TierUpMessage } from "@/components/TierUpBanner";
+
+// Returns true when a streak increment crosses one of the bonus
+// boundaries (3, 7, 14, 30). Used to choose between a stronger and a
+// regular haptic pattern on check-in. Replaces the previous
+// `tierForStreak` import — the banner that used it is gone, but the
+// haptic distinction is still nice for milestone check-ins.
+function crossesTierBoundary(prev: number, next: number): boolean {
+  for (const at of [3, 7, 14, 30]) {
+    if (prev < at && next >= at) return true;
+  }
+  return false;
+}
 
 function vibrate(pattern: number | number[]) {
   if (typeof navigator === "undefined" || !("vibrate" in navigator)) return;
@@ -73,8 +84,10 @@ export function useTaskActions({
     }, 5000);
   }, []);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
-  const [tierUp, setTierUp] = useState<TierUpMessage | null>(null);
-  const dismissTierUp = useCallback(() => setTierUp(null), []);
+  // Tier-up banner removed — streak milestones are conveyed in-place via
+  // the streak chip's pop animation (TaskRow) plus the multiplier shown
+  // on the StreakDisplay chip inside the detail modal. The dismiss /
+  // state plumbing for the banner is gone with it.
 
   const handleAdvance = useEvent(async function handleAdvance(task: TaskDto) {
     if (advancing === task.taskId) return;
@@ -206,8 +219,10 @@ export function useTaskActions({
       const newCount = prevCount + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
-      const tier = tierForStreak(prevCount, newCount);
-      if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
+      // Tier transitions used to fire a banner; now only the haptic
+      // pattern differentiates a milestone check-in from a regular one.
+      const isTierTransition = crossesTierBoundary(prevCount, newCount);
+      vibrate(isTierTransition ? [15, 30, 60] : 20);
       // checkInDate must match the server's convention (local-midnight written
       // as fake-UTC) so consumers comparing `cycle.checkInDate.split("T")[0]`
       // against `todayLocalKey()` see the same date. Using a real UTC
@@ -244,13 +259,12 @@ export function useTaskActions({
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
     }
 
-    const tier = tierForStreak(prevCount, data!.streakCount);
-    if (tier) { setTierUp(tier); vibrate([15, 30, 60]); } else { vibrate(20); }
-
-    if (setSuccess && awarded > 0 && data!.bonusMultiplier > 1) {
-      const mult = Number.isInteger(data!.bonusMultiplier) ? data!.bonusMultiplier.toFixed(0) : data!.bonusMultiplier.toFixed(1);
-      setSuccess(`+${awarded} pts (${data!.basePoints} × ${mult}x streak 🔥${data!.streakCount})`);
-    }
+    const isTierTransition = crossesTierBoundary(prevCount, data!.streakCount);
+    vibrate(isTierTransition ? [15, 30, 60] : 20);
+    // Note: previously fired a setSuccess toast here when the streak bonus
+    // multiplier kicked in. Removed in favour of the in-row streak pop
+    // animation (see TaskRow) and the existing multiplier badge on the
+    // StreakDisplay chip — the same info is now conveyed without a toast.
 
     let nextDueDate = data!.nextDueDate || task.dueDate;
     if (nextDueDate && task.recurrenceRule) {
@@ -469,5 +483,5 @@ export function useTaskActions({
     await handleUndoCheckIn(task, cycleId);
   });
 
-  return { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn };
+  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn };
 }

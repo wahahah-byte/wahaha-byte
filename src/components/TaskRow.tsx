@@ -72,6 +72,26 @@ function TaskRowImpl({
   const [expanded, setExpanded] = useState(false);
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
 
+  // Streak-chip pop animation. When task.currentStreakCount goes up (a
+  // check-in just landed) we tag the streak chip span with a class that
+  // plays a one-shot scale + glow keyframe. Replaces the louder
+  // setSuccess toast that used to fire from useTaskActions whenever the
+  // bonus multiplier kicked in. Only fires on *increments* — initial
+  // mount and resets (streak broken) play nothing.
+  const streakCountForPop = task.currentStreakCount ?? 0;
+  const prevStreakRef = useRef(streakCountForPop);
+  const [streakJustIncremented, setStreakJustIncremented] = useState(false);
+  useEffect(() => {
+    const prev = prevStreakRef.current;
+    prevStreakRef.current = streakCountForPop;
+    if (streakCountForPop > prev) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStreakJustIncremented(true);
+      const t = setTimeout(() => setStreakJustIncremented(false), 800);
+      return () => clearTimeout(t);
+    }
+  }, [streakCountForPop]);
+
   async function handleToggleSubtask(s: Subtask) {
     const list = task.subtasks ?? [];
     const next = list.map((x) => x.subtaskId === s.subtaskId ? { ...x, completed: !x.completed } : x);
@@ -755,13 +775,19 @@ function TaskRowImpl({
                 );
               })()}
               {canUndo && (
-                <>
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-                    <path d="M7 1.5H4C2.3 1.5 1 2.8 1 4.5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" />
-                    <polyline points="3.5,4 1,1.5 3.5,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                  <span style={{ color: "var(--color-warning)", fontSize: "8px", letterSpacing: "0.22em", textTransform: "uppercase", flexShrink: 0 }}>Undo</span>
-                </>
+                <svg
+                  width="8"
+                  height="8"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  style={{ flexShrink: 0 }}
+                  role="img"
+                  aria-label="Undo"
+                >
+                  <title>Undo</title>
+                  <path d="M7 1.5H4C2.3 1.5 1 2.8 1 4.5s1.3 3 3 3h4" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" />
+                  <polyline points="3.5,4 1,1.5 3.5,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
                 // Overdue state is now signalled by the red date column —
@@ -801,7 +827,10 @@ function TaskRowImpl({
                       const tier = currentStreakTier(streakCount);
                       if (!tier) return null;
                       return (
-                        <span style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        <span
+                          className={streakJustIncremented ? "streak-chip-pop" : undefined}
+                          style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85, flexShrink: 0, fontVariantNumeric: "tabular-nums", display: "inline-block", transformOrigin: "center" }}
+                        >
                           {tier.label} · {streakCount}
                         </span>
                       );
@@ -821,25 +850,24 @@ function TaskRowImpl({
                 if (undoableCycle) onUndoCheckIn?.(task, undoableCycle.cycleId);
               }}
               title="Undo check-in"
-              className="inline-flex items-center gap-1 cursor-pointer"
+              aria-label="Undo check-in"
+              className="inline-flex items-center justify-center cursor-pointer"
               style={{
-                fontSize: 9,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                fontWeight: 700,
+                // Icon-only pill — tighter padding so the round shape stays
+                // visually balanced without the "UNDO" label that used to
+                // sit beside the glyph.
                 color: "var(--color-active-highlight-alt)",
                 background: "var(--color-active-highlight-alt-bg)",
                 border: "1px solid var(--color-active-highlight-alt-border, var(--color-border-hairline))",
                 borderRadius: 999,
-                padding: "2px 8px",
-                lineHeight: 1,
+                padding: 4,
+                lineHeight: 0,
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
                 <polyline points="4,2 2,4 4,6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 <path d="M2 4H6.5A2.5 2.5 0 0 1 6.5 9H4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
-              Undo
             </button>
           ) : (
             <div className="flex items-center gap-1">

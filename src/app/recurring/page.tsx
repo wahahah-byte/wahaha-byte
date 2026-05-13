@@ -96,7 +96,7 @@ function Recurring() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submittedTaskIds] = useState<Set<string>>(new Set());
 
-  const { advancing, pausing, slashingId, recurringPopups, tierUp, dismissTierUp, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, undoableCheckIn, dismissUndoableCheckIn } =
+  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, undoableCheckIn, dismissUndoableCheckIn } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -451,8 +451,6 @@ function Recurring() {
       logPromptTask={logPromptTask}
       onCancelLog={cancelLog}
       onSubmitLog={submitLog}
-      tierUp={tierUp}
-      onDismissTierUp={dismissTierUp}
       undoableCheckIn={undoableCheckIn}
       tasks={tasks}
       onUndoCheckInFromToast={handleUndoCheckInFromToast}

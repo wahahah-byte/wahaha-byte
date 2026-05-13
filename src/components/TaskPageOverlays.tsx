@@ -4,7 +4,6 @@ import { ReactNode } from "react";
 import type { TaskDto } from "@/lib/api/tasks";
 import NewTaskModal from "@/components/NewTaskModal";
 import CounterPromptModal from "@/components/CounterPromptModal";
-import TierUpBanner, { TierUpMessage } from "@/components/TierUpBanner";
 import CheckInUndoToast from "@/components/CheckInUndoToast";
 
 interface UndoableCheckIn {
@@ -30,10 +29,6 @@ interface Props {
   onCancelLog: () => void;
   onSubmitLog: (value: number) => void;
 
-  // Streak tier-up banner
-  tierUp: TierUpMessage | null;
-  onDismissTierUp: () => void;
-
   // Undo-most-recent-checkin toast
   undoableCheckIn: UndoableCheckIn | null;
   tasks: TaskDto[];
@@ -51,7 +46,6 @@ export default function TaskPageOverlays({
   showNewTask, onCloseNewTask, onTaskCreated, newTaskInitialRecurring,
   counterPromptTask, onCloseCounterPrompt, onSubmitCounterCheckIn,
   logPromptTask, onCancelLog, onSubmitLog,
-  tierUp, onDismissTierUp,
   undoableCheckIn, tasks, onUndoCheckInFromToast, onDismissUndoableCheckIn,
   children,
 }: Props) {
@@ -91,7 +85,6 @@ export default function TaskPageOverlays({
           onSubmit={(value) => { if (value !== undefined) onSubmitLog(value); }}
         />
       )}
-      <TierUpBanner message={tierUp} onDone={onDismissTierUp} />
       {undoableCheckIn && undoTask && (
         <CheckInUndoToast
           taskTitle={undoableCheckIn.taskTitle}

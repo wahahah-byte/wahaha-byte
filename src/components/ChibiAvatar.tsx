@@ -41,6 +41,18 @@ const SOURCE_W = 256;
 const SOURCE_H = 384;
 const ASPECT = SOURCE_W / SOURCE_H;
 
+// Slot-wide horizontal nudge applied to items that don't carry their own
+// offsetX hint. In source-canvas pixels (256-wide); positive shifts the
+// sprite right. Hair PNGs are consistently drawn a few pixels left of
+// canvas centre, so a +3 default re-aligns them with the chibi head. The
+// per-item OffsetX render hint still wins when set — this only kicks in
+// for items that pass through without one.
+const SLOT_OFFSET_X: Record<string, number> = {
+  HAIR: 5,
+  HAIR_FRONT: 5,
+  HAIR_BACK: 5,
+};
+
 interface Props {
   equipped: UserInventoryDto[];
   height?: number;        // rendered pixel height (default 192 = clean 2× downsample)
@@ -185,8 +197,14 @@ export default function ChibiAvatar({
         const itemH = Math.round(itemSrcH * scale);
         const left = 0;
         const top = 0;
-        const dx = (item.offsetX ?? 0) * scale;
-        const dy = (item.offsetY ?? 0) * scale;
+        // Per-item offsetX wins over slot defaults. Slot defaults exist
+        // for systematic alignment quirks (e.g. all hair drawn 3 px left
+        // of centre) so admins don't have to set the same offsetX on
+        // every hair upload.
+        const offsetX = item.offsetX ?? SLOT_OFFSET_X[item.slot] ?? 0;
+        const offsetY = item.offsetY ?? 0;
+        const dx = offsetX * scale;
+        const dy = offsetY * scale;
         const renderScale = item.renderScale ?? 1;
         return (
           <img

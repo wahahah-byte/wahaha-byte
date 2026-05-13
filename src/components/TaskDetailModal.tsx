@@ -15,6 +15,7 @@ import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
 import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
+import { useEquippedAvatar } from "@/hooks/useEquippedAvatar";
 import { dateKey } from "@/lib/dateUtils";
 
 const PRIORITIES = [
@@ -144,6 +145,23 @@ export default function TaskDetailModal({
 }: Props) {
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
+
+  // Pull the user's currently-equipped avatar items so the chibi inside
+  // this modal matches whatever's dressed up on the /avatar page. The
+  // hook caches across modal opens so each open doesn't pay another
+  // network trip.
+  //
+  // Mock fallback only fires for unauthed sessions (static demo) — for
+  // authed users we'd rather render the base chibi with no items for
+  // the ~100-300ms a first-time fetch is in flight than briefly show
+  // someone else's mock loadout (alien hat etc.) that then flips to
+  // their real equipped set. That brief flash was the "old avatar
+  // showing up" the user was seeing.
+  const hasToken = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
+  const userEquipped = useEquippedAvatar();
+  const chibiEquipped = hasToken
+    ? (userEquipped ?? [])
+    : buildMockEquipped();
 
   function todayMidnight() {
     const d = new Date();
@@ -766,7 +784,7 @@ export default function TaskDetailModal({
                     key: "stage",
                     content: (
                       <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                        <ChibiAvatar equipped={buildMockEquipped()} height={192} />
+                        <ChibiAvatar equipped={chibiEquipped} height={192} />
                         {task.hasCounter && (() => {
                           // hasCounter && pending status && not yet checked in today
                           // is the gate for showing the +/- buttons; otherwise we
