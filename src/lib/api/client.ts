@@ -102,6 +102,16 @@ export function authedDelete<T>(path: string, options?: RequestInit) {
 // (empty string would still send a header). We strip the JSON header here
 // by passing a custom set that apiFetch will spread last and then we override.
 export async function authedPostFormData<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  return formDataFetch<T>(path, form, "POST");
+}
+
+export async function authedPutFormData<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  return formDataFetch<T>(path, form, "PUT");
+}
+
+// Shared multipart fetch — same header rules as apiFetch but with no
+// Content-Type set so the browser can append the multipart boundary.
+async function formDataFetch<T>(path: string, form: FormData, method: "POST" | "PUT"): Promise<ApiResult<T>> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...(typeof window !== "undefined"
@@ -110,7 +120,7 @@ export async function authedPostFormData<T>(path: string, form: FormData): Promi
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: form, headers });
+  const res = await fetch(`${API_URL}${path}`, { method, body: form, headers });
   if (!res.ok) {
     const text = await res.text();
     let message: string;

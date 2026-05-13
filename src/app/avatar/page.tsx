@@ -7,9 +7,12 @@ import ChibiAvatar from "@/components/ChibiAvatar";
 import DemoModeBanner from "@/components/DemoModeBanner";
 import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
+import { computeImageBounds, type ImageBounds } from "@/lib/imageBounds";
 import { avatarApi, type AvatarItemDto, type UserInventoryDto } from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
+import { useUserRoles } from "@/hooks/useUserRoles";
+import AvatarAdminPanel from "@/components/AvatarAdminPanel";
 import {
   DndContext,
   PointerSensor,
@@ -51,22 +54,45 @@ const CELL_PX_MOBILE = 56;
 // the translateY, leaving items (notably the hair sprite) rendered at the
 // top of their card instead of centered.
 const SLOT_TRANSFORM: Record<string, string> = {
+  // ---- Legacy aliases ----
   HEAD:  "scale(1.7) translateY(22%)",
   HAIR:  "scale(1.7) translateY(20%)",
-  // Planned granular hair slots map to the same canvas region as HAIR.
-  HAIR_FRONT: "scale(1.7) translateY(20%)",
-  HAIR_BACK:  "scale(1.7) translateY(20%)",
-  FACE:  "scale(1.7) translateY(12%)",
   BODY:  "scale(1.4) translateY(-4%)",
   HAND:  "scale(1.4) translateY(-6%)",
+  FACE:  "scale(1.7) translateY(12%)",
   BACK:  "scale(1.4) translateY(2%)",
   FEET:  "scale(1.7) translateY(-22%)",
+
+  // ---- Granular slots (MapleStory-style) ----
+  // Hair slots map to the same upper canvas region as HAIR.
+  HAIR_FRONT: "scale(1.7) translateY(20%)",
+  HAIR_BACK:  "scale(1.7) translateY(20%)",
+  // Headwear sits on the upper third — same as HEAD.
+  HAT:  "scale(1.7) translateY(22%)",
+  // Eye accessories (glasses) and ear pieces are slightly higher than mouth.
+  EYE:  "scale(1.7) translateY(14%)",
+  EAR:  "scale(1.7) translateY(12%)",
+  // Body sections — same band as legacy BODY since the asset region
+  // overlaps the chibi torso.
+  TOP:     "scale(1.4) translateY(-4%)",
+  BOTTOM:  "scale(1.4) translateY(8%)",
+  OVERALL: "scale(1.3) translateY(2%)",
+  // Outerwear extras.
+  CAPE:   "scale(1.3) translateY(0%)",
+  GLOVES: "scale(1.4) translateY(-6%)",
+  SHOES:  "scale(1.7) translateY(-22%)",
+  // Weapons render small inside their card by default — per-asset
+  // CARD_TRANSFORM_OVERRIDE entries override with bigger scales.
+  WEAPON_FRONT: "scale(1.4)",
+  WEAPON_BACK:  "scale(1.4)",
+  WRIST:  "scale(1.4) translateY(-6%)",
 };
 
 // Per-asset overrides for the inventory-card transform, keyed by filename.
-// Use this when a sprite needs more zoom or a different vertical offset than
-// its slot default — e.g. an oversized weapon on a 384×384 canvas would
-// otherwise render small inside its 2×1 card.
+// Used as a fallback when the item doesn't carry server-computed content
+// bounds (see boundsTransformFor below). For items with bounds the
+// auto-centre math wins; this dict survives for legacy assets and the
+// static-demo mock catalogue.
 const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(3%, -10%)",
   // Seraph hair is drawn ~11 source pixels left of canvas center (the same
@@ -76,6 +102,89 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
   // scale(1.7) magnification, lands canvas-x 117 on the cell's centre line.
   "hair_seraph_wave_brown.png": "scale(1.7) translate(2.8%, 20%)",
 };
+
+// Compute a CSS transform that translates + scales the source image so its
+// content bbox lands centred inside the card, when the server gave us
+// bounds. Returns null when any bound is missing (caller falls back to
+// slot defaults).
+//
+// Math — accounts for the fact that the image element uses
+// objectFit:contain, so when source aspect ≠ card aspect the source is
+// letterboxed inside the card box rather than filling it. The naive
+// "translate by source-relative fraction" overshoots along the
+// letterboxed axis. Two correction factors:
+//
+//   dispFracX = how much of the card's *width* the displayed source
+//               occupies (1 when source is wide-relative-to-card,
+//               sourceW/sourceH × cardH/cardW otherwise)
+//   dispFracY = same for height
+//
+// Cells are square, so cardW/cardH = gridCols/gridRows. Both default to 1
+// for plain 1×1 items.
+//
+//   - Translate: we want the bbox centre to land at the card centre.
+//     The translate amount (in px) required equals (cardCentre - bboxPre).
+//     Expressed as a CSS percentage of the card box, that simplifies to
+//     -fx × 100 × dispFracX along X (and symmetric for Y), where fx/fy
+//     are the bbox-centre-offset-from-source-centre fractions in source
+//     pixels.
+//   - Scale: we want the bbox's *displayed* extent to fill ~fillFactor of
+//     the card's limiting axis. effSrcW/effSrcH are the "effective"
+//     source dimensions after letterboxing — equal to sourceW/sourceH
+//     when aspects match, larger along the letterboxed axis otherwise.
+//     Picking min(effSrcW/bboxW, effSrcH/bboxH) gives the scale that
+//     makes the bbox fit; multiplying by fillFactor leaves padding.
+// Shape of the bounds the renderer accepts — either from the DTO's
+// server-computed fields or from the in-browser client scan. Kept loose
+// (only the four bbox coords) so both sources slot in identically.
+interface BoundsInput {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+}
+
+function boundsTransformFor(item: AvatarItemDto, override?: BoundsInput | null): string | null {
+  // Prefer the explicit override (client-side scan) over the DTO fields —
+  // the override is computed on the actually-rendered PNG, so it survives
+  // cases where the row's server bounds are stale or missing.
+  const contentMinX = override?.minX ?? item.contentMinX;
+  const contentMinY = override?.minY ?? item.contentMinY;
+  const contentMaxX = override?.maxX ?? item.contentMaxX;
+  const contentMaxY = override?.maxY ?? item.contentMaxY;
+  if (contentMinX == null || contentMinY == null || contentMaxX == null || contentMaxY == null) return null;
+  const sourceW = override?.sourceWidth ?? item.sourceWidth ?? 256;
+  const sourceH = override?.sourceHeight ?? item.sourceHeight ?? 384;
+  const cols = item.gridCols ?? 1;
+  const rows = item.gridRows ?? 1;
+  const bboxW = Math.max(1, contentMaxX - contentMinX);
+  const bboxH = Math.max(1, contentMaxY - contentMinY);
+  const bboxCx = (contentMinX + contentMaxX) / 2;
+  const bboxCy = (contentMinY + contentMaxY) / 2;
+
+  // Aspect correction factors. See top-comment for derivation.
+  const dispFracX = Math.min(1, (sourceW * rows) / (sourceH * cols));
+  const dispFracY = Math.min(1, (sourceH * cols) / (sourceW * rows));
+
+  const fx = (bboxCx - sourceW / 2) / sourceW;
+  const fy = (bboxCy - sourceH / 2) / sourceH;
+  const tx = -fx * 100 * dispFracX;
+  const ty = -fy * 100 * dispFracY;
+
+  // Effective source extent along each axis after letterboxing.
+  const effSrcW = Math.max(sourceW, (sourceH * cols) / rows);
+  const effSrcH = Math.max((sourceW * rows) / cols, sourceH);
+  // 0.75 leaves a comfortable ~12% margin per side around the bbox.
+  // Earlier 0.9 was too tight visually — items felt cramped against the
+  // card edges, especially for tall sprites that already extend close to
+  // the limiting axis.
+  const fillFactor = 0.75;
+  const scale = fillFactor * Math.min(effSrcW / bboxW, effSrcH / bboxH);
+
+  return `scale(${scale.toFixed(3)}) translate(${tx.toFixed(2)}%, ${ty.toFixed(2)}%)`;
+}
 
 // Per-asset overrides for the *rotated* card transform. Translate happens
 // before rotate in CSS transforms, so when the polearm card is flipped 90°
@@ -105,6 +214,7 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   }
   const cat = (item.category ?? "").toLowerCase();
   switch (item.slot) {
+    // Legacy slots ------------------------------------------------------
     case "HEAD":
     case "HAIR":
     case "FACE":
@@ -115,28 +225,78 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
       return cat === "weapon" ? { cols: 2, rows: 1 } : { cols: 1, rows: 1 };
     case "BACK":
       return { cols: 2, rows: 1 };
+    // Granular slots ----------------------------------------------------
+    case "HAT":
+    case "HAIR_FRONT":
+    case "HAIR_BACK":
+    case "EYE":
+    case "EAR":
+    case "SHOES":
+    case "GLOVES":
+    case "WRIST":
+      return { cols: 1, rows: 1 };
+    case "TOP":
+    case "BOTTOM":
+      return { cols: 1, rows: 1 };
+    case "OVERALL":
+      // Dress / robe — tall in inventory like RE4 body armor.
+      return { cols: 1, rows: 2 };
+    case "CAPE":
+    case "WEAPON_BACK":
+    case "WEAPON_FRONT":
+      return { cols: 2, rows: 1 };
     default:
       return { cols: 1, rows: 1 };
   }
 }
 
-// Per-asset render hints (offsetX/Y, renderScale, coversHair, sourceWidth/Height).
-// The backend AvatarItemDto doesn't persist these — they're applied here keyed
-// by the asset filename so the same PNG renders correctly whether the item
-// came from the mock catalogue or from /api/AvatarItems.
+// Per-asset render hints (offsetX/Y, renderScale, coversHairFront/Back,
+// sourceWidth/Height) used to live exclusively in this map keyed by blob
+// filename — the backend ignored these fields. They're now persisted server-
+// side on AvatarItem and arrive on the DTO directly, so DB values take
+// precedence. This dict survives only as a fallback for items that pre-date
+// the DB columns (e.g. the buildMockInventory() rows in static demo mode)
+// and for any future asset that needs a hint before someone enters one in
+// the admin modal.
 const RENDER_HINTS: Record<string, Partial<AvatarItemDto>> = {
-  "hat_alien_neo.png": { coversHair: true, renderScale: 1.2, offsetY: 10 },
+  "hat_alien_neo.png": { coversHairFront: true, coversHairBack: true, renderScale: 1.2, offsetY: 10 },
   "hair_seraph_wave_brown.png": { offsetX: 11 },
   "weapon_polearm_alien_cyber.png": {
     sourceWidth: 384, sourceHeight: 384, offsetX: 6, offsetY: -8, renderScale: 1.25,
   },
 };
 
+// Layer order (lowest precedence first → highest precedence last):
+//   1. Hardcoded fallback in this file (RENDER_HINTS, keyed by filename)
+//   2. Server-persisted values on the DTO
+// Server values win when set. We merge so partial server hints still pick up
+// fallback values for any field the DB has null on. `coversHair` (the legacy
+// single flag) is treated as both granular flags true and applied last when
+// truthy, since some pre-migration data still uses it.
 function applyHints(item: AvatarItemDto): AvatarItemDto {
-  if (!item.previewAssetUrl) return item;
-  const filename = item.previewAssetUrl.split("/").pop() ?? "";
-  const hints = RENDER_HINTS[filename];
-  return hints ? { ...item, ...hints } : item;
+  const filename = item.previewAssetUrl?.split("/").pop() ?? "";
+  const fallback = RENDER_HINTS[filename] ?? {};
+  const merged: AvatarItemDto = { ...item };
+  for (const key of [
+    "coversHairFront", "coversHairBack",
+    "offsetX", "offsetY", "renderScale",
+    "sourceWidth", "sourceHeight",
+  ] as const) {
+    // Server value wins when non-null. Fall back to the filename dict
+    // entry, else leave undefined (renderer uses slot defaults).
+    if (merged[key] == null && fallback[key] != null) {
+      // @ts-expect-error narrow assignment — key is a known optional field
+      merged[key] = fallback[key];
+    }
+  }
+  // Legacy single-flag coversHair → expand to both granular flags when
+  // either side is unset. Server-side rows shouldn't be using this anymore
+  // but mock-data fallback might.
+  if (merged.coversHair === true) {
+    if (merged.coversHairFront == null) merged.coversHairFront = true;
+    if (merged.coversHairBack == null) merged.coversHairBack = true;
+  }
+  return merged;
 }
 
 // Whitelist of URL patterns that point to real (or potentially real) assets.
@@ -293,6 +453,10 @@ export default function AvatarPage() {
   const [hasToken, setHasToken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [inventory, setInventory] = useState<UserInventoryDto[]>([]);
+  // Role flags drive the admin manage-items panel below the inventory.
+  // Both flags are false until the JWT has been read on the client, so the
+  // panel is automatically hidden during SSR and the first paint.
+  const userRoles = useUserRoles();
   // Hair has its own grid so the main inventory isn't cluttered with wigs.
   // Position is stored per inventory row; collision checks are scoped to
   // the active tab so hair and equipment can share the same coordinates.
@@ -860,6 +1024,17 @@ export default function AvatarPage() {
           )}
         </section>
         </div>
+
+        {/* Admin manage-items panel. Hidden entirely for users without the
+            Admin/Moderator role; the JWT has to have already been read on
+            the client (userRoles.ready) before we mount anything so the
+            first paint matches the SSR HTML. */}
+        {userRoles.ready && userRoles.canManageAvatarItems && (
+          <AvatarAdminPanel
+            isAdmin={userRoles.isAdmin}
+            isModerator={userRoles.isModerator}
+          />
+        )}
       </div>
     </main>
   );
@@ -885,6 +1060,28 @@ function DropCell({ x, y }: { x: number; y: number }) {
   );
 }
 
+// Subscribes a card to the in-browser bbox cache for its PreviewAssetUrl.
+// Returns null while loading (or when the scan can't run / fails — CORS,
+// unreachable, fully transparent, etc.). The card uses whatever it gets as
+// an override on top of any server-stored bounds; null means fall through
+// to the next precedence step (server bounds → slot default).
+function useClientBounds(url: string | null | undefined): ImageBounds | null {
+  const [bounds, setBounds] = useState<ImageBounds | null>(null);
+  useEffect(() => {
+    if (!url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBounds(null);
+      return;
+    }
+    let cancelled = false;
+    computeImageBounds(url).then((b) => {
+      if (!cancelled) setBounds(b);
+    });
+    return () => { cancelled = true; };
+  }, [url]);
+  return bounds;
+}
+
 interface DraggableItemProps {
   inv: UserInventoryDto;
   busy: boolean;
@@ -907,6 +1104,13 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inv.inventoryId,
   });
+  // Run the alpha-scan client-side so the card centres even when the row
+  // doesn't have server-stored bounds yet (legacy uploads, URL registers
+  // from an older build). The result is cached per URL, so a re-render
+  // doesn't re-scan. Null while loading or when the scan can't run.
+  const clientBounds = useClientBounds(
+    item.previewAssetUrl ? assetPath(item.previewAssetUrl) : null,
+  );
 
   return (
     <button
@@ -970,8 +1174,14 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
             imageRendering: "pixelated",
             transform: (() => {
               const filename = item.previewAssetUrl?.split("/").pop() ?? "";
+              // Resolution order: server-computed bbox (highest precedence
+              // — guarantees auto-centred content for any item uploaded
+              // since this feature shipped), then per-filename CSS
+              // override (legacy hand-tuned values), then per-slot default,
+              // then a generic 1.4× zoom.
               const base =
-                CARD_TRANSFORM_OVERRIDE[filename]
+                boundsTransformFor(item, clientBounds)
+                ?? CARD_TRANSFORM_OVERRIDE[filename]
                 ?? SLOT_TRANSFORM[item.slot]
                 ?? "scale(1.4)";
               // BODY items: rotate only the box footprint, not the sprite —

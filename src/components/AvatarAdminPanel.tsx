@@ -1,0 +1,504 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { avatarApi, type AvatarItemDto } from "@/lib/api/avatar";
+import { assetPath } from "@/lib/assetPath";
+import { useToast } from "@/context/ToastContext";
+import AvatarItemFormModal, { type FormMode } from "@/components/AvatarItemFormModal";
+
+interface Props {
+  // Whether the current viewer can delete (Admin) or only manage
+  // (Admin/Moderator). Passed from the page so the panel doesn't have to
+  // re-read the JWT — keeps the role check single-sourced.
+  isAdmin: boolean;
+  isModerator: boolean;
+  // Fired when the admin creates a new item or updates one — the host page
+  // refreshes the user's inventory state so the new/updated item appears
+  // immediately in the existing inventory grid without a manual reload.
+  onCatalogueChange?: () => void;
+}
+
+// Collapsible admin panel that sits below the inventory grid on /avatar.
+// Renders a list of every catalogue item with inline actions for the
+// operations the API exposes — create, update, toggle availability, delete.
+// Visibility is gated by canManageAvatarItems() upstream; this component
+// assumes it should render when mounted.
+export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChange }: Props) {
+  const { setError } = useToast();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<AvatarItemDto[]>([]);
+  const [filter, setFilter] = useState("");
+  // Item IDs currently mid-request (toggle/delete) — disables the row's
+  // buttons so a double-click can't queue two conflicting writes.
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  // Active modal mode — null means closed. Driven by "+ New item" (create)
+  // and the per-row Edit button (edit). Save callback handles list updates.
+  const [formMode, setFormMode] = useState<FormMode | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await avatarApi.catalog({ pageNumber: 1, pageSize: 500 });
+    setLoading(false);
+    if (error) { setError(error); return; }
+    setItems(data?.data ?? []);
+  }, [setError]);
+
+  // Lazy-load: only fetch when the panel is first opened. Saves an HTTP
+  // round-trip for the common case where a moderator visits /avatar without
+  // intending to manage anything.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && items.length === 0 && !loading) refresh();
+  }, [open, items.length, loading, refresh]);
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((i) =>
+      i.name.toLowerCase().includes(q)
+      || i.category.toLowerCase().includes(q)
+      || i.slot.toLowerCase().includes(q),
+    );
+  }, [items, filter]);
+
+  const onToggleAvailability = useCallback(async (item: AvatarItemDto) => {
+    if (busyIds.has(item.itemId)) return;
+    setBusyIds((prev) => new Set(prev).add(item.itemId));
+    // Optimistic flip — server inverts isAvailable on its side, so we just
+    // mirror the same inversion locally and roll back on error.
+    setItems((prev) => prev.map((i) =>
+      i.itemId === item.itemId ? { ...i, isAvailable: !i.isAvailable } : i,
+    ));
+    const { error } = await avatarApi.toggleItemAvailability(item.itemId);
+    setBusyIds((prev) => { const n = new Set(prev); n.delete(item.itemId); return n; });
+    if (error) {
+      setItems((prev) => prev.map((i) =>
+        i.itemId === item.itemId ? { ...i, isAvailable: item.isAvailable } : i,
+      ));
+      setError(error);
+    }
+  }, [busyIds, setError]);
+
+  const onDelete = useCallback(async (item: AvatarItemDto) => {
+    if (!isAdmin) return;
+    const ok = window.confirm(`Delete "${item.name}" (#${item.itemId})? This can't be undone.`);
+    if (!ok) return;
+    setBusyIds((prev) => new Set(prev).add(item.itemId));
+    const { error } = await avatarApi.deleteItem(item.itemId);
+    setBusyIds((prev) => { const n = new Set(prev); n.delete(item.itemId); return n; });
+    if (error) { setError(error); return; }
+    setItems((prev) => prev.filter((i) => i.itemId !== item.itemId));
+    onCatalogueChange?.();
+  }, [isAdmin, setError, onCatalogueChange]);
+
+  const onEdit = useCallback((item: AvatarItemDto) => {
+    setFormMode({ kind: "edit", item });
+  }, []);
+
+  // Re-scans the item's PreviewAssetUrl on the server and stores fresh
+  // content bounds. Splices the returned DTO back into the local list so
+  // the inventory grid's auto-centre transform sees the new bounds on the
+  // next render — the host page also rebuilds its catalogue from this same
+  // list via onCatalogueChange.
+  const onRecenter = useCallback(async (item: AvatarItemDto) => {
+    if (busyIds.has(item.itemId)) return;
+    setBusyIds((prev) => new Set(prev).add(item.itemId));
+    const { data, error } = await avatarApi.recomputeBounds(item.itemId);
+    setBusyIds((prev) => { const n = new Set(prev); n.delete(item.itemId); return n; });
+    if (error) { setError(error); return; }
+    if (data) {
+      setItems((prev) => prev.map((i) => (i.itemId === data.itemId ? data : i)));
+      onCatalogueChange?.();
+    }
+  }, [busyIds, setError, onCatalogueChange]);
+
+  // Tracks how many items the bulk recenter is still chewing through so the
+  // button can show progress instead of spinning silently. Cleared back to
+  // null when the run finishes (success or fail).
+  const [recenterAllProgress, setRecenterAllProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // One-click fix for legacy rows that don't have content bounds yet — runs
+  // the recompute endpoint for every item missing bounds whose
+  // PreviewAssetUrl is an absolute http(s) URL (relative seed paths can't
+  // be fetched server-side and are skipped). Sequential to keep the API
+  // honest about its load — each scan downloads a PNG and runs ImageSharp,
+  // a parallel storm would be unkind.
+  const onRecenterAll = useCallback(async () => {
+    const targets = items.filter((i) => {
+      const hasBounds =
+        i.contentMinX != null && i.contentMinY != null
+        && i.contentMaxX != null && i.contentMaxY != null;
+      const httpUrl = !!i.previewAssetUrl && /^https?:\/\//i.test(i.previewAssetUrl);
+      return !hasBounds && httpUrl;
+    });
+    if (targets.length === 0) return;
+
+    setRecenterAllProgress({ done: 0, total: targets.length });
+    for (let i = 0; i < targets.length; i++) {
+      const t = targets[i];
+      const { data, error } = await avatarApi.recomputeBounds(t.itemId);
+      if (error) {
+        // Don't abort the whole batch on a single failure (third-party CDN
+        // outage etc.) — surface it via toast and keep going.
+        setError(`Recenter failed for "${t.name}": ${error}`);
+      } else if (data) {
+        setItems((prev) => prev.map((it) => (it.itemId === data.itemId ? data : it)));
+      }
+      setRecenterAllProgress({ done: i + 1, total: targets.length });
+    }
+    setRecenterAllProgress(null);
+    onCatalogueChange?.();
+  }, [items, setError, onCatalogueChange]);
+
+  // Count of items that would actually do something on "Recenter all" —
+  // missing bounds AND have a scannable URL. Drives both the button's
+  // disabled state and its label.
+  const recenterableCount = useMemo(() => items.filter((i) => {
+    const hasBounds =
+      i.contentMinX != null && i.contentMinY != null
+      && i.contentMaxX != null && i.contentMaxY != null;
+    const httpUrl = !!i.previewAssetUrl && /^https?:\/\//i.test(i.previewAssetUrl);
+    return !hasBounds && httpUrl;
+  }).length, [items]);
+
+  // Saves from the modal — splice the returned item into the local list so
+  // the row updates / new row appears without a full refetch. Notifies the
+  // host page so it can refresh the user's inventory if the catalogue
+  // change might affect equipped items.
+  const onSavedFromModal = useCallback((saved: AvatarItemDto) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.itemId === saved.itemId);
+      if (idx < 0) return [saved, ...prev];
+      const next = prev.slice();
+      next[idx] = saved;
+      return next;
+    });
+    onCatalogueChange?.();
+  }, [onCatalogueChange]);
+
+  return (
+    <section
+      style={{
+        marginTop: 24,
+        border: "1px solid var(--color-border-soft)",
+        borderRadius: 4,
+        background: "var(--color-surface)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 14px",
+          background: "transparent",
+          border: "none",
+          color: "var(--color-fg-muted)",
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        <span>
+          Manage Items
+          <span style={{ marginLeft: 8, color: "var(--color-fg-subtle)", fontWeight: 500 }}>
+            {isAdmin ? "Admin" : isModerator ? "Moderator" : ""}
+          </span>
+        </span>
+        <span aria-hidden style={{ color: "var(--color-fg-subtle)", fontSize: 12 }}>
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {open && (
+        <div style={{ borderTop: "1px solid var(--color-border-soft)", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter by name / category / slot"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "6px 10px",
+                background: "var(--color-input)",
+                border: "1px solid var(--color-border-hairline)",
+                borderRadius: 2,
+                color: "var(--color-fg)",
+                fontSize: 11,
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setFormMode({ kind: "create" })}
+              title="Create a new avatar item"
+              style={{
+                flexShrink: 0,
+                padding: "6px 10px",
+                background: "var(--color-active-highlight-bg)",
+                border: "1px solid var(--color-active-highlight-border)",
+                color: "var(--color-active-highlight)",
+                borderRadius: 2,
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              + New item
+            </button>
+            <button
+              type="button"
+              onClick={onRecenterAll}
+              disabled={recenterAllProgress != null || recenterableCount === 0}
+              title={
+                recenterableCount === 0
+                  ? "All scannable items already have content bounds"
+                  : `Recompute bounds for ${recenterableCount} item(s) without them`
+              }
+              style={{
+                flexShrink: 0,
+                padding: "6px 10px",
+                background: "transparent",
+                border: "1px solid var(--color-border-hairline)",
+                color: "var(--color-fg-muted)",
+                borderRadius: 2,
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+                cursor: recenterAllProgress != null ? "wait" : (recenterableCount === 0 ? "default" : "pointer"),
+                opacity: recenterAllProgress != null || recenterableCount === 0 ? 0.5 : 1,
+              }}
+            >
+              {recenterAllProgress != null
+                ? `${recenterAllProgress.done}/${recenterAllProgress.total}…`
+                : `Recenter all${recenterableCount > 0 ? ` (${recenterableCount})` : ""}`}
+            </button>
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={loading}
+              title="Reload the catalogue from the server"
+              style={{
+                flexShrink: 0,
+                padding: "6px 10px",
+                background: "transparent",
+                border: "1px solid var(--color-border-hairline)",
+                color: "var(--color-fg-muted)",
+                borderRadius: 2,
+                fontSize: 10,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+                cursor: loading ? "wait" : "pointer",
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
+              {loading ? "…" : "Refresh"}
+            </button>
+          </div>
+
+          {loading && items.length === 0 ? (
+            <p style={{ color: "var(--color-fg-subtle)", fontSize: 11 }}>Loading items…</p>
+          ) : filtered.length === 0 ? (
+            <p style={{ color: "var(--color-fg-subtle)", fontSize: 11 }}>
+              {items.length === 0 ? "No items in the catalogue yet." : "No items match the filter."}
+            </p>
+          ) : (
+            <ul style={{ display: "flex", flexDirection: "column", gap: 4, listStyle: "none", margin: 0, padding: 0 }}>
+              {filtered.map((item) => (
+                <AdminItemRow
+                  key={item.itemId}
+                  item={item}
+                  busy={busyIds.has(item.itemId)}
+                  canDelete={isAdmin}
+                  onEdit={onEdit}
+                  onToggleAvailability={onToggleAvailability}
+                  onRecenter={onRecenter}
+                  onDelete={onDelete}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {formMode && (
+        <AvatarItemFormModal
+          mode={formMode}
+          onClose={() => setFormMode(null)}
+          onSaved={onSavedFromModal}
+        />
+      )}
+    </section>
+  );
+}
+
+interface RowProps {
+  item: AvatarItemDto;
+  busy: boolean;
+  canDelete: boolean;
+  onEdit: (item: AvatarItemDto) => void;
+  onToggleAvailability: (item: AvatarItemDto) => void;
+  onRecenter: (item: AvatarItemDto) => void;
+  onDelete: (item: AvatarItemDto) => void;
+}
+
+function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onRecenter, onDelete }: RowProps) {
+  const hasAsset = !!item.previewAssetUrl;
+  // The recompute-bounds endpoint requires an absolute http(s) URL — relative
+  // seed paths like "/assets/hats/hat_wizard.png" can't be fetched server-side.
+  // Hide the button on those rows; admins can still edit + re-upload to get
+  // the same effect via the upload code path.
+  const canRecenter = !!item.previewAssetUrl && /^https?:\/\//i.test(item.previewAssetUrl);
+  // Glance-able state — green dot when the row has stored bounds, faint dot
+  // when it doesn't (auto-centre falls back to slot defaults).
+  const hasBounds =
+    item.contentMinX != null && item.contentMinY != null
+    && item.contentMaxX != null && item.contentMaxY != null;
+  return (
+    <li
+      style={{
+        display: "grid",
+        gridTemplateColumns: "56px 1fr auto",
+        gap: 10,
+        alignItems: "center",
+        padding: "6px 8px",
+        background: "var(--color-bg)",
+        border: "1px solid var(--color-border-hairline)",
+        borderRadius: 2,
+        opacity: busy ? 0.5 : 1,
+      }}
+    >
+      <div
+        style={{
+          width: 56, height: 56,
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid var(--color-border-hairline)",
+          borderRadius: 2,
+          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {hasAsset ? (
+          <Image
+            src={assetPath(item.previewAssetUrl!)}
+            alt=""
+            width={112}
+            height={112}
+            unoptimized
+            style={{ width: "100%", height: "100%", objectFit: "contain", imageRendering: "pixelated" }}
+          />
+        ) : (
+          <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, letterSpacing: "0.1em" }}>—</span>
+        )}
+      </div>
+
+      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ color: "var(--color-fg)", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.name}
+          <span style={{ marginLeft: 6, color: "var(--color-fg-subtle)", fontWeight: 400, fontSize: 10 }}>
+            #{item.itemId}
+          </span>
+        </span>
+        <span style={{ color: "var(--color-fg-subtle)", fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          {item.slot} · {item.rarity} · {item.cost}p
+          {item.category ? <> · {item.category}</> : null}
+          {/* Bounds status — handy for spotting items that need a Recenter
+              run (no green dot = card falls back to slot defaults). */}
+          <span
+            title={hasBounds ? "Content bounds stored" : "No content bounds — using slot default"}
+            aria-hidden
+            style={{
+              display: "inline-block",
+              marginLeft: 6,
+              width: 6, height: 6,
+              borderRadius: "50%",
+              background: hasBounds ? "var(--color-success)" : "var(--color-fg-subtle)",
+              opacity: hasBounds ? 0.85 : 0.4,
+              verticalAlign: "middle",
+            }}
+          />
+        </span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <label
+          title="Toggle availability"
+          style={{
+            display: "flex", alignItems: "center", gap: 4, cursor: busy ? "wait" : "pointer",
+            color: item.isAvailable ? "var(--color-success)" : "var(--color-fg-subtle)",
+            fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={item.isAvailable}
+            disabled={busy}
+            onChange={() => onToggleAvailability(item)}
+            style={{ cursor: busy ? "wait" : "pointer" }}
+          />
+          {item.isAvailable ? "Live" : "Off"}
+        </label>
+        <button
+          type="button"
+          onClick={() => onEdit(item)}
+          disabled={busy}
+          title="Edit item metadata or replace image"
+          style={iconBtnStyle}
+        >
+          Edit
+        </button>
+        {canRecenter && (
+          <button
+            type="button"
+            onClick={() => onRecenter(item)}
+            disabled={busy}
+            title="Re-scan PNG and store fresh content bounds so the inventory card auto-centres"
+            style={iconBtnStyle}
+          >
+            Recenter
+          </button>
+        )}
+        {canDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(item)}
+            disabled={busy}
+            title="Delete item (Admin only)"
+            style={{ ...iconBtnStyle, color: "var(--color-danger)", borderColor: "var(--color-danger-border)" }}
+          >
+            Del
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+const iconBtnStyle: React.CSSProperties = {
+  padding: "3px 8px",
+  background: "transparent",
+  border: "1px solid var(--color-border-hairline)",
+  color: "var(--color-fg-muted)",
+  borderRadius: 2,
+  fontSize: 9,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  fontWeight: 600,
+  cursor: "pointer",
+};

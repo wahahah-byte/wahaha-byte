@@ -13,6 +13,9 @@ const SLOT_Z: Record<string, number> = {
   HAIR_BACK: 20,
   BOTTOM: 40,
   TOP: 50,
+  // OVERALL shares TOP's z-band — when equipped, the filter above hides
+  // any TOP/BOTTOM behind it, so they can't conflict in the stack.
+  OVERALL: 50,
   GLOVES: 60,
   SHOES: 70,
   HAIR_FRONT: 80,
@@ -56,23 +59,79 @@ export default function ChibiAvatar({
   const width = Math.round(height * ASPECT);
 
   // Filter to items that actually have a PNG asset, then sort by slot z-order.
-  // Items without a previewAssetUrl (e.g. legacy mock pixel-rect items) are
-  // simply skipped — the base character still shows. Hair (category "hair")
-  // is suppressed when any equipped item declares coversHair — e.g. a
-  // full-coverage helmet — so hair doesn't poke through.
-  const hideHair = equipped.some((inv) => inv.avatarItem?.coversHair === true);
-  const layered = equipped
-    .filter((inv) => {
-      const item = inv.avatarItem;
-      if (!item?.previewAssetUrl) return false;
-      if (hideHair && item.category === "hair") return false;
-      return true;
-    })
-    .sort((a, b) => {
-      const za = SLOT_Z[a.avatarItem!.slot] ?? 100;
-      const zb = SLOT_Z[b.avatarItem!.slot] ?? 100;
-      return za - zb;
-    });
+  // Items without a previewAssetUrl are skipped — the base character still shows.
+  //
+  // Three suppression rules layered together:
+  //   1. coversHairFront / coversHairBack — hat-style items hide the matching
+  //      hair slot. The legacy `coversHair` flag is treated as "both true" so
+  //      pre-existing RENDER_HINTS entries (e.g. hat_alien_neo.png) keep
+  //      working without a code change.
+  //   2. Category "hair" rows on the legacy `HAIR` slot are also suppressed
+  //      when either hair flag is set (back-compat for the old single-slot
+  //      hair model).
+  //   3. OVERALL equipped — when an OVERALL-slot item is present, the chibi
+  //      composite hides any equipped TOP and BOTTOM items behind it. The
+  //      user can still own / equip the underlying pieces; they just don't
+  //      render while the OVERALL is on.
+  const hideHairFront = equipped.some((inv) => {
+    const i = inv.avatarItem;
+    return i?.coversHairFront === true || i?.coversHair === true;
+  });
+  const hideHairBack = equipped.some((inv) => {
+    const i = inv.avatarItem;
+    return i?.coversHairBack === true || i?.coversHair === true;
+  });
+  const hasOverall = equipped.some((inv) => inv.avatarItem?.slot === "OVERALL");
+
+  // Each equipped row expands to one or two render layers:
+  //   - the primary previewAssetUrl, drawn at its slot's own z-order
+  //   - optionally, secondaryAssetUrl, drawn at HAIR_BACK z-order
+  //
+  // Two-layer rows (Option B for hair front/back) let a single inventory
+  // square own both the bangs and the strands behind the head. The
+  // secondary layer is suppressed by hideHairBack just like a standalone
+  // HAIR_BACK item would be.
+  type Layer = {
+    key: string;
+    inv: UserInventoryDto;
+    src: string;
+    z: number;
+  };
+  const layered: Layer[] = [];
+  for (const inv of equipped) {
+    const item = inv.avatarItem;
+    if (!item?.previewAssetUrl) continue;
+    if (hasOverall && (item.slot === "TOP" || item.slot === "BOTTOM")) continue;
+    const isPrimaryHairFront = item.slot === "HAIR_FRONT";
+    const isPrimaryHairBack = item.slot === "HAIR_BACK";
+    // Legacy single-bucket hair — hidden if either granular flag is set.
+    const isLegacyHair =
+      item.slot === "HAIR" || (item.slot !== "HAIR_FRONT" && item.slot !== "HAIR_BACK" && item.category === "hair");
+
+    const primarySuppressed =
+      (hideHairFront && isPrimaryHairFront) ||
+      (hideHairBack && isPrimaryHairBack) ||
+      ((hideHairFront || hideHairBack) && isLegacyHair);
+
+    if (!primarySuppressed) {
+      layered.push({
+        key: `${inv.inventoryId}:primary`,
+        inv,
+        src: item.previewAssetUrl,
+        z: SLOT_Z[item.slot] ?? 100,
+      });
+    }
+
+    if (item.secondaryAssetUrl && !hideHairBack) {
+      layered.push({
+        key: `${inv.inventoryId}:secondary`,
+        inv,
+        src: item.secondaryAssetUrl,
+        z: SLOT_Z.HAIR_BACK,
+      });
+    }
+  }
+  layered.sort((a, b) => a.z - b.z);
 
   return (
     <div
@@ -98,8 +157,8 @@ export default function ChibiAvatar({
           pointerEvents: "none",
         }}
       />
-      {layered.map((inv) => {
-        const item = inv.avatarItem!;
+      {layered.map((layer) => {
+        const item = layer.inv.avatarItem!;
         // Per-item canvas can be larger than the base (e.g. an oversized
         // weapon at 384×384 vs base 256×384). Render at the item's native
         // dimensions scaled by the same source-pixel→DOM-pixel ratio as
@@ -107,6 +166,12 @@ export default function ChibiAvatar({
         // matches the base canvas's (0,0). Extra pixels overhang to the
         // right and/or below. Use offsetX/Y to nudge if the asset was
         // drawn with a different anchor convention.
+        //
+        // Render-hint values (sourceWidth/Height, offsetX/Y, renderScale)
+        // apply to both layers of a two-layer item — the primary and
+        // secondary are assumed to be painted on the same canvas at the
+        // same anchor, so the hair-back artist works in the same coord
+        // system as the hair-front artist.
         const itemSrcW = item.sourceWidth ?? SOURCE_W;
         const itemSrcH = item.sourceHeight ?? SOURCE_H;
         const scale = height / SOURCE_H;
@@ -114,20 +179,15 @@ export default function ChibiAvatar({
         const itemH = Math.round(itemSrcH * scale);
         const left = 0;
         const top = 0;
-        // Source-canvas offsets scaled to render size so a "1px right"
-        // hint stays visually consistent across height settings.
         const dx = (item.offsetX ?? 0) * scale;
         const dy = (item.offsetY ?? 0) * scale;
-        // Per-item uniform scale, applied via CSS transform around the
-        // item img's center — so changing scale doesn't drift the visual
-        // anchor and offsetX/Y stays calibrated.
         const renderScale = item.renderScale ?? 1;
         return (
           <img
-            key={inv.inventoryId}
+            key={layer.key}
             // assetPath is a no-op for full https:// URLs (e.g. blob storage)
             // and prepends the GitHub Pages base path for /-rooted public assets.
-            src={assetPath(item.previewAssetUrl!)}
+            src={assetPath(layer.src)}
             alt=""
             width={itemW}
             height={itemH}
@@ -138,6 +198,7 @@ export default function ChibiAvatar({
               top,
               width: itemW,
               height: itemH,
+              zIndex: layer.z,
               imageRendering: "pixelated",
               userSelect: "none",
               pointerEvents: "none",
