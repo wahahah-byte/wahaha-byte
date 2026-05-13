@@ -102,7 +102,17 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   // Slots that get a secondary asset control. Kept tight on purpose — every
   // other slot ignores SecondaryAssetUrl in ChibiAvatar so exposing the
   // control would invite "uploaded a second PNG, didn't render" confusion.
-  const supportsSecondaryAsset = slot === "HAIR_FRONT";
+  //   HAIR_FRONT   → secondary = back-of-head strands  (HAIR_BACK z)
+  //   CAPE         → secondary = front drape           (CAPE_FRONT z)
+  //   WEAPON_FRONT → secondary = shaft behind chibi    (WEAPON_BACK z)
+  const supportsSecondaryAsset =
+    slot === "HAIR_FRONT" || slot === "CAPE" || slot === "WEAPON_FRONT";
+  // Semantic label for the secondary layer — what the artist drew. Hair's
+  // primary is the front bangs so its secondary is "Back"; cape's primary
+  // is the back panel so its secondary is "Front"; weapon's primary is
+  // the front weapon so its secondary is "Back". Mirrors the z-order
+  // resolution in ChibiAvatar.
+  const secondaryLayerLabel = slot === "CAPE" ? "Front" : "Back";
 
   // Render hints — empty string in number inputs means "not set" (i.e. omit
   // from the payload so the server keeps the existing value / falls back to
@@ -472,12 +482,14 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
           )}
 
           {/* Secondary asset section — only when the selected slot uses it
-              (HAIR_FRONT today, future two-layer slots tomorrow). Mirrors the
+              (HAIR_FRONT = back strands, CAPE = front drape). Mirrors the
               primary section's upload/url split. Always optional; omitting
               keeps the row single-layer. */}
           {supportsSecondaryAsset && (
             isEdit || createMode === "upload" ? (
-              <Field label={isEdit ? "Replace back layer (optional)" : "Back layer (PNG, optional)"}>
+              <Field label={isEdit
+                ? `Replace ${secondaryLayerLabel.toLowerCase()} layer (optional)`
+                : `${secondaryLayerLabel} layer (PNG, optional)`}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     ref={secondaryFileInputRef}
@@ -501,13 +513,19 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                 </div>
               </Field>
             ) : (
-              <Field label="Back layer URL (optional)">
+              <Field label={`${secondaryLayerLabel} layer URL (optional)`}>
                 <input
                   type="url"
                   value={secondaryAssetUrl}
                   onChange={(e) => setSecondaryAssetUrl(e.target.value)}
                   maxLength={255}
-                  placeholder="https://…/avatar-items/hair_seraph_back.png"
+                  placeholder={
+                    slot === "CAPE"
+                      ? "https://…/avatar-items/cape_valor_front.png"
+                      : slot === "WEAPON_FRONT"
+                        ? "https://…/avatar-items/weapon_polearm_back.png"
+                        : "https://…/avatar-items/hair_seraph_back.png"
+                  }
                   className="themed-form-input"
                 />
               </Field>
@@ -517,10 +535,10 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
           {(previewSrc || secondaryPreviewSrc) && (
             <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "4px 0" }}>
               {previewSrc && (
-                <PreviewThumb src={previewSrc} label="Front" />
+                <PreviewThumb src={previewSrc} label={slot === "CAPE" ? "Back" : "Front"} />
               )}
               {secondaryPreviewSrc && (
-                <PreviewThumb src={secondaryPreviewSrc} label="Back" />
+                <PreviewThumb src={secondaryPreviewSrc} label={secondaryLayerLabel} />
               )}
             </div>
           )}

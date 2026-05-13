@@ -16,6 +16,11 @@ const SLOT_Z: Record<string, number> = {
   // OVERALL shares TOP's z-band — when equipped, the filter above hides
   // any TOP/BOTTOM behind it, so they can't conflict in the stack.
   OVERALL: 50,
+  // Front drape of a two-layer cape — sits over TOP/OVERALL so the cape
+  // edges visibly fall in front of the body, but stays below GLOVES so the
+  // hand sprites can still grab/hold things over it. Not a real backend
+  // slot; only used as the z-anchor for a CAPE item's secondaryAssetUrl.
+  CAPE_FRONT: 55,
   GLOVES: 60,
   SHOES: 70,
   HAIR_FRONT: 80,
@@ -39,7 +44,17 @@ const SLOT_Z: Record<string, number> = {
 // other clean integer divisors for the crispest pixel-art result.
 const SOURCE_W = 256;
 const SOURCE_H = 384;
-const ASPECT = SOURCE_W / SOURCE_H;
+// The chibi base only occupies SOURCE_W × SOURCE_H, but item canvases can
+// be wider (e.g. weapons at 384×384). Without horizontal room the extra
+// pixels overflow into the next layout section (or get visually clipped on
+// surfaces with overflow:hidden). Add OVERHANG_RIGHT_SRC source pixels of
+// right-side room so items up to (SOURCE_W + OVERHANG_RIGHT_SRC) wide fit
+// inside their own preview box. Asymmetric so the container stays compact
+// — the layout-level centring is recovered via a translateX below.
+// 128 covers today's 384-wide weapons; update if items get even wider.
+const OVERHANG_RIGHT_SRC = 128;
+const CONTAINER_SOURCE_W = SOURCE_W + OVERHANG_RIGHT_SRC;
+const ASPECT = CONTAINER_SOURCE_W / SOURCE_H;
 
 // Slot-wide horizontal nudge applied to items that don't carry their own
 // offsetX hint. In source-canvas pixels (256-wide); positive shifts the
@@ -69,6 +84,30 @@ export default function ChibiAvatar({
   className,
 }: Props) {
   const width = Math.round(height * ASPECT);
+  // The base sprite renders at its native aspect inside the wider
+  // container so the chibi doesn't get stretched. Items anchor at the
+  // same (0, 0) as the base, so existing offsetX/Y tuning stays valid.
+  // visualShift translates the whole container left by half the right
+  // overhang so the chibi (which sits at the left edge of the asymmetric
+  // container) ends up visually centred in its parent flex slot — without
+  // bloating the chibi section's layout width or pushing the inventory
+  // grid further away.
+  const baseScale = height / SOURCE_H;
+  const baseW = Math.round(SOURCE_W * baseScale);
+  const baseLeft = 0;
+  // The container sits at its own left edge in the parent flex slot, but
+  // half of it is dead right-side overhang. Apply a positive `left:` on
+  // the position:relative container to nudge the whole thing right by
+  // half the overhang (plus a small calibration nudge that makes weapon
+  // sprites with negative offsetX visually clear of the section edge) —
+  // that re-centres the chibi in the parent without expanding the
+  // section's layout box. Both terms are expressed in SOURCE pixels and
+  // multiplied by baseScale so the visual shift tracks the chibi size:
+  // when the avatar preview shrinks, the alignment scales with it.
+  // Using `left:` instead of `transform:translateX` so it doesn't clobber
+  // the avatar-idle bobbing animation that already lives on `transform`.
+  const CHIBI_NUDGE_X_SRC = 40;
+  const visualShiftX = Math.round((OVERHANG_RIGHT_SRC / 2 + CHIBI_NUDGE_X_SRC) * baseScale);
 
   // Filter to items that actually have a PNG asset, then sort by slot z-order.
   // Items without a previewAssetUrl are skipped — the base character still shows.
@@ -97,12 +136,17 @@ export default function ChibiAvatar({
 
   // Each equipped row expands to one or two render layers:
   //   - the primary previewAssetUrl, drawn at its slot's own z-order
-  //   - optionally, secondaryAssetUrl, drawn at HAIR_BACK z-order
+  //   - optionally, secondaryAssetUrl, drawn at a slot-dependent z-order:
+  //       HAIR_FRONT   primary → HAIR_BACK   (back-of-head strands)
+  //       CAPE         primary → CAPE_FRONT  (drape in front of body)
+  //       WEAPON_FRONT primary → WEAPON_BACK (shaft passing behind chibi)
   //
-  // Two-layer rows (Option B for hair front/back) let a single inventory
-  // square own both the bangs and the strands behind the head. The
-  // secondary layer is suppressed by hideHairBack just like a standalone
-  // HAIR_BACK item would be.
+  // Two-layer rows let a single inventory square own both sides of an
+  // asset that wraps the chibi (hair around the head, cape around the
+  // body, polearm shaft crossing the torso). For hair, the secondary is
+  // suppressed by hideHairBack so a full-coverage hat hides the back
+  // strands as well as the front. Cape and weapon secondaries always
+  // render — hats don't interact with them.
   type Layer = {
     key: string;
     inv: UserInventoryDto;
@@ -134,13 +178,33 @@ export default function ChibiAvatar({
       });
     }
 
-    if (item.secondaryAssetUrl && !hideHairBack) {
-      layered.push({
-        key: `${inv.inventoryId}:secondary`,
-        inv,
-        src: item.secondaryAssetUrl,
-        z: SLOT_Z.HAIR_BACK,
-      });
+    if (item.secondaryAssetUrl) {
+      // Slot-dependent z + suppression rules.
+      //   CAPE         → secondary drapes in front of body (CAPE_FRONT z)
+      //   WEAPON_FRONT → secondary passes behind body (WEAPON_BACK z)
+      //   anything else (HAIR_FRONT today) → secondary is back-of-head
+      // Only hair secondaries respect hideHairBack — a helmet covers the
+      // back strands. Cape/weapon secondaries never interact with hats.
+      let secondaryZ: number;
+      let respectHairCover: boolean;
+      if (item.slot === "CAPE") {
+        secondaryZ = SLOT_Z.CAPE_FRONT;
+        respectHairCover = false;
+      } else if (item.slot === "WEAPON_FRONT") {
+        secondaryZ = SLOT_Z.WEAPON_BACK;
+        respectHairCover = false;
+      } else {
+        secondaryZ = SLOT_Z.HAIR_BACK;
+        respectHairCover = true;
+      }
+      if (!(respectHairCover && hideHairBack)) {
+        layered.push({
+          key: `${inv.inventoryId}:secondary`,
+          inv,
+          src: item.secondaryAssetUrl,
+          z: secondaryZ,
+        });
+      }
     }
   }
   layered.sort((a, b) => a.z - b.z);
@@ -152,18 +216,23 @@ export default function ChibiAvatar({
         position: "relative",
         width,
         height,
+        left: visualShiftX,
         animation: pose === "idle" ? "avatar-idle 2.6s ease-in-out infinite" : undefined,
       }}
     >
       <img
         src={basePath}
         alt=""
-        width={width}
+        width={baseW}
         height={height}
         draggable={false}
         style={{
           position: "absolute",
-          inset: 0,
+          // Anchor at baseLeft so the chibi sits centred inside the
+          // overhang-padded container. `inset:0` would stretch the 256-wide
+          // base to fill the wider container.
+          left: baseLeft,
+          top: 0,
           // Base body sits between the back-of-character layers (HAIR_BACK=20,
           // CAPE=10, WEAPON_BACK=0) and the clothing layers (BOTTOM=40, TOP=50).
           // Without this, the base is at z=auto and back-hair / capes render
@@ -195,7 +264,10 @@ export default function ChibiAvatar({
         const scale = height / SOURCE_H;
         const itemW = Math.round(itemSrcW * scale);
         const itemH = Math.round(itemSrcH * scale);
-        const left = 0;
+        // Items shift right by the same baseLeft as the base so their
+        // canvas (0, 0) keeps aligning with the base canvas (0, 0).
+        // OffsetX/Y are still added on top.
+        const left = baseLeft;
         const top = 0;
         // Per-item offsetX wins over slot defaults. Slot defaults exist
         // for systematic alignment quirks (e.g. all hair drawn 3 px left

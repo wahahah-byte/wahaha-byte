@@ -101,6 +101,7 @@ const SLOT_TRANSFORM: Record<string, string> = {
 // auto-centre math wins; this dict survives for legacy assets and the
 // static-demo mock catalogue.
 const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
+  // Legacy filename, kept in case any row still points at the old URL.
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(3%, -10%)",
   // Seraph hair is drawn ~11 source pixels left of canvas center (the same
   // shift ChibiAvatar applies via offsetX: 11 to align it with the chibi's
@@ -108,7 +109,30 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
   // hair sits slightly left of card center. 2.8% on the element width, with
   // scale(1.7) magnification, lands canvas-x 117 on the cell's centre line.
   "hair_seraph_wave_brown.png": "scale(1.7) translate(2.8%, 20%)",
+  // Two-layer magic staff — combined content spans source y 184→328 in a
+  // 384² canvas, so its vertical midpoint sits below source centre and
+  // the slot-default scale(1.4) renders it hugging the card bottom.
+  // -16% Y lifts the combined sprite up to card centre.
+  "weapon_front_magic_staff.png": "scale(1.4) translate(0%, -16%)",
 };
+
+// Class-level card transforms — applied when an item's name/category
+// includes one of these tokens (case-insensitive). Lets new uploads of
+// the same weapon family pick up the card sizing without a per-filename
+// entry. Per-filename CARD_TRANSFORM_OVERRIDE still wins when present.
+const CARD_CLASS_TRANSFORM: Record<string, string> = {
+  // Polearm: 2× zoom centred horizontally, lifted 12% to bring the
+  // diagonal sprite's combined-bbox centre onto the card centre.
+  polearm: "scale(2.0) translate(0%, -12%)",
+};
+
+function cardClassTransform(item: AvatarItemDto): string | null {
+  const haystack = `${item.name ?? ""} ${item.category ?? ""}`.toLowerCase();
+  for (const token of Object.keys(CARD_CLASS_TRANSFORM)) {
+    if (haystack.includes(token)) return CARD_CLASS_TRANSFORM[token];
+  }
+  return null;
+}
 
 // Compute a CSS transform that translates + scales the source image so its
 // content bbox lands centred inside the card, when the server gave us
@@ -165,18 +189,36 @@ function isHairSlot(slot: string | undefined | null): boolean {
   return slot === "HAIR" || slot === "HAIR_FRONT" || slot === "HAIR_BACK";
 }
 
+// Weapons share a single "held by the chibi" equipment group across three
+// underlying slots: the legacy HAND enum, WEAPON_FRONT (sword in hand), and
+// WEAPON_BACK (sheath / quiver on the back). Equipping any of them should
+// unequip whatever was held before, even across slots — the chibi can only
+// brandish one weapon at a time.
+function isWeaponSlot(slot: string | undefined | null): boolean {
+  return slot === "HAND" || slot === "WEAPON_FRONT" || slot === "WEAPON_BACK";
+}
+
 // Resident-Evil-style inventory: items take up a different number of grid
 // cells depending on what they are. The backend now stores gridCols/gridRows
 // per item — when set we honour those directly. Older rows without a stored
 // size fall back to a slot-based heuristic so the page still renders.
 function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
+  const cat = (item.category ?? "").toLowerCase();
+  // Staffs are always 2×1 in the grid — long sprite needs the horizontal
+  // footprint. Takes precedence over the persisted gridCols/gridRows so
+  // legacy rows stored as 1×1 (e.g. item 10 Magic Staff) get corrected on
+  // load without a DB migration.
+  if (cat.includes("staff")) return { cols: 2, rows: 1 };
+  // Hats (both the granular HAT slot and the legacy HEAD slot they get
+  // bucketed into) are always 1×1 — overrides any persisted gridCols/Rows
+  // so a hat row stored as 2×1 doesn't take an oversized footprint.
+  if (item.slot === "HAT" || item.slot === "HEAD") return { cols: 1, rows: 1 };
   if (item.gridCols && item.gridRows) {
     return { cols: item.gridCols, rows: item.gridRows };
   }
-  const cat = (item.category ?? "").toLowerCase();
   switch (item.slot) {
     // Legacy slots ------------------------------------------------------
-    case "HEAD":
+    // (HEAD handled above — always 1×1 regardless of stored grid size.)
     case "HAIR":
     case "FACE":
     case "FEET":
@@ -187,7 +229,7 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
     case "BACK":
       return { cols: 2, rows: 1 };
     // Granular slots ----------------------------------------------------
-    case "HAT":
+    // (HAT handled above — always 1×1 regardless of stored grid size.)
     case "HAIR_FRONT":
     case "HAIR_BACK":
     case "EYE":
@@ -203,6 +245,10 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
       // Dress / robe — tall in inventory like RE4 body armor.
       return { cols: 1, rows: 2 };
     case "CAPE":
+      // Cloak-category capes hang straight down rather than draping wide,
+      // so they fit a 1×1 cell like an outfit. Other CAPE items (wings,
+      // pennants) keep the 2-wide footprint.
+      return cat === "cloak" ? { cols: 1, rows: 1 } : { cols: 2, rows: 1 };
     case "WEAPON_BACK":
     case "WEAPON_FRONT":
       return { cols: 2, rows: 1 };
@@ -212,43 +258,94 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
 }
 
 // Per-asset render hints (offsetX/Y, renderScale, coversHairFront/Back,
-// sourceWidth/Height) used to live exclusively in this map keyed by blob
-// filename — the backend ignored these fields. They're now persisted server-
-// side on AvatarItem and arrive on the DTO directly, so DB values take
-// precedence. This dict survives only as a fallback for items that pre-date
-// the DB columns (e.g. the buildMockInventory() rows in static demo mode)
-// and for any future asset that needs a hint before someone enters one in
-// the admin modal.
+// sourceWidth/Height) keyed by blob filename. Mixed precedence: the
+// positional offsetX/offsetY override server values (they're the most
+// fiddly to hand-tune iteratively and the server only stores whatever the
+// admin last typed in); the other keys still fall back to server values
+// when set (they're more structural — source dimensions, cover flags,
+// render scale — and an admin's explicit DB value should win over a stale
+// code hint).
 const RENDER_HINTS: Record<string, Partial<AvatarItemDto>> = {
   "hat_alien_neo.png": { coversHairFront: true, coversHairBack: true, renderScale: 1.2, offsetY: 10 },
   "hair_seraph_wave_brown.png": { offsetX: 11 },
+  // Legacy filename — kept for any rows that still point at the old URL
+  // before the backend's slug-naming change.
   "weapon_polearm_alien_cyber.png": {
     sourceWidth: 384, sourceHeight: 384, offsetX: 6, offsetY: -8, renderScale: 1.25,
   },
+  // Per-asset polearm override slot — left empty so the broader
+  // POLEARM defaults in CLASS_HINTS apply. Re-add an entry here if a
+  // specific polearm needs to deviate from the class default.
+  // Staff sprite — the front layer's grip end sits at source (65, 320)
+  // but the new chibi base puts its right hand around (90, 228). offsetX
+  // here wins over whatever the server has on the row.
+  "weapon_front_magic_staff.png": { offsetX: -67, offsetY: 1 },
 };
 
+// Class-level render hints applied when an item's name or category
+// contains one of these tokens (case-insensitive). Used to set defaults
+// shared by every item of the same weapon family — so re-uploading a new
+// polearm doesn't require hand-tuning offsets again. Filename-specific
+// entries in RENDER_HINTS still win when present (per-asset overrides).
+const CLASS_HINTS: Record<string, Partial<AvatarItemDto>> = {
+  // Polearms: 384×384 canvas with the grip drawn in the lower-left of
+  // the source. Calibrated against the current chibi base's hand at
+  // (90, 228). renderScale 1.25 keeps the haft visually substantial.
+  polearm: {
+    sourceWidth: 384, sourceHeight: 384, offsetX: -73, offsetY: -8, renderScale: 1.25,
+  },
+};
+
+// True when any CLASS_HINTS key token appears in the item's name OR
+// category. Used by applyHints to pick the matching class default.
+function classHintMatch(item: AvatarItemDto): Partial<AvatarItemDto> | null {
+  const haystack = `${item.name ?? ""} ${item.category ?? ""}`.toLowerCase();
+  for (const token of Object.keys(CLASS_HINTS)) {
+    if (haystack.includes(token)) return CLASS_HINTS[token];
+  }
+  return null;
+}
+
 // Layer order (lowest precedence first → highest precedence last):
-//   1. Hardcoded fallback in this file (RENDER_HINTS, keyed by filename)
-//   2. Server-persisted values on the DTO
-// Server values win when set. We merge so partial server hints still pick up
-// fallback values for any field the DB has null on. `coversHair` (the legacy
-// single flag) is treated as both granular flags true and applied last when
-// truthy, since some pre-migration data still uses it.
+//   STRUCTURAL fields (renderScale, sourceWidth/Height, coversHair*):
+//     1. Hardcoded fallback in RENDER_HINTS
+//     2. Server-persisted values on the DTO (wins)
+//   POSITIONAL fields (offsetX, offsetY):
+//     1. Server-persisted values on the DTO
+//     2. RENDER_HINTS entry (wins)
+// The positional inversion exists so weapon/hair-hand tuning can be
+// iterated in code without needing to PUT each tweak back to the API.
+// `coversHair` (the legacy single flag) is treated as both granular flags
+// true and applied last when truthy, since some pre-migration data still
+// uses it.
 function applyHints(item: AvatarItemDto): AvatarItemDto {
   const filename = item.previewAssetUrl?.split("/").pop() ?? "";
-  const fallback = RENDER_HINTS[filename] ?? {};
+  const fileHints = RENDER_HINTS[filename] ?? {};
+  const classHints = classHintMatch(item) ?? {};
   const merged: AvatarItemDto = { ...item };
+  // Structural fields: server > class hints > file hints. Server values
+  // win when set; otherwise prefer the class-family default over the
+  // per-filename one (class defaults encode artist convention, filename
+  // entries are usually one-off pre-DB stopgaps).
   for (const key of [
     "coversHairFront", "coversHairBack",
-    "offsetX", "offsetY", "renderScale",
-    "sourceWidth", "sourceHeight",
+    "renderScale", "sourceWidth", "sourceHeight",
   ] as const) {
-    // Server value wins when non-null. Fall back to the filename dict
-    // entry, else leave undefined (renderer uses slot defaults).
-    if (merged[key] == null && fallback[key] != null) {
+    if (merged[key] == null && classHints[key] != null) {
       // @ts-expect-error narrow assignment — key is a known optional field
-      merged[key] = fallback[key];
+      merged[key] = classHints[key];
     }
+    if (merged[key] == null && fileHints[key] != null) {
+      // @ts-expect-error narrow assignment — key is a known optional field
+      merged[key] = fileHints[key];
+    }
+  }
+  // Positional fields: file > class > server. Per-asset filename entries
+  // override the family default (so a misaligned individual polearm can
+  // be hand-corrected), and both override whatever the server has.
+  for (const key of ["offsetX", "offsetY"] as const) {
+    if (classHints[key] != null) merged[key] = classHints[key];
+    if (fileHints[key] != null) merged[key] = fileHints[key];
   }
   // Legacy single-flag coversHair → expand to both granular flags when
   // either side is unset. Server-side rows shouldn't be using this anymore
@@ -834,16 +931,36 @@ export default function AvatarPage() {
         setInventory((prev) => prev.map((row) =>
           row.inventoryId === inv.inventoryId ? { ...row, isEquipped: false } : row));
       } else {
+        const slot = inv.avatarItem?.slot;
+        // Cross-slot weapon group: equipping any HAND / WEAPON_FRONT /
+        // WEAPON_BACK item should unequip every other weapon, not just
+        // same-slot duplicates (which the backend's equip call already
+        // handles). Identify the rows to unequip first so we can fire the
+        // backend calls before the local optimistic update.
+        const crossWeaponRows = isWeaponSlot(slot)
+          ? inventory.filter((row) =>
+              row.isEquipped
+              && row.inventoryId !== inv.inventoryId
+              && isWeaponSlot(row.avatarItem?.slot)
+              && row.avatarItem?.slot !== slot)
+          : [];
         if (hasToken) {
+          // Unequip the other weapons sequentially so a 5xx on one doesn't
+          // leave the rest in a half-applied state.
+          for (const row of crossWeaponRows) {
+            const { error } = await avatarApi.unequip(row.inventoryId);
+            if (error) { setError(error); return; }
+          }
           const { error } = await avatarApi.equip(inv.inventoryId);
           if (error) { setError(error); return; }
         }
-        const slot = inv.avatarItem?.slot;
-        // Mirror the backend's slot uniqueness locally so the UI updates
-        // without a refetch — equipping flips this row on and any other
-        // equipped row in the same slot off.
+        // Mirror locally: flip this row on, and turn off any same-slot
+        // duplicate (backend rule) plus any cross-weapon-group row we
+        // just unequipped via the API.
+        const droppedIds = new Set(crossWeaponRows.map((r) => r.inventoryId));
         setInventory((prev) => prev.map((row) => {
           if (row.inventoryId === inv.inventoryId) return { ...row, isEquipped: true };
+          if (droppedIds.has(row.inventoryId)) return { ...row, isEquipped: false };
           if (row.isEquipped && row.avatarItem?.slot === slot) return { ...row, isEquipped: false };
           return row;
         }));
@@ -894,7 +1011,11 @@ export default function AvatarPage() {
           style={{
             display: "flex",
             flexDirection: isDesktop ? "row" : "column",
-            gap: isDesktop ? 36 : 20,
+            // 60px on desktop gives the chibi's right-side overhang
+            // (which can carry up to 96 displayed pixels of weapon tip
+            // past the layout width of the section) clear visual space
+            // before the inventory grid's bright hairline border begins.
+            gap: isDesktop ? 60 : 20,
             alignItems: isDesktop ? "flex-start" : "stretch",
           }}
         >
@@ -909,7 +1030,7 @@ export default function AvatarPage() {
             alignSelf: isDesktop ? "flex-start" : undefined,
           }}
         >
-          <ChibiAvatar equipped={equipped} height={isDesktop ? 360 : 224} />
+          <ChibiAvatar equipped={equipped} height={isDesktop ? 240 : 160} />
           <p style={{ color: "var(--color-fg-subtle)", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
             {loading ? "Loading…" : equipped.length === 0 ? "Nothing equipped" : `${equipped.length} equipped`}
           </p>
@@ -1181,51 +1302,96 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
       {...listeners}
       {...attributes}
     >
-      {hasRealAsset(item.previewAssetUrl) && !failed ? (
-        <Image
-          src={assetPath(item.previewAssetUrl!)}
-          alt=""
-          width={120}
-          height={120}
-          unoptimized
-          loading="eager"
-          draggable={false}
-          onError={() => onImageError(item.itemId)}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            imageRendering: "pixelated",
-            transform: (() => {
-              const filename = item.previewAssetUrl?.split("/").pop() ?? "";
-              // Resolution order: server-computed bbox (highest precedence
-              // — guarantees auto-centred content for any item uploaded
-              // since this feature shipped), then per-filename CSS
-              // override (legacy hand-tuned values), then per-slot default,
-              // then a generic 1.4× zoom.
-              const base =
-                boundsTransformFor(item, clientBounds)
-                ?? CARD_TRANSFORM_OVERRIDE[filename]
-                ?? SLOT_TRANSFORM[item.slot]
-                ?? "scale(1.4)";
-              // BODY items: rotate only the box footprint, not the sprite —
-              // the sweater pixel stays vertically oriented even when the
-              // grid box flips horizontal.
-              if (!rotated || item.slot === "BODY") return base;
-              // Per-asset rotated override wins so off-center sprites can be
-              // re-calibrated for the flipped orientation. Otherwise keep
-              // just the scale (drops translate, which is in pre-rotation
-              // coords and would push the image off-center).
-              const rotatedOverride = CARD_TRANSFORM_ROTATED_OVERRIDE[filename];
-              if (rotatedOverride) return rotatedOverride;
-              const scale = base.match(/scale\([^)]+\)/)?.[0] ?? "scale(1.4)";
-              return `${scale} rotate(90deg)`;
-            })(),
-            transformOrigin: "center",
-            pointerEvents: "none",
-          }}
-        />
-      ) : (
+      {hasRealAsset(item.previewAssetUrl) && !failed ? (() => {
+        // Resolve the shared transform once — both layers (primary +
+        // optional secondary) are drawn on the same source canvas at the
+        // same anchor, so they share the bbox-derived translate/scale.
+        // Pass the un-rotated card footprint (getItemSize, not the
+        // rotation-aware `size`) so the math centres against the actual
+        // rendered box even when the frontend has overridden the item's
+        // persisted gridCols/gridRows (e.g. staffs forced to 2×1).
+        const filename = item.previewAssetUrl?.split("/").pop() ?? "";
+        const cardSize = getItemSize(item);
+        // For two-layer items, the primary's bbox doesn't represent the
+        // combined visual — auto-centring against it pushes the secondary
+        // off-frame and over-scales the primary. Fall through to the slot
+        // default (or per-asset override) so both layers stay coherent;
+        // hand-tune via CARD_TRANSFORM_OVERRIDE if a specific item needs it.
+        const isTwoLayer = !!item.secondaryAssetUrl && hasRealAsset(item.secondaryAssetUrl);
+        const autoBounds = isTwoLayer
+          ? null
+          : boundsTransformFor(item, clientBounds, { cols: cardSize.cols, rows: cardSize.rows });
+        const baseTransform =
+          autoBounds
+          ?? CARD_TRANSFORM_OVERRIDE[filename]
+          ?? cardClassTransform(item)
+          ?? SLOT_TRANSFORM[item.slot]
+          ?? "scale(1.4)";
+        const layerTransform = (() => {
+          if (!rotated || item.slot === "BODY") return baseTransform;
+          const rotatedOverride = CARD_TRANSFORM_ROTATED_OVERRIDE[filename];
+          if (rotatedOverride) return rotatedOverride;
+          const scale = baseTransform.match(/scale\([^)]+\)/)?.[0] ?? "scale(1.4)";
+          return `${scale} rotate(90deg)`;
+        })();
+        const hasSecondary = item.secondaryAssetUrl && hasRealAsset(item.secondaryAssetUrl);
+        // Secondary's z-order on the card mirrors ChibiAvatar:
+        //   CAPE         primary = back panel    → secondary in FRONT
+        //   HAIR_FRONT   primary = bangs         → secondary BEHIND
+        //   WEAPON_FRONT primary = front weapon  → secondary BEHIND
+        const secondaryInFront = item.slot === "CAPE";
+        const layerStyle = (z: number): React.CSSProperties => ({
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          imageRendering: "pixelated",
+          transform: layerTransform,
+          transformOrigin: "center",
+          pointerEvents: "none",
+          zIndex: z,
+        });
+        return (
+          <>
+            {hasSecondary && !secondaryInFront && (
+              <Image
+                src={assetPath(item.secondaryAssetUrl!)}
+                alt=""
+                width={120}
+                height={120}
+                unoptimized
+                loading="eager"
+                draggable={false}
+                style={layerStyle(0)}
+              />
+            )}
+            <Image
+              src={assetPath(item.previewAssetUrl!)}
+              alt=""
+              width={120}
+              height={120}
+              unoptimized
+              loading="eager"
+              draggable={false}
+              onError={() => onImageError(item.itemId)}
+              style={layerStyle(1)}
+            />
+            {hasSecondary && secondaryInFront && (
+              <Image
+                src={assetPath(item.secondaryAssetUrl!)}
+                alt=""
+                width={120}
+                height={120}
+                unoptimized
+                loading="eager"
+                draggable={false}
+                style={layerStyle(2)}
+              />
+            )}
+          </>
+        );
+      })() : (
         <PaperIcon />
       )}
       {isEquipped && (
