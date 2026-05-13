@@ -286,6 +286,19 @@ export const avatarApi = {
   recomputeBounds: (itemId: number) =>
     authedPost<AvatarItemDto>(`/api/AvatarItems/${itemId}/recompute-bounds`, {}),
 
+  // POST /api/AvatarItems/{id}/grant — Admin/Moderator grants the item to
+  // a target user (or to themselves when targetEmail is omitted/empty).
+  // Skips the regular point cost. autoEquip flips the new inventory row
+  // to equipped (unequipping anything in the same slot first). Returns
+  // the freshly created inventory row so the admin UI can confirm + the
+  // host page can splice it into the user's current inventory if granting
+  // to self.
+  grantItem: (itemId: number, payload: { targetEmail?: string | null; autoEquip?: boolean }) =>
+    authedPost<UserInventoryDto>(`/api/AvatarItems/${itemId}/grant`, {
+      targetEmail: payload.targetEmail ?? null,
+      autoEquip: !!payload.autoEquip,
+    }),
+
   // DELETE /api/AvatarItems/{id} — Admin-only. Hidden in the UI for
   // Moderator-only sessions; the server enforces the same restriction.
   deleteItem: (itemId: number) =>

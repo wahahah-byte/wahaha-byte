@@ -152,6 +152,12 @@ export default function ChibiAvatar({
         style={{
           position: "absolute",
           inset: 0,
+          // Base body sits between the back-of-character layers (HAIR_BACK=20,
+          // CAPE=10, WEAPON_BACK=0) and the clothing layers (BOTTOM=40, TOP=50).
+          // Without this, the base is at z=auto and back-hair / capes render
+          // *over* the face. Has to stay below 40 so clothing still draws on
+          // top of the naked body silhouette.
+          zIndex: 30,
           imageRendering: "pixelated",
           userSelect: "none",
           pointerEvents: "none",

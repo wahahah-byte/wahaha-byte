@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { avatarApi, type AvatarItemDto } from "@/lib/api/avatar";
 import { assetPath } from "@/lib/assetPath";
+import { boundsTransformFor, useClientBounds } from "@/lib/cardTransform";
 import { useToast } from "@/context/ToastContext";
 import AvatarItemFormModal, { type FormMode } from "@/components/AvatarItemFormModal";
 
@@ -25,7 +26,7 @@ interface Props {
 // Visibility is gated by canManageAvatarItems() upstream; this component
 // assumes it should render when mounted.
 export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChange }: Props) {
-  const { setError } = useToast();
+  const { setError, setSuccess } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<AvatarItemDto[]>([]);
@@ -36,6 +37,10 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
   // Active modal mode — null means closed. Driven by "+ New item" (create)
   // and the per-row Edit button (edit). Save callback handles list updates.
   const [formMode, setFormMode] = useState<FormMode | null>(null);
+  // Active grant target — null when the grant modal is closed. Stores the
+  // AvatarItemDto so the modal can show name + thumbnail without an
+  // extra lookup. Driven by the per-row Grant button.
+  const [grantTarget, setGrantTarget] = useState<AvatarItemDto | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -151,6 +156,38 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     setRecenterAllProgress(null);
     onCatalogueChange?.();
   }, [items, setError, onCatalogueChange]);
+
+  // Open the grant modal for a specific item. The modal itself is rendered
+  // at the bottom of this component and reads grantTarget directly; this
+  // helper just sets state.
+  const onGrant = useCallback((item: AvatarItemDto) => {
+    setGrantTarget(item);
+  }, []);
+
+  // Submit handler from the grant modal. Calls the API and on success
+  // notifies the host page so it can refresh the user's inventory (so a
+  // grant-to-self lands in the inventory grid right away).
+  const handleGrantSubmit = useCallback(async (
+    item: AvatarItemDto,
+    targetEmail: string,
+    autoEquip: boolean,
+  ): Promise<string | null> => {
+    const { data, error } = await avatarApi.grantItem(item.itemId, {
+      // Empty string → null so the backend interprets it as "grant to self".
+      targetEmail: targetEmail.trim() || null,
+      autoEquip,
+    });
+    if (error) return error;
+    const who = targetEmail.trim() ? `to ${targetEmail.trim()}` : "to you";
+    setSuccess(`Granted "${item.name}" ${who}${autoEquip ? " (equipped)" : ""}.`);
+    // Always notify — a grant-to-self should re-render the inventory grid
+    // immediately, and even other-user grants can affect catalogue state
+    // the host page cares about (point cost, availability flags).
+    onCatalogueChange?.();
+    setGrantTarget(null);
+    void data;
+    return null;
+  }, [setSuccess, onCatalogueChange]);
 
   // Count of items that would actually do something on "Recenter all" —
   // missing bounds AND have a scannable URL. Drives both the button's
@@ -327,6 +364,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
                   onEdit={onEdit}
                   onToggleAvailability={onToggleAvailability}
                   onRecenter={onRecenter}
+                  onGrant={onGrant}
                   onDelete={onDelete}
                 />
               ))}
@@ -342,6 +380,14 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
           onSaved={onSavedFromModal}
         />
       )}
+
+      {grantTarget && (
+        <GrantItemModal
+          item={grantTarget}
+          onClose={() => setGrantTarget(null)}
+          onSubmit={handleGrantSubmit}
+        />
+      )}
     </section>
   );
 }
@@ -353,26 +399,31 @@ interface RowProps {
   onEdit: (item: AvatarItemDto) => void;
   onToggleAvailability: (item: AvatarItemDto) => void;
   onRecenter: (item: AvatarItemDto) => void;
+  onGrant: (item: AvatarItemDto) => void;
   onDelete: (item: AvatarItemDto) => void;
 }
 
-function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onRecenter, onDelete }: RowProps) {
+function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onRecenter, onGrant, onDelete }: RowProps) {
   const hasAsset = !!item.previewAssetUrl;
-  // The recompute-bounds endpoint requires an absolute http(s) URL — relative
-  // seed paths like "/assets/hats/hat_wizard.png" can't be fetched server-side.
-  // Hide the button on those rows; admins can still edit + re-upload to get
-  // the same effect via the upload code path.
   const canRecenter = !!item.previewAssetUrl && /^https?:\/\//i.test(item.previewAssetUrl);
-  // Glance-able state — green dot when the row has stored bounds, faint dot
-  // when it doesn't (auto-centre falls back to slot defaults).
   const hasBounds =
     item.contentMinX != null && item.contentMinY != null
     && item.contentMaxX != null && item.contentMaxY != null;
+  // Same auto-centring pipeline the inventory cards use, but the thumb is
+  // always a 1×1 square regardless of the item's storage footprint —
+  // override cols/rows so the math doesn't apply letterbox-correction
+  // meant for a 1×2 or 2×1 card.
+  const clientBounds = useClientBounds(
+    item.previewAssetUrl ? assetPath(item.previewAssetUrl) : null,
+  );
+  const thumbTransform = hasAsset
+    ? boundsTransformFor(item, clientBounds, { cols: 1, rows: 1 }) ?? "scale(1.2)"
+    : undefined;
   return (
     <li
       style={{
         display: "grid",
-        gridTemplateColumns: "56px 1fr auto",
+        gridTemplateColumns: "80px 1fr auto",
         gap: 10,
         alignItems: "center",
         padding: "6px 8px",
@@ -384,7 +435,7 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
     >
       <div
         style={{
-          width: 56, height: 56,
+          width: 80, height: 80,
           background: "rgba(0,0,0,0.25)",
           border: "1px solid var(--color-border-hairline)",
           borderRadius: 2,
@@ -398,10 +449,17 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
           <Image
             src={assetPath(item.previewAssetUrl!)}
             alt=""
-            width={112}
-            height={112}
+            width={160}
+            height={160}
             unoptimized
-            style={{ width: "100%", height: "100%", objectFit: "contain", imageRendering: "pixelated" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              imageRendering: "pixelated",
+              transform: thumbTransform,
+              transformOrigin: "center",
+            }}
           />
         ) : (
           <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, letterSpacing: "0.1em" }}>—</span>
@@ -463,6 +521,15 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
         >
           Edit
         </button>
+        <button
+          type="button"
+          onClick={() => onGrant(item)}
+          disabled={busy}
+          title="Grant this item to a user (defaults to you)"
+          style={iconBtnStyle}
+        >
+          Grant
+        </button>
         {canRecenter && (
           <button
             type="button"
@@ -487,6 +554,151 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
         )}
       </div>
     </li>
+  );
+}
+
+// Tiny inline modal for the Grant action. Kept in this file rather than a
+// separate component because it's small and only used here. Returns the
+// error string from the submit promise (or null on success); the caller
+// closes the modal on success via the same submit handler.
+interface GrantModalProps {
+  item: AvatarItemDto;
+  onClose: () => void;
+  onSubmit: (item: AvatarItemDto, targetEmail: string, autoEquip: boolean) => Promise<string | null>;
+}
+
+function GrantItemModal({ item, onClose, onSubmit }: GrantModalProps) {
+  const [targetEmail, setTargetEmail] = useState("");
+  const [autoEquip, setAutoEquip] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !submitting) onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
+
+  async function handleSubmit() {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const err = await onSubmit(item, targetEmail, autoEquip);
+    setSubmitting(false);
+    if (err) setError(err);
+    // Success path: parent closes the modal via setGrantTarget(null) in
+    // its onSubmit handler — no work needed here.
+  }
+
+  return (
+    <div
+      data-edge-drawer-block
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: "var(--color-modal-overlay)" }}
+      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
+    >
+      <div
+        className="w-full max-w-sm relative"
+        style={{
+          background: "var(--color-panel)",
+          border: "1px solid var(--color-border)",
+          borderRadius: 6,
+          boxShadow: "var(--shadow-popover)",
+          padding: "20px 20px 16px",
+        }}
+      >
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <h2 style={{
+            color: "var(--color-fg)",
+            fontSize: 11,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            fontWeight: 700,
+          }}>
+            Grant Item
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={submitting}
+            style={{
+              fontSize: 16, lineHeight: 1, color: "var(--color-fg-subtle)",
+              background: "transparent", border: "none",
+              cursor: submitting ? "wait" : "pointer", padding: 4,
+            }}
+          >×</button>
+        </header>
+
+        <p style={{
+          color: "var(--color-fg-subtle)", fontSize: 11, lineHeight: 1.5, margin: "0 0 12px",
+        }}>
+          Granting <strong style={{ color: "var(--color-fg)" }}>{item.name}</strong>
+          <span style={{ marginLeft: 4, fontSize: 10, color: "var(--color-fg-subtle)" }}>#{item.itemId}</span>
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{
+              color: "var(--color-fg-subtle)", fontSize: 9,
+              letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600,
+            }}>
+              Target email (blank = grant to yourself)
+            </span>
+            <input
+              type="email"
+              value={targetEmail}
+              onChange={(e) => setTargetEmail(e.target.value)}
+              maxLength={100}
+              placeholder="user@example.com"
+              autoFocus
+              style={{
+                width: "100%", padding: "6px 8px",
+                background: "var(--color-input)",
+                border: "1px solid var(--color-border-hairline)",
+                borderRadius: 2, color: "var(--color-fg)",
+                fontSize: 12, outline: "none",
+              }}
+            />
+          </label>
+
+          <label style={{
+            display: "flex", alignItems: "center", gap: 6,
+            color: "var(--color-fg-muted)", fontSize: 10,
+            letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 500,
+          }}>
+            <input type="checkbox" checked={autoEquip} onChange={(e) => setAutoEquip(e.target.checked)} />
+            Auto-equip after granting
+          </label>
+
+          {error && (
+            <p role="alert" style={{
+              color: "var(--color-danger)", fontSize: 11, lineHeight: 1.4,
+              background: "var(--color-danger-bg)",
+              border: "1px solid var(--color-danger-border)",
+              padding: "6px 8px", borderRadius: 2,
+            }}>{error}</p>
+          )}
+
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
+            <button type="button" onClick={onClose} disabled={submitting} style={{
+              ...iconBtnStyle, padding: "6px 12px", fontSize: 10,
+            }}>Cancel</button>
+            <button type="button" onClick={handleSubmit} disabled={submitting} style={{
+              padding: "6px 14px",
+              background: "var(--color-active-highlight-bg)",
+              border: "1px solid var(--color-active-highlight-border)",
+              color: "var(--color-active-highlight)",
+              borderRadius: 2, fontSize: 10,
+              letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700,
+              cursor: submitting ? "wait" : "pointer",
+            }}>{submitting ? "Granting…" : "Grant"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

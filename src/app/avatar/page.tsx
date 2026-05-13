@@ -7,7 +7,7 @@ import ChibiAvatar from "@/components/ChibiAvatar";
 import DemoModeBanner from "@/components/DemoModeBanner";
 import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
-import { computeImageBounds, type ImageBounds } from "@/lib/imageBounds";
+import { boundsTransformFor, useClientBounds } from "@/lib/cardTransform";
 import { avatarApi, type AvatarItemDto, type UserInventoryDto } from "@/lib/api/avatar";
 import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
@@ -134,57 +134,11 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
 //     when aspects match, larger along the letterboxed axis otherwise.
 //     Picking min(effSrcW/bboxW, effSrcH/bboxH) gives the scale that
 //     makes the bbox fit; multiplying by fillFactor leaves padding.
-// Shape of the bounds the renderer accepts — either from the DTO's
-// server-computed fields or from the in-browser client scan. Kept loose
-// (only the four bbox coords) so both sources slot in identically.
-interface BoundsInput {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  sourceWidth?: number;
-  sourceHeight?: number;
-}
-
-function boundsTransformFor(item: AvatarItemDto, override?: BoundsInput | null): string | null {
-  // Prefer the explicit override (client-side scan) over the DTO fields —
-  // the override is computed on the actually-rendered PNG, so it survives
-  // cases where the row's server bounds are stale or missing.
-  const contentMinX = override?.minX ?? item.contentMinX;
-  const contentMinY = override?.minY ?? item.contentMinY;
-  const contentMaxX = override?.maxX ?? item.contentMaxX;
-  const contentMaxY = override?.maxY ?? item.contentMaxY;
-  if (contentMinX == null || contentMinY == null || contentMaxX == null || contentMaxY == null) return null;
-  const sourceW = override?.sourceWidth ?? item.sourceWidth ?? 256;
-  const sourceH = override?.sourceHeight ?? item.sourceHeight ?? 384;
-  const cols = item.gridCols ?? 1;
-  const rows = item.gridRows ?? 1;
-  const bboxW = Math.max(1, contentMaxX - contentMinX);
-  const bboxH = Math.max(1, contentMaxY - contentMinY);
-  const bboxCx = (contentMinX + contentMaxX) / 2;
-  const bboxCy = (contentMinY + contentMaxY) / 2;
-
-  // Aspect correction factors. See top-comment for derivation.
-  const dispFracX = Math.min(1, (sourceW * rows) / (sourceH * cols));
-  const dispFracY = Math.min(1, (sourceH * cols) / (sourceW * rows));
-
-  const fx = (bboxCx - sourceW / 2) / sourceW;
-  const fy = (bboxCy - sourceH / 2) / sourceH;
-  const tx = -fx * 100 * dispFracX;
-  const ty = -fy * 100 * dispFracY;
-
-  // Effective source extent along each axis after letterboxing.
-  const effSrcW = Math.max(sourceW, (sourceH * cols) / rows);
-  const effSrcH = Math.max((sourceW * rows) / cols, sourceH);
-  // 0.75 leaves a comfortable ~12% margin per side around the bbox.
-  // Earlier 0.9 was too tight visually — items felt cramped against the
-  // card edges, especially for tall sprites that already extend close to
-  // the limiting axis.
-  const fillFactor = 0.75;
-  const scale = fillFactor * Math.min(effSrcW / bboxW, effSrcH / bboxH);
-
-  return `scale(${scale.toFixed(3)}) translate(${tx.toFixed(2)}%, ${ty.toFixed(2)}%)`;
-}
+// The auto-centring math (boundsTransformFor) and the in-browser bounds
+// hook (useClientBounds) live in @/lib/cardTransform — see that module
+// for the geometric derivation. Both are imported above; this comment is
+// just a signpost for the next reader who lands here looking for the
+// transform code.
 
 // Per-asset overrides for the *rotated* card transform. Translate happens
 // before rotate in CSS transforms, so when the polearm card is flipped 90°
@@ -756,6 +710,17 @@ export default function AvatarPage() {
       if (e.repeat) return;
       e.preventDefault();
       const newRotated = !rotations.has(activeDragId);
+      // Compute the rotated footprint and clamp positionX/Y so the box
+      // can't extend past the grid bounds. Without this, rotating e.g. a
+      // 1×2 item at the rightmost column into a 2×1 footprint leaves the
+      // card hanging off the right edge until the user drops it
+      // somewhere else. Clamping here keeps the box inside the grid as
+      // soon as the rotation key is hit.
+      const newSize = sizeFor(dragging.avatarItem!, newRotated);
+      const curX = dragging.positionX ?? 0;
+      const curY = dragging.positionY ?? 0;
+      const clampedX = Math.max(0, Math.min(curX, gridCols - newSize.cols));
+      const clampedY = Math.max(0, Math.min(curY, gridRows - newSize.rows));
       setRotations((prev) => {
         const n = new Set(prev);
         if (newRotated) n.add(activeDragId);
@@ -763,22 +728,20 @@ export default function AvatarPage() {
         return n;
       });
       setInventory((prev) => prev.map((r) =>
-        r.inventoryId === activeDragId ? { ...r, isRotated: newRotated } : r));
+        r.inventoryId === activeDragId
+          ? { ...r, isRotated: newRotated, positionX: clampedX, positionY: clampedY }
+          : r));
       // Mobile rotation is session-only; the backend column tracks the
       // desktop layout exclusively.
       if (!hasToken || !isDesktop) return;
-      // Fire-and-forget — keeps the rotation pinned even if the user
-      // releases the mouse outside the grid (drag-cancel).
-      avatarApi.setPosition(
-        activeDragId,
-        dragging.positionX ?? null,
-        dragging.positionY ?? null,
-        newRotated,
-      );
+      // Fire-and-forget — keeps the rotation pinned (and the clamped
+      // position persisted) even if the user releases the mouse outside
+      // the grid (drag-cancel).
+      avatarApi.setPosition(activeDragId, clampedX, clampedY, newRotated);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [activeDragId, inventory, rotations, hasToken, isDesktop]);
+  }, [activeDragId, inventory, rotations, hasToken, isDesktop, gridCols, gridRows]);
 
   async function onCardClick(inv: UserInventoryDto) {
     if (busyIds.has(inv.inventoryId)) return;
@@ -1058,28 +1021,6 @@ function DropCell({ x, y }: { x: number; y: number }) {
       }}
     />
   );
-}
-
-// Subscribes a card to the in-browser bbox cache for its PreviewAssetUrl.
-// Returns null while loading (or when the scan can't run / fails — CORS,
-// unreachable, fully transparent, etc.). The card uses whatever it gets as
-// an override on top of any server-stored bounds; null means fall through
-// to the next precedence step (server bounds → slot default).
-function useClientBounds(url: string | null | undefined): ImageBounds | null {
-  const [bounds, setBounds] = useState<ImageBounds | null>(null);
-  useEffect(() => {
-    if (!url) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBounds(null);
-      return;
-    }
-    let cancelled = false;
-    computeImageBounds(url).then((b) => {
-      if (!cancelled) setBounds(b);
-    });
-    return () => { cancelled = true; };
-  }, [url]);
-  return bounds;
 }
 
 interface DraggableItemProps {
