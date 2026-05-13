@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { avatarApi, type UserInventoryDto } from "@/lib/api/avatar";
+import { applyHints } from "@/lib/avatarHints";
+
+// Run each row's avatarItem through applyHints so the modal's chibi
+// (which renders directly from this hook's output) picks up RENDER_HINTS
+// and CLASS_HINTS the same way the /avatar page does. Without this,
+// per-filename / per-class offset overrides only worked on the page that
+// did the hint resolution itself, leaving the modal's preview misaligned.
+function withHints(rows: UserInventoryDto[]): UserInventoryDto[] {
+  return rows.map((r) => r.avatarItem
+    ? { ...r, avatarItem: applyHints(r.avatarItem) }
+    : r);
+}
 
 // Session-scoped cache so multiple TaskDetailModal opens during the same
 // page life don't each pay a network round-trip for the user's equipped
@@ -22,7 +34,7 @@ export function clearEquippedAvatarCache(): void {
 // chibi while it loads. Cheap to call repeatedly; just overwrites the
 // cache reference.
 export function primeEquippedAvatarCache(equipped: UserInventoryDto[]): void {
-  cache = equipped;
+  cache = withHints(equipped);
 }
 
 // Returns the user's currently-equipped avatar items, or null when the
@@ -44,8 +56,9 @@ export function useEquippedAvatar(): UserInventoryDto[] | null {
     let cancelled = false;
     avatarApi.getEquipped().then(({ data }) => {
       if (cancelled || !data) return;
-      cache = data;
-      setEquipped(data);
+      const resolved = withHints(data);
+      cache = resolved;
+      setEquipped(resolved);
     });
     return () => { cancelled = true; };
   }, []);

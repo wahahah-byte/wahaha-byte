@@ -8,6 +8,7 @@ import DemoModeBanner from "@/components/DemoModeBanner";
 import { buildMockInventory } from "@/lib/mockAvatar";
 import { assetPath } from "@/lib/assetPath";
 import { boundsTransformFor, useClientBounds } from "@/lib/cardTransform";
+import { applyHints } from "@/lib/avatarHints";
 import { clearEquippedAvatarCache, primeEquippedAvatarCache } from "@/hooks/useEquippedAvatar";
 import {
   avatarApi,
@@ -181,6 +182,30 @@ const CARD_TRANSFORM_ROTATED_OVERRIDE: Record<string, string> = {
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(10%, 3%) rotate(90deg)",
 };
 
+// Class-level rotated card transforms. Same matching rule as
+// CARD_CLASS_TRANSFORM (name/category token match). Consulted when the
+// per-filename rotated override is missing and the card is in a rotated
+// orientation. Lets a whole weapon family share rotated centring without
+// per-asset tuning. Per-filename CARD_TRANSFORM_ROTATED_OVERRIDE still wins.
+const CARD_CLASS_ROTATED_TRANSFORM: Record<string, string> = {
+  // Polearm rotated to 1×2 (vertical). Combined-bbox centre at source
+  // (172, 241). After CSS rotate(90deg) clockwise (which sends (x,y) to
+  // (-y,x) in screen coords), the bbox centre that was left+below source
+  // centre lands at top+left of card centre; scale(2.0) magnifies that
+  // offset to roughly (-16px, -7px) on a 64×128 card. Pull it back to
+  // centre with translate(+25%, +5%) — positive both, applied last (so
+  // operates in post-rotate screen space).
+  polearm: "translate(25%, 5%) scale(2.0) rotate(90deg)",
+};
+
+function cardClassRotatedTransform(item: AvatarItemDto): string | null {
+  const haystack = `${item.name ?? ""} ${item.category ?? ""}`.toLowerCase();
+  for (const token of Object.keys(CARD_CLASS_ROTATED_TRANSFORM)) {
+    if (haystack.includes(token)) return CARD_CLASS_ROTATED_TRANSFORM[token];
+  }
+  return null;
+}
+
 // True for any slot that belongs in the hair tab. The backend currently
 // only exposes the bare "HAIR" enum, but mock items can use the planned
 // granular variants ("HAIR_FRONT", "HAIR_BACK") — without recognising
@@ -257,105 +282,11 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   }
 }
 
-// Per-asset render hints (offsetX/Y, renderScale, coversHairFront/Back,
-// sourceWidth/Height) keyed by blob filename. Mixed precedence: the
-// positional offsetX/offsetY override server values (they're the most
-// fiddly to hand-tune iteratively and the server only stores whatever the
-// admin last typed in); the other keys still fall back to server values
-// when set (they're more structural — source dimensions, cover flags,
-// render scale — and an admin's explicit DB value should win over a stale
-// code hint).
-const RENDER_HINTS: Record<string, Partial<AvatarItemDto>> = {
-  "hat_alien_neo.png": { coversHairFront: true, coversHairBack: true, renderScale: 1.2, offsetY: 10 },
-  "hair_seraph_wave_brown.png": { offsetX: 11 },
-  // Legacy filename — kept for any rows that still point at the old URL
-  // before the backend's slug-naming change.
-  "weapon_polearm_alien_cyber.png": {
-    sourceWidth: 384, sourceHeight: 384, offsetX: 6, offsetY: -8, renderScale: 1.25,
-  },
-  // Per-asset polearm override slot — left empty so the broader
-  // POLEARM defaults in CLASS_HINTS apply. Re-add an entry here if a
-  // specific polearm needs to deviate from the class default.
-  // Staff sprite — the front layer's grip end sits at source (65, 320)
-  // but the new chibi base puts its right hand around (90, 228). offsetX
-  // here wins over whatever the server has on the row.
-  "weapon_front_magic_staff.png": { offsetX: -67, offsetY: 1 },
-};
-
-// Class-level render hints applied when an item's name or category
-// contains one of these tokens (case-insensitive). Used to set defaults
-// shared by every item of the same weapon family — so re-uploading a new
-// polearm doesn't require hand-tuning offsets again. Filename-specific
-// entries in RENDER_HINTS still win when present (per-asset overrides).
-const CLASS_HINTS: Record<string, Partial<AvatarItemDto>> = {
-  // Polearms: 384×384 canvas with the grip drawn in the lower-left of
-  // the source. Calibrated against the current chibi base's hand at
-  // (90, 228). renderScale 1.25 keeps the haft visually substantial.
-  polearm: {
-    sourceWidth: 384, sourceHeight: 384, offsetX: -73, offsetY: -8, renderScale: 1.25,
-  },
-};
-
-// True when any CLASS_HINTS key token appears in the item's name OR
-// category. Used by applyHints to pick the matching class default.
-function classHintMatch(item: AvatarItemDto): Partial<AvatarItemDto> | null {
-  const haystack = `${item.name ?? ""} ${item.category ?? ""}`.toLowerCase();
-  for (const token of Object.keys(CLASS_HINTS)) {
-    if (haystack.includes(token)) return CLASS_HINTS[token];
-  }
-  return null;
-}
-
-// Layer order (lowest precedence first → highest precedence last):
-//   STRUCTURAL fields (renderScale, sourceWidth/Height, coversHair*):
-//     1. Hardcoded fallback in RENDER_HINTS
-//     2. Server-persisted values on the DTO (wins)
-//   POSITIONAL fields (offsetX, offsetY):
-//     1. Server-persisted values on the DTO
-//     2. RENDER_HINTS entry (wins)
-// The positional inversion exists so weapon/hair-hand tuning can be
-// iterated in code without needing to PUT each tweak back to the API.
-// `coversHair` (the legacy single flag) is treated as both granular flags
-// true and applied last when truthy, since some pre-migration data still
-// uses it.
-function applyHints(item: AvatarItemDto): AvatarItemDto {
-  const filename = item.previewAssetUrl?.split("/").pop() ?? "";
-  const fileHints = RENDER_HINTS[filename] ?? {};
-  const classHints = classHintMatch(item) ?? {};
-  const merged: AvatarItemDto = { ...item };
-  // Structural fields: server > class hints > file hints. Server values
-  // win when set; otherwise prefer the class-family default over the
-  // per-filename one (class defaults encode artist convention, filename
-  // entries are usually one-off pre-DB stopgaps).
-  for (const key of [
-    "coversHairFront", "coversHairBack",
-    "renderScale", "sourceWidth", "sourceHeight",
-  ] as const) {
-    if (merged[key] == null && classHints[key] != null) {
-      // @ts-expect-error narrow assignment — key is a known optional field
-      merged[key] = classHints[key];
-    }
-    if (merged[key] == null && fileHints[key] != null) {
-      // @ts-expect-error narrow assignment — key is a known optional field
-      merged[key] = fileHints[key];
-    }
-  }
-  // Positional fields: file > class > server. Per-asset filename entries
-  // override the family default (so a misaligned individual polearm can
-  // be hand-corrected), and both override whatever the server has.
-  for (const key of ["offsetX", "offsetY"] as const) {
-    if (classHints[key] != null) merged[key] = classHints[key];
-    if (fileHints[key] != null) merged[key] = fileHints[key];
-  }
-  // Legacy single-flag coversHair → expand to both granular flags when
-  // either side is unset. Server-side rows shouldn't be using this anymore
-  // but mock-data fallback might.
-  if (merged.coversHair === true) {
-    if (merged.coversHairFront == null) merged.coversHairFront = true;
-    if (merged.coversHairBack == null) merged.coversHairBack = true;
-  }
-  return merged;
-}
+// Render hints (RENDER_HINTS, CLASS_HINTS) and applyHints() live in
+// @/lib/avatarHints so every surface that renders a chibi — this page,
+// the TaskDetailModal preview via useEquippedAvatar, future surfaces —
+// resolves the same offset/cover/source defaults. See that module for
+// the precedence rules.
 
 // Whitelist of URL patterns that point to real (or potentially real) assets.
 // Anything else — notably the legacy seed paths like `/assets/hats/…` — is
@@ -1331,6 +1262,8 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
           if (!rotated || item.slot === "BODY") return baseTransform;
           const rotatedOverride = CARD_TRANSFORM_ROTATED_OVERRIDE[filename];
           if (rotatedOverride) return rotatedOverride;
+          const rotatedClass = cardClassRotatedTransform(item);
+          if (rotatedClass) return rotatedClass;
           const scale = baseTransform.match(/scale\([^)]+\)/)?.[0] ?? "scale(1.4)";
           return `${scale} rotate(90deg)`;
         })();

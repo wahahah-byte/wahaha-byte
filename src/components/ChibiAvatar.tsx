@@ -45,15 +45,17 @@ const SLOT_Z: Record<string, number> = {
 const SOURCE_W = 256;
 const SOURCE_H = 384;
 // The chibi base only occupies SOURCE_W × SOURCE_H, but item canvases can
-// be wider (e.g. weapons at 384×384). Without horizontal room the extra
-// pixels overflow into the next layout section (or get visually clipped on
-// surfaces with overflow:hidden). Add OVERHANG_RIGHT_SRC source pixels of
-// right-side room so items up to (SOURCE_W + OVERHANG_RIGHT_SRC) wide fit
-// inside their own preview box. Asymmetric so the container stays compact
-// — the layout-level centring is recovered via a translateX below.
-// 128 covers today's 384-wide weapons; update if items get even wider.
-const OVERHANG_RIGHT_SRC = 128;
-const CONTAINER_SOURCE_W = SOURCE_W + OVERHANG_RIGHT_SRC;
+// be wider (e.g. weapons at 384×384). Add OVERHANG_SRC source pixels of
+// breathing room on EACH side so items up to (SOURCE_W + 2*OVERHANG_SRC)
+// wide can render in either direction without overflowing the container.
+// Symmetric so the base is naturally centred in the container — every
+// consumer (avatar page, task-detail modal, future surfaces) gets the
+// chibi centred in its slot without needing a shift hack.
+// 128 source pixels covers today's 384-wide weapon canvases (since items
+// anchor at the base's source (0,0), so they extend at most OVERHANG_SRC
+// past the base in either direction); update if items get even wider.
+const OVERHANG_SRC = 128;
+const CONTAINER_SOURCE_W = SOURCE_W + OVERHANG_SRC * 2;
 const ASPECT = CONTAINER_SOURCE_W / SOURCE_H;
 
 // Slot-wide horizontal nudge applied to items that don't carry their own
@@ -94,20 +96,11 @@ export default function ChibiAvatar({
   // grid further away.
   const baseScale = height / SOURCE_H;
   const baseW = Math.round(SOURCE_W * baseScale);
-  const baseLeft = 0;
-  // The container sits at its own left edge in the parent flex slot, but
-  // half of it is dead right-side overhang. Apply a positive `left:` on
-  // the position:relative container to nudge the whole thing right by
-  // half the overhang (plus a small calibration nudge that makes weapon
-  // sprites with negative offsetX visually clear of the section edge) —
-  // that re-centres the chibi in the parent without expanding the
-  // section's layout box. Both terms are expressed in SOURCE pixels and
-  // multiplied by baseScale so the visual shift tracks the chibi size:
-  // when the avatar preview shrinks, the alignment scales with it.
-  // Using `left:` instead of `transform:translateX` so it doesn't clobber
-  // the avatar-idle bobbing animation that already lives on `transform`.
-  const CHIBI_NUDGE_X_SRC = 40;
-  const visualShiftX = Math.round((OVERHANG_RIGHT_SRC / 2 + CHIBI_NUDGE_X_SRC) * baseScale);
+  // Symmetric overhang means the base sits at OVERHANG_SRC*baseScale from
+  // the container's left edge. Items use the same offset so their
+  // canvas (0, 0) keeps aligning with the base canvas (0, 0); per-item
+  // offsetX/offsetY are added on top.
+  const baseLeft = Math.round(OVERHANG_SRC * baseScale);
 
   // Filter to items that actually have a PNG asset, then sort by slot z-order.
   // Items without a previewAssetUrl are skipped — the base character still shows.
@@ -216,7 +209,6 @@ export default function ChibiAvatar({
         position: "relative",
         width,
         height,
-        left: visualShiftX,
         animation: pose === "idle" ? "avatar-idle 2.6s ease-in-out infinite" : undefined,
       }}
     >
