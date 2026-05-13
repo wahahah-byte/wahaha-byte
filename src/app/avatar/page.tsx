@@ -417,7 +417,12 @@ async function loadDemoInventory(): Promise<UserInventoryDto[]> {
       const res = await fetch(`${apiUrl}/api/AvatarItems?pageSize=200`);
       if (res.ok) {
         const page: PagedResult<AvatarItemDto> = await res.json();
-        const items = (page.data ?? []).filter((it) => it.previewAssetUrl);
+        // Drop legacy seed rows whose previewAssetUrl is a relative path
+        // (e.g. "/assets/outfits/cloak_adventurer.png") — those files
+        // don't exist on the static export OR on the API host, so they'd
+        // render as PaperIcon. Showing only blob-hosted items keeps the
+        // demo grid consistent.
+        const items = (page.data ?? []).filter((it) => hasRealAsset(it.previewAssetUrl));
         if (items.length > 0) return buildInventoryFromCatalog(items);
       }
     } catch {
