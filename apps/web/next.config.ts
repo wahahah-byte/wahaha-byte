@@ -15,12 +15,16 @@ const nextConfig: NextConfig = {
     // Next.js doesn't auto-rewrite arbitrary string paths — only managed assets.
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
-  // rewrites are ignored during static export build but still work in `next dev`
+  // rewrites are ignored during static export build but still work in `next dev`.
+  // Skip entirely when NEXT_PUBLIC_API_URL is unset (e.g. the Pages CI build) —
+  // otherwise the destination becomes "undefined/:path*" and Next fails validation.
   async rewrites() {
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    if (!api) return [];
     return [
       {
         source: "/backend/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
+        destination: `${api}/:path*`,
       },
     ];
   },
