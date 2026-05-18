@@ -1,0 +1,99 @@
+# Build and deploy the Next.js web app (apps/web) to GitHub Pages.
+#
+# Layout notes:
+# - This is an npm workspaces monorepo. Root package.json declares
+#   workspaces: ["apps/*", "packages/*"]. `npm ci` at the root installs
+#   every workspace, so the web app's deps are ready to use.
+# - The Next.js app itself lives at apps/web. We invoke its build via
+#   the root script `npm run web:build`, which dispatches to the
+#   @wahaha/web workspace and runs `next build` with the correct cwd.
+# - next.config.ts has `output: "export"`, so the build emits a static
+#   site to apps/web/out — that's what we upload to Pages.
+
+name: Deploy Next.js site to Pages
+
+on:
+  push:
+    branches: ["main"]
+    # Only fire when something that actually affects the web build changes —
+    # avoids burning a deploy on mobile-only or doc-only commits.
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/nextjs.yml"
+
+  # Allows manual triggering from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time, but don't cancel an in-flight production deploy.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # Workspace-aware caching — the cache key is keyed off the root
+          # package-lock.json that npm workspaces actually use.
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          # Lets the action inject the right base path (e.g. /repo-name) into
+          # the Next.js build via NEXT_PUBLIC_BASE_PATH below. next.config.ts
+          # reads this env var and applies basePath + assetPrefix.
+          static_site_generator: next
+
+      - name: Restore Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          # Bust the cache when the root lockfile or any source under
+          # apps/web changes. Packages under packages/** are inputs too.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/**.[jt]s', 'apps/web/**.[jt]sx', 'packages/**/*.[jt]s', 'packages/**/*.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with Next.js
+        env:
+          # configure-pages exposes the computed base path as an output;
+          # re-export here so next.config.ts picks it up at build time.
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: npm run web:build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/out
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

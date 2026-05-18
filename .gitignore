@@ -49,3 +49,9 @@ next-env.d.ts
 
 # claude code (local per-machine settings)
 .claude/settings.local.json
+
+# Local-only backup of the previously discarded outer .git (never push)
+/.git.outer-throwaway/
+
+# Expo dev server cache
+/.expo/
