@@ -13,5 +13,6 @@
         "delay": 5000,
         "scope": "folderOpen"
     }
-]
+],
+"git.ignoreLimitWarning": true
 }

@@ -176,8 +176,10 @@ export function TaskList({
     // Seed the task cache so the detail modal can render synchronously
     // when the user taps a row — eliminates the spinner-then-content flash.
     taskCache.setMany(res.data.data);
-    onTasksLoaded?.(res.data.data);
-  }, [filters, onTasksLoaded]);
+    // No need to call onTasksLoaded here — the effect below mirrors the
+    // local `tasks` state to the parent on every change, including this
+    // initial setTasks call.
+  }, [filters]);
 
   useEffect(() => {
     setLoading(true);
@@ -185,6 +187,16 @@ export function TaskList({
   }, [fetchTasks, refreshKey]);
 
   useFocusEffect(useCallback(() => { fetchTasks(); }, [fetchTasks]));
+
+  // Mirror the local tasks state to the parent so derived UI (filter
+  // counts, submit bar totals, etc.) reflects optimistic mutations the
+  // moment they happen — check-ins, completes, archives, deletes, undos.
+  // Previously onTasksLoaded only fired after a full fetchTasks call, so
+  // local setTasks calls (which exist precisely to avoid round-trips)
+  // left the parent's view of the list stale.
+  useEffect(() => {
+    onTasksLoaded?.(tasks);
+  }, [tasks, onTasksLoaded]);
 
   // Optimistic check-in updates from the detail modal — see lib/task-events.
   // The modal emits the moment the slide commits, so the row visibly moves
