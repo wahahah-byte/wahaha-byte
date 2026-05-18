@@ -1,8 +1,0 @@
-{
-  "app": {
-    "[project]/apps/web/src/app/recurring/page": []
-  },
-  "appUsingSizeAdjust": true,
-  "pages": {},
-  "pagesUsingSizeAdjust": false
-}
