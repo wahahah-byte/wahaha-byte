@@ -1,4 +1,5 @@
 import type { AvatarItemDto, ItemSlot, UserInventoryDto } from "@/lib/api/avatar";
+import { applyHints } from "@wahaha/shared";
 
 // Pixel art is rendered onto a fixed 14×16 grid that PixelAvatar uses as its
 // SVG viewBox. The base MapleStory-style chibi occupies these regions:
@@ -279,7 +280,10 @@ export function buildMockEquipped(): UserInventoryDto[] {
         itemId: dto.itemId,
         acquiredAt: now,
         isEquipped: true,
-        avatarItem: dto,
+        // Apply hints here so callers that render the mock directly
+        // (e.g. TaskDetailModal in the static-demo build) get the same
+        // class-level offsets that authed/avatar-page paths get.
+        avatarItem: applyHints(dto),
       };
       return inv;
     })
