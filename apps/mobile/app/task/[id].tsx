@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Keyboard,
   Platform,
   Pressable,
@@ -14,10 +15,12 @@ import BottomSheet, {
   type BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Polyline } from "react-native-svg";
 
@@ -26,7 +29,9 @@ import {
   CATEGORY_COLOR,
   type CheckInCycleDto,
   getNextDueDate,
+  isOverdue,
   parseLocalDate,
+  willStreakResetOnCheckIn,
   PRIORITY_DOT,
   type Subtask,
   type TaskDto,
@@ -119,6 +124,93 @@ function PageHeader({
       </Pressable>
       <View style={styles.headerRight}>{right}</View>
     </View>
+  );
+}
+
+// Wraps the edit-mode body and adds swipe-right-to-dismiss that works
+// anywhere on the form — including over Pressables (Save / Cancel /
+// dropdowns) and TextInputs.
+//
+// The trick is `manualActivation(true)`. A plain Pan with `activeOffsetX`
+// only worked over inert areas (titles, labels) because Pressables claim
+// the JS touch responder synchronously on touch-down, before RNGH gets to
+// evaluate the Pan's offset criteria. With manual activation, the Pan
+// observes touches passively and only calls `state.activate()` from
+// `onTouchesMove` once we've actually seen >12px of dominantly-horizontal
+// motion. Until then, taps & vertical scrolls behave normally; once
+// activated, the Pan claims the touch and Pressables get a cancel event.
+//
+// The activation threshold is also subtracted from `translationX` when
+// computing tx, so the form's position starts at 0 the moment the
+// gesture activates — no visible jump (the source of the previous jitter).
+function EditPaneSwipeWrapper({
+  onDismiss,
+  children,
+}: {
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
+  const screenWidth = Dimensions.get("window").width;
+  // Commit thresholds: either drag the form past ~25% of screen width, or
+  // flick it with enough rightward velocity. Velocity-first matches the
+  // detail sheet's drag-down dismiss feel.
+  const COMMIT_DISTANCE = screenWidth * 0.25;
+  const COMMIT_VELOCITY = 700;
+  const SWIPE_THRESHOLD = 12;
+  const tx = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .manualActivation(true)
+    .onBegin((e) => {
+      "worklet";
+      startX.value = e.x;
+      startY.value = e.y;
+    })
+    .onTouchesMove((e, state) => {
+      "worklet";
+      const t = e.allTouches[0];
+      if (!t) return;
+      const dx = t.x - startX.value;
+      const dy = t.y - startY.value;
+      // Horizontal-dominant + rightward + over threshold → activate.
+      if (dx > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        state.activate();
+      } else if (Math.abs(dy) > SWIPE_THRESHOLD) {
+        // Vertical-dominant motion → hand off to the form's ScrollView.
+        state.fail();
+      }
+    })
+    .onUpdate((e) => {
+      "worklet";
+      // Subtract threshold so the form position starts at 0 on activation
+      // (no visible jump as the gesture transitions PENDING → ACTIVE).
+      tx.value = Math.max(0, e.translationX - SWIPE_THRESHOLD);
+    })
+    .onEnd((e) => {
+      "worklet";
+      const commit = e.translationX > COMMIT_DISTANCE || e.velocityX > COMMIT_VELOCITY;
+      if (commit) {
+        // Slide fully off-screen, then flip state. Setting state during
+        // the animation makes the underlying detail view appear before
+        // the slide finishes, which looks jarring.
+        tx.value = withTiming(screenWidth, { duration: 220 }, (done) => {
+          if (done) runOnJS(onDismiss)();
+        });
+      } else {
+        tx.value = withTiming(0, { duration: 200 });
+      }
+    });
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }],
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={[{ flex: 1 }, animStyle]}>{children}</Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -235,6 +327,16 @@ export default function TaskDetailScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Sync detail with mutations coming from the underlying TaskList — e.g.
+  // an undo fired via the leading checkbox in the list (after the user
+  // closes detail, undoes, reopens). Without this the StreakDisplay (which
+  // reads `task.currentStreakCount`) keeps showing the pre-undo value
+  // until something else triggers `load()`. The list emits this event
+  // after any task mutation that affects values displayed in detail.
+  useEffect(() => {
+    return taskEvents.subscribeRefreshRequested(() => { load(); });
+  }, [load]);
+
   // (scrollToEnd is now consolidated into the keyboardDidShow handler
   // above — it always fires after the keyboardHeight-driven re-render
   // so the input lands at the bottom of the shrunken visible panel.)
@@ -301,8 +403,14 @@ export default function TaskDetailScreen() {
     // The server call below is authoritative; TaskList's useFocusEffect
     // refetches on focus for correctness.
     const todayIso = new Date().toISOString().split("T")[0];
+    // For overdue tasks, advance from today (not from the past dueDate) so
+    // the optimistic next-due lands on tomorrow for a daily task instead of
+    // today. Without this, the row's date label and the underlying list
+    // briefly show the stale value before load() reconciles to the server's
+    // already-caught-up dueDate.
+    const dueBase = task.recurrenceRule && isOverdue(task.dueDate) ? todayIso : task.dueDate;
     const nextDueIso = task.recurrenceRule
-      ? getNextDueDate(task.dueDate, task.recurrenceRule)
+      ? getNextDueDate(dueBase, task.recurrenceRule)
       : task.dueDate ?? todayIso;
     taskEvents.emitCheckedIn({
       taskId: task.taskId,
@@ -313,12 +421,21 @@ export default function TaskDetailScreen() {
     // fade-out completes and the footer unmounts in one beat instead of
     // briefly re-rendering at opacity 1 after the slide finishes its
     // commit animation but before load() lands. Server is authoritative;
-    // load() reconciles below.
-    setTask((prev) => (prev ? {
-      ...prev,
-      lastCheckInDate: todayIso,
-      dueDate: nextDueIso ?? prev.dueDate,
-    } : prev));
+    // load() reconciles below. Streak prediction mirrors the server's
+    // reset rule (CheckInTask.cs: daysSinceLast > maxGapDays per rule).
+    const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
+    const predictedStreak = willResetStreak ? 1 : (task.currentStreakCount ?? 0) + 1;
+    setTask((prev) => {
+      if (!prev) return prev;
+      const prevLongest = prev.longestStreakCount ?? 0;
+      return {
+        ...prev,
+        lastCheckInDate: todayIso,
+        dueDate: nextDueIso ?? prev.dueDate,
+        currentStreakCount: predictedStreak,
+        longestStreakCount: Math.max(prevLongest, predictedStreak),
+      };
+    });
     const res = await tasksApi.checkIn(task.taskId);
     if (res.error) { setError(res.error); return; }
     await load();
@@ -510,29 +627,33 @@ export default function TaskDetailScreen() {
         ref={sheetRef}
         index={0}
         snapPoints={snapPoints}
-        // Edit mode disables pan-down-to-close — the form is wall-to-wall
-        // TextInputs and Pressables and the user has an explicit Cancel
-        // button right there. A sheet-wide dismiss-pan would compete with
-        // text-field scrolling and accidental flicks.
+        // Edit mode disables every sheet-owned pan — we add our own
+        // horizontal swipe-to-dismiss via EditPaneSwipeWrapper below, and
+        // any competing pan on the sheet wrapper would either fight it
+        // for the touch responder or eat the Pressables underneath.
         enablePanDownToClose={false}
+        enableContentPanningGesture={false}
+        enableHandlePanningGesture={false}
         enableDynamicSizing={false}
         onChange={handleSheetChange}
         handleComponent={SheetHandle}
         backgroundComponent={SheetBackground}
       >
-        <View style={styles.page}>
-          <PageHeader
-            c={c}
-            onBack={() => setIsEditing(false)}
-            backLabel="Cancel"
-          />
-          <TaskForm
-            initial={initial}
-            submitLabel="Save"
-            onSubmit={handleEditSubmit}
-            onCancel={() => setIsEditing(false)}
-          />
-        </View>
+        <EditPaneSwipeWrapper onDismiss={() => setIsEditing(false)}>
+          <View style={styles.page}>
+            <PageHeader
+              c={c}
+              onBack={() => setIsEditing(false)}
+              backLabel="Cancel"
+            />
+            <TaskForm
+              initial={initial}
+              submitLabel="Save"
+              onSubmit={handleEditSubmit}
+              onCancel={() => setIsEditing(false)}
+            />
+          </View>
+        </EditPaneSwipeWrapper>
       </BottomSheet>
     );
   }
@@ -548,9 +669,19 @@ export default function TaskDetailScreen() {
   // Delete are useful from there.
   const showEdit = task.status !== "completed";
   // Archive only makes sense for one-off tasks; recurring routines are
-  // deleted, not archived. The triple-dot overflow only exists to host it,
-  // so it disappears entirely on recurring rows.
-  const showArchive = !task.isRecurring;
+  // exited via delete instead. Backend rule (ArchiveTask.cs): only
+  // *completed* one-off tasks can be archived. We also require the task
+  // to be *submitted* (points banked) before exposing Archive — a
+  // completed-but-unsubmitted task still owes the user a bank-burst from
+  // the bulk-submit flow, archiving it from here would skip that. Once a
+  // task IS archived, we still want the menu (so the user can Unarchive),
+  // hence the OR on task.isArchived.
+  // The triple-dot overflow only exists to host Archive/Unarchive, so it
+  // disappears entirely when the action wouldn't be available.
+  const isSubmittedForArchive = task.submitted === true || !!task.pointsAwarded;
+  const showArchive =
+    !task.isRecurring &&
+    (task.isArchived || (task.status === "completed" && isSubmittedForArchive));
   const pageFooter = (
     <View
       style={[
@@ -654,6 +785,31 @@ export default function TaskDetailScreen() {
             inner flex chains (subtasks panel → BottomSheetScrollView)
             then have a real container to fit and scroll against. */}
         <View style={[styles.body, { top: headerHeight, bottom: footerHeight }]}>
+          {/* Avatar hero — pinned at the top of the body so the interactive
+              content below (title, actions, subtasks, footer) sits inside the
+              one-handed thumb zone. Recurring tasks use the existing
+              CounterPanel (DetailPager: Stage = avatar + stepper, Stats =
+              heatmap, swipe-left to switch). Non-recurring tasks render a
+              static ChibiAvatar of equivalent height so the layout stays
+              consistent across task types. The DetailPager's horizontal pan
+              doesn't fight BottomSheet's pan-down-to-close (failOffsetX is
+              the default) — keep that in mind before adding ancestor gestures
+              here. */}
+          {task.isRecurring && task.recurrenceRule ? (
+            <CounterPanel
+              task={task}
+              onCycleAppend={(cycle) =>
+                setTask((prev) => prev
+                  ? { ...prev, recentCycles: [cycle, ...(prev.recentCycles ?? [])] }
+                  : prev
+                )
+              }
+              onError={setError}
+            />
+          ) : (
+            <AvatarOnlyHero />
+          )}
+
           <View style={styles.topBlock}>
               {/* Title */}
               <ThemedText style={{ fontSize: 16, fontWeight: "600", color: c.fg, letterSpacing: 0.2 }}>
@@ -700,27 +856,10 @@ export default function TaskDetailScreen() {
                 </ThemedText>
               ) : null}
 
-              {/* Locked pill (pending+recurring+not-yet-checkable) — inline cue. */}
-              {task.status === "pending" && task.isRecurring && !canCheckIn ? (
-                <View
-                  style={{
-                    alignSelf: "flex-start",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderWidth: 1,
-                    borderRadius: 999,
-                    borderColor: c.warningBorder,
-                    backgroundColor: c.warningBg,
-                  }}
-                >
-                  <ThemedText style={{ fontSize: 11, color: c.warning, letterSpacing: 1.4, textTransform: "uppercase" }}>
-                    Locked · {fmtShort(task.dueDate)}
-                  </ThemedText>
-                </View>
-              ) : null}
+              {/* Locked-state cue intentionally omitted — the due-date chip
+                  in the metadata row above already communicates when the
+                  next check-in unlocks, so a second "Locked · MM/DD" pill
+                  here was redundant. */}
 
               {(task.status === "pending" && !task.isRecurring)
               || task.status === "in_progress"
@@ -761,24 +900,6 @@ export default function TaskDetailScreen() {
                 </View>
               ) : null}
             </View>
-
-          {/* CounterPanel — the DetailPager inside has its own horizontal
-              pan. BottomSheet's pan-down-to-close only activates on
-              vertical motion (failOffsetX is the default), so they don't
-              conflict, but we keep this comment as a reminder for anyone
-              adding ancestor gestures here. */}
-          {task.isRecurring && task.recurrenceRule ? (
-            <CounterPanel
-              task={task}
-              onCycleAppend={(cycle) =>
-                setTask((prev) => prev
-                  ? { ...prev, recentCycles: [cycle, ...(prev.recentCycles ?? [])] }
-                  : prev
-                )
-              }
-              onError={setError}
-            />
-          ) : null}
 
           {/* Subtasks panel — claims remaining body height (flex:1) and
               scrolls internally. minHeight:0 is required so a flex child
@@ -964,6 +1085,43 @@ export default function TaskDetailScreen() {
   );
 }
 
+// Hero block used for non-recurring tasks. Matches CounterPanel's shape
+// (DetailPager: Stage = avatar, Stats = empty heatmap) so the
+// swipe-left-to-heatmap gesture is consistent across task types — even
+// when there's no check-in history to show. Subscribes to equippedCache
+// the same way CounterPanel does — both share the module-level cache, so
+// the second subscriber doesn't trigger an extra fetch.
+function AvatarOnlyHero() {
+  const [equipped, setEquipped] = useState<UserInventoryDto[]>(
+    () => equippedCache.read() ?? [],
+  );
+  useEffect(() => {
+    const unsubscribe = equippedCache.subscribe(setEquipped);
+    equippedCache.revalidate();
+    return unsubscribe;
+  }, []);
+  const stageCard = (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ChibiAvatar equipped={equipped} height={168} />
+    </View>
+  );
+  const statsCard = (
+    <View style={{ flex: 1, paddingTop: 4 }}>
+      <HeatmapStrip rule="" hasCounter={false} cycles={[]} />
+    </View>
+  );
+  return (
+    <DetailPager
+      height={232}
+      labels={["Stage", "Stats"]}
+      cards={[
+        { key: "stage", content: stageCard },
+        { key: "stats", content: statsCard },
+      ]}
+    />
+  );
+}
+
 // Heatmap + counter stepper share pendingLog so the heatmap's today cell
 // reflects buffered taps in real time. Lives in its own subcomponent because
 // useQuickLog requires a non-null TaskDto.
@@ -1017,11 +1175,12 @@ function CounterPanel({
     return unsubscribe;
   }, []);
 
-  // Heatmap is meaningful only for daily / weekdays cadence (matches web).
-  // For weekly / biweekly / monthly the second tab would mostly be empty, so
-  // skip it and render the Stage card alone.
+  // Always render the Stats tab so the swipe-left-to-heatmap gesture is
+  // available regardless of cadence. For weekly / biweekly / monthly the
+  // grid is mostly empty cells, but the user explicitly asked for the
+  // gesture to be consistent across all task types — predictability beats
+  // a sparser-looking heatmap.
   const rule = task.recurrenceRule ?? "";
-  const showStatsTab = rule === "daily" || rule === "weekdays";
   const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === new Date().toISOString().split("T")[0];
   const showStepper = task.hasCounter === true && task.status === "pending" && !checkedInToday;
 
@@ -1057,15 +1216,11 @@ function CounterPanel({
   return (
     <DetailPager
       height={232}
-      labels={showStatsTab ? ["Stage", "Stats"] : ["Stage"]}
-      cards={
-        showStatsTab
-          ? [
-              { key: "stage", content: stageCard },
-              { key: "stats", content: statsCard },
-            ]
-          : [{ key: "stage", content: stageCard }]
-      }
+      labels={["Stage", "Stats"]}
+      cards={[
+        { key: "stage", content: stageCard },
+        { key: "stats", content: statsCard },
+      ]}
     />
   );
 }
@@ -1102,6 +1257,16 @@ function SubtaskAddBar({
   const toastOpacity = useSharedValue(0);
   const toastTranslateY = useSharedValue(8);
   const toastHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard so the bar doesn't auto-close on a stray keyboardDidHide that
+  // fires before our own TextInput has ever raised the keyboard (e.g. a
+  // keyboard belonging to a different input was already retracting when
+  // we mounted). Flipped to true on the first show; the bar only
+  // auto-closes on hides that happen after that point.
+  const hasShownRef = useRef(false);
+  // Latest onCancel — captured in a ref so the keyboard listener doesn't
+  // need to re-subscribe whenever the parent passes a new callback identity.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     // Will* on iOS for a smoother ride-up; Did* on Android because Will*
@@ -1109,10 +1274,17 @@ function SubtaskAddBar({
     const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const show = Keyboard.addListener(showEvt, (e) => {
+      hasShownRef.current = true;
       kbHeight.value = withTiming(e.endCoordinates.height, { duration: 200 });
     });
     const hide = Keyboard.addListener(hideEvt, () => {
       kbHeight.value = withTiming(0, { duration: 200 });
+      // Bar exists to host the keyboard — once the keyboard is gone, so is
+      // its reason to be on screen. Dismiss as a sibling of the keyboard
+      // retraction (system back, tap-outside, Done key, hardware blur).
+      // Guarded on hasShownRef so a phantom hide event right after mount
+      // doesn't close us before we've ever opened.
+      if (hasShownRef.current) onCancelRef.current?.();
     });
     return () => {
       show.remove();
@@ -1408,7 +1580,7 @@ const styles = StyleSheet.create({
   // height instead of expanding to fit every row.
   subtasksPanel: { flex: 1, minHeight: 0 },
   subtasksScroll: { flex: 1 },
-  subtasksContent: { gap: 14, paddingTop: 4, paddingBottom: 16 },
+  subtasksContent: { paddingTop: 4, paddingBottom: 16 },
   // Footer anchor: absolute-positioned at the sheet bottom so it stays
   // on-screen no matter how the body lays out. The body reads this
   // element's measured height (via onLayout) into a paddingBottom so the

@@ -46,6 +46,23 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
     bodyEl.style.overscrollBehavior = 'none';
   }
 
+  // react-native-gesture-handler 2.28 (the version Expo SDK 54 pins) reads
+  // `node.ref` directly inside its web `isRNSVGNode` check, which React 19
+  // logs as a deprecation warning every time @gorhom/bottom-sheet mounts a
+  // GestureDetector. Fixed upstream in 2.31; until the Expo pin moves we
+  // silence just that one message. LogBox.ignoreLogs can't catch it on web
+  // (it only filters "Warning: "-prefixed messages), so we patch console.error.
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    const originalConsoleError = console.error;
+    console.error = function patchedConsoleError(...args: unknown[]) {
+      const first = args[0];
+      if (typeof first === 'string' && first.includes('Accessing element.ref was removed in React 19')) {
+        return;
+      }
+      return originalConsoleError.apply(this, args as []);
+    };
+  }
+
   // react-native-gesture-handler on web races multiple gestures over the
   // same pointer; when one of them ends or is cancelled, it can call
   // `releasePointerCapture` on a pointerId that another has already

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import TaskListControls from "@/components/TaskListControls";
 import QuickAddInput from "@/components/QuickAddInput";
 import FilterTray from "@/components/FilterTray";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import type { GroupMode, SortMode } from "@/lib/taskList";
 
 type Filter = { label: string; shortLabel: string; value: string };
@@ -42,6 +43,13 @@ export default function MobileActionBar({
 }: Props) {
   const [trayOpen, setTrayOpen] = useState(true);
   const trayElementRef = useRef<HTMLDivElement>(null);
+  // When a soft keyboard is up, pin the bar to the real visible bottom (top
+  // of the keyboard). When dismissed, fall back to the safe-area inset. Pure
+  // env() left a stale gap on iOS after the keyboard closed.
+  const keyboardInset = useKeyboardInset();
+  const bottomOffset = keyboardInset > 0
+    ? `${keyboardInset}px`
+    : "env(safe-area-inset-bottom, 0px)";
 
   return (
     <>
@@ -50,7 +58,7 @@ export default function MobileActionBar({
           data-edge-drawer-block
           className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
           style={{
-            bottom: "env(safe-area-inset-bottom, 0px)",
+            bottom: bottomOffset,
             height: "50px",
             background: "var(--color-header)",
             borderTop: "1px solid var(--color-border-soft)",

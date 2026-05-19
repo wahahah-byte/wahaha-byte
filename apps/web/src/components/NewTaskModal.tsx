@@ -237,12 +237,23 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
               <DatePicker value={dueDate} onChange={setDueDate} />
             </div>
 
+            <Field label="Category">
+              <CompactSelect
+                value={category}
+                onChange={setCategory}
+                options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+              />
+            </Field>
+
             <div className="flex gap-3">
-              <Field label="Category" className="flex-1 min-w-0">
+              <Field label="Repeat" className="flex-1 min-w-0">
                 <CompactSelect
-                  value={category}
-                  onChange={setCategory}
-                  options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  value={isRecurring ? recurrenceRule : "once"}
+                  onChange={(v) => {
+                    if (v === "once") setIsRecurring(false);
+                    else { setIsRecurring(true); setRecurrenceRule(v); }
+                  }}
+                  options={REPEAT_OPTIONS.map((o) => ({ value: o.rule ?? "once", label: o.label }))}
                 />
               </Field>
               <Field label="Points" className="w-20">
@@ -257,38 +268,6 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
                 />
               </Field>
             </div>
-
-            <Field label="Repeat">
-              <div className="flex flex-wrap gap-1">
-                {REPEAT_OPTIONS.map((opt) => {
-                  const active = opt.rule === null ? !isRecurring : isRecurring && recurrenceRule === opt.rule;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => {
-                        if (opt.rule === null) {
-                          setIsRecurring(false);
-                        } else {
-                          setIsRecurring(true);
-                          setRecurrenceRule(opt.rule);
-                        }
-                      }}
-                      className="text-[10px] tracking-widest uppercase cursor-pointer transition-colors"
-                      style={{
-                        background: active ? "var(--color-active-highlight-bg)" : "transparent",
-                        color: active ? "var(--color-active-highlight)" : "var(--color-fg-subtle)",
-                        border: `1px solid ${active ? "var(--color-active-highlight-border)" : "var(--color-border-hairline)"}`,
-                        borderRadius: "999px",
-                        fontWeight: active ? 600 : 400,
-                        padding: "3px 10px",
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
 
             {isRecurring && (
               <Field label="Counter">

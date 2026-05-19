@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CATEGORIES } from "@/lib/constants";
 import { parseQuickTask, formatParsedHint } from "@/lib/quickTask";
 
@@ -12,6 +12,7 @@ type Props = {
 export default function QuickAddInput({ onSubmit, disabled }: Props) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const parsed = useMemo(() => parseQuickTask(value, CATEGORIES), [value]);
   const hint = formatParsedHint(parsed);
@@ -28,6 +29,12 @@ export default function QuickAddInput({ onSubmit, disabled }: Props) {
         category: parsed.category,
       });
       setValue("");
+      // Drop focus so the soft keyboard dismisses — otherwise the input
+      // stays focused after submit, the keyboard stays up, and the action
+      // bar floats above where the keyboard was, leaving a visual gap below
+      // it for users who expect the bar to return to the screen bottom
+      // after creating the task.
+      inputRef.current?.blur();
     } finally {
       setBusy(false);
     }
@@ -45,6 +52,7 @@ export default function QuickAddInput({ onSubmit, disabled }: Props) {
       }}
     >
       <input
+        ref={inputRef}
         type="text"
         value={value}
         disabled={disabled}

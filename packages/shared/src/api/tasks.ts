@@ -83,6 +83,12 @@ export interface CheckInCycleDto {
   counterValue: number | null;
   createdAt: string;
   cycleType?: "checkin" | "log";
+  // Snapshot of task.dueDate from BEFORE this check-in advanced it.
+  // Surfaced so the leading-checkbox undo can restore the precise
+  // pre-checkin overdue state instantly, even when the cycle was loaded
+  // from a previous session (in-session check-ins are tracked separately
+  // via preCheckinDueDateRef in TaskList).
+  previousDueDate?: string | null;
 }
 
 export interface TaskFilterParams {
@@ -181,6 +187,13 @@ export function createTasksApi(client: ApiClient) {
 
     undoCheckIn: (taskId: string, cycleId: number) =>
       client.authedPost<UndoCheckInResponse>(`/api/tasks/${taskId}/checkin/${cycleId}/undo`, {}),
+
+    // Recovery for tasks left in a "fake checked in" state — LastCheckInDate
+    // set but no backing cycle row. Returns the rolled-back dueDate so the
+    // client can patch local state without a follow-up refetch.
+    repairCheckIn: (taskId: string) =>
+      client.authedPost<{ restoredLastCheckInDate: string | null; restoredDueDate: string | null }>(
+        `/api/tasks/${taskId}/repair-checkin`, {}),
 
     deleteLogCycle: (taskId: string, cycleId: number) =>
       client.authedDelete<void>(`/api/tasks/${taskId}/checkin-history/${cycleId}`),

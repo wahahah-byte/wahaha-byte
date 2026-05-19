@@ -118,6 +118,30 @@ export function isOverdue(dueDate: string | null): boolean {
   return today > due;
 }
 
+/**
+ * Mirrors the server's streak-reset rule in CheckInTask.cs: the streak
+ * resets when the task is overdue at the moment of check-in (today >
+ * dueDate). For a brand-new streak (no lastCheckInDate / no streak row
+ * server-side), the server creates one at 0 and increments to 1 — that
+ * isn't a reset, so we return false even if the task happens to be
+ * overdue.
+ *
+ * Used by the optimistic check-in patches to predict whether the server
+ * will return streakCount=1 (reset) or prev+1 (continue), so the in-row
+ * badge matches the final value without bouncing through an intermediate.
+ */
+export function willStreakResetOnCheckIn(
+  rule: string | null | undefined,
+  lastCheckInDate: string | null | undefined,
+  dueDate: string | null | undefined,
+): boolean {
+  if (!lastCheckInDate) return false;
+  // rule is part of the signature for forward-compatibility (a future
+  // per-rule tolerance could be reintroduced without changing callers).
+  void rule;
+  return isOverdue(dueDate ?? null);
+}
+
 export function getCyclesOverdue(dueDate: string | null, rule: string | null): number {
   if (!dueDate) return 0;
   const r = normalizeRule(rule);

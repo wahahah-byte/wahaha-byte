@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tasksApi, TaskDto, Subtask, CheckInCycleDto } from "@/lib/api/tasks";
-import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS } from "@/lib/constants";
+import { PRIORITY_DOT, CATEGORIES, CATEGORY_COLOR, COUNTER_UNITS, maxPointsFor } from "@/lib/constants";
 import DatePicker from "@/components/DatePicker";
 import GoalStepper from "@/components/GoalStepper";
 import SubtasksSection from "@/components/SubtasksSection";
@@ -35,6 +35,7 @@ export interface EditableTaskFields {
   description: string | null;
   category: string;
   priority: string;
+  pointValue?: number;
   dueDate: string | null;
   hasCounter?: boolean;
   counterUnit?: string | null;
@@ -189,6 +190,7 @@ export default function TaskDetailModal({
   const [editDescription, setEditDescription] = useState(task.description ?? "");
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editCategory, setEditCategory] = useState(task.category);
+  const [editPointValue, setEditPointValue] = useState<number>(task.pointValue);
   const [editDueDate, setEditDueDate] = useState<Date | null>(
     mustReschedule
       ? rescheduleDefault()
@@ -205,6 +207,7 @@ export default function TaskDetailModal({
     setShowEditDescription(!!(task.description ?? ""));
     setEditPriority(task.priority);
     setEditCategory(task.category);
+    setEditPointValue(task.pointValue);
     setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
     setEditHasCounter(!!task.hasCounter);
     setEditCounterUnit(task.counterUnit ?? "");
@@ -230,6 +233,7 @@ export default function TaskDetailModal({
       description: editDescription.trim() || null,
       category: editCategory,
       priority: editPriority,
+      pointValue: editPointValue,
       dueDate: editDueDate ? dateKey(editDueDate) : null,
       hasCounter: task.isRecurring ? editHasCounter : undefined,
       counterUnit: task.isRecurring ? (editHasCounter && editCounterUnit ? editCounterUnit : null) : undefined,
@@ -647,6 +651,29 @@ export default function TaskDetailModal({
                   <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: CATEGORY_COLOR[editCategory] ?? "var(--color-fg-subtle)" }}>▾</span>
                 </div>
               </Field>
+              <Field label="Points" className="w-20">
+                <div className="relative">
+                  <select
+                    value={String(editPointValue)}
+                    onChange={(e) => setEditPointValue(Number(e.target.value))}
+                    className="w-full px-2 py-1.5 text-xs appearance-none outline-none cursor-pointer"
+                    style={{
+                      background: "var(--color-input)",
+                      color: "var(--color-active-highlight)",
+                      border: "1px solid var(--color-border-hairline)",
+                      borderRadius: "3px",
+                    }}
+                  >
+                    {(task.isRecurring
+                      ? [1, 2, 3, 4, 5]
+                      : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(editCategory))
+                    ).map((v) => (
+                      <option key={v} value={String(v)} style={{ background: "var(--color-input)" }}>{v}</option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: "var(--color-active-highlight)" }}>▾</span>
+                </div>
+              </Field>
             </div>
 
             <Field label="Priority">
@@ -830,52 +857,48 @@ export default function TaskDetailModal({
         <div className="flex items-center gap-1.5 flex-wrap mt-4">
           {isEditing ? (
             <>
-              <button
+              <ActionBtn
                 onClick={handleSave}
                 disabled={isSaving}
-                className="pixel-btn"
-                style={{ fontSize: "10px", padding: "5px 12px" }}
-              >
-                {isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
-              </button>
-              <button
+                color="var(--color-success)"
+                hoverBg="var(--color-success-bg)"
+                label={isSaving ? "Saving…" : mustReschedule ? (task.isRecurring ? "Save & Resume" : "Save & Start") : "Save"}
+                icon={
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                    <polyline points="1,5 4,8 9,2" style={{ stroke: "var(--color-success)" }} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                }
+              />
+              <ActionBtn
                 onClick={() => mustReschedule ? onClose() : setIsEditing(false)}
                 disabled={isSaving}
-                className="text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                style={{
-                  color: "var(--color-fg-subtle)",
-                  background: "transparent",
-                  border: "1px solid var(--color-border-hairline)",
-                  borderRadius: "999px",
-                  padding: "5px 12px",
-                }}
-                onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-overlay-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                Cancel
-              </button>
-              {mustReschedule && onDelete && (
-                <button
-                  onClick={handleDeleteClick}
-                  disabled={isSaving}
-                  className="ml-auto flex items-center gap-1.5 text-[10px] tracking-widest uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
-                  style={{
-                    color: "var(--color-danger)",
-                    background: "transparent",
-                    border: "1px solid var(--color-danger-border)",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                  }}
-                  onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = "var(--color-danger-bg)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
+                color="var(--color-fg-muted)"
+                hoverBg="var(--color-overlay-hover)"
+                label="Cancel"
+                icon={
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                    <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
-                    <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
-                    <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <line x1="2" y1="2" x2="8" y2="8" style={{ stroke: "var(--color-fg-muted)" }} strokeWidth="1.5" strokeLinecap="round" />
+                    <line x1="8" y1="2" x2="2" y2="8" style={{ stroke: "var(--color-fg-muted)" }} strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
-                  Delete
-                </button>
+                }
+              />
+              {mustReschedule && onDelete && (
+                <div className="ml-auto">
+                  <ActionBtn
+                    onClick={handleDeleteClick}
+                    disabled={isSaving}
+                    color="var(--color-danger)"
+                    hoverBg="var(--color-danger-bg)"
+                    label="Delete"
+                    icon={
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                        <path d="M3.8 2V1.3h2.4V2" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" />
+                        <line x1="1.3" y1="2.5" x2="8.7" y2="2.5" style={{ stroke: "var(--color-danger)" }} strokeWidth="1" strokeLinecap="round" />
+                        <path d="M2.6 3L3.1 8.5h3.8L7.4 3" style={{ stroke: "var(--color-danger)" }} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    }
+                  />
+                </div>
               )}
             </>
           ) : (
@@ -1072,7 +1095,10 @@ export default function TaskDetailModal({
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`flex flex-col gap-1 ${className ?? ""}`}>
-      <span className="text-[8px] tracking-widest uppercase" style={{ color: "var(--color-fg-subtle)" }}>
+      <span
+        className="tracking-widest uppercase"
+        style={{ color: "var(--color-fg-muted)", fontSize: "9px", fontWeight: 600, letterSpacing: "0.18em" }}
+      >
         {label}
       </span>
       {children}

@@ -4,7 +4,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { tasksApi, TaskDto, UndoCheckInResponse } from "@/lib/api/tasks";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
-import { dateKey, getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue } from "@/lib/dateUtils";
+import { dateKey, getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue, willStreakResetOnCheckIn } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
 
 // Returns true when a streak increment crosses one of the bonus
@@ -162,8 +162,27 @@ export function useTaskActions({
           submitted: false,
         });
         setAdvancing(null);
+        // Completing a recurring task implicitly records a check-in for the
+        // current cycle. Mirror handleCheckIn's local state surgery so the
+        // routine row reflects the cycle (checkbox fills, row moves into the
+        // "checked in" group). Without these fields the row stayed pending-
+        // looking until the next refetch, even though the server had logged it.
+        // checkInDate uses the local-midnight-as-fake-UTC convention so
+        // wasCheckedInToday / heatmap / undo all key on the same date string.
+        const todayIso = dateKey(new Date());
+        const synthCycle = {
+          cycleId: -Date.now(),
+          taskId: task.taskId,
+          checkInDate: `${todayIso}T00:00:00Z`,
+          counterValue: null,
+          createdAt: new Date().toISOString(),
+          cycleType: "checkin" as const,
+        };
         setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-          ? { ...t, status: "pending", dueDate: nextDue, completedAt: null, submitted: false }
+          ? { ...t, status: "pending", dueDate: nextDue, completedAt: null, submitted: false,
+              lastCheckInDate: todayIso,
+              recentCycles: [synthCycle, ...(t.recentCycles ?? [])],
+              subtasks: t.subtasks?.map((s) => ({ ...s, completed: false, setsCompleted: null })) }
           : t
         ));
       } else {
@@ -244,8 +263,44 @@ export function useTaskActions({
       return;
     }
     const prevCount = task.currentStreakCount ?? 0;
+    const prevDueDate = task.dueDate;
+    const prevLastCheckIn = task.lastCheckInDate;
+    // Optimistic patch so the row reflects its new cycle state (streak,
+    // dueDate, lastCheckInDate) in the same frame as the user's commit
+    // gesture, rather than waiting ~300 ms for the server response.
+    //
+    // Predictions:
+    //   - Streak: mirrors the server's reset rule in CheckInTask.cs —
+    //     resets to 1 when daysSinceLast > maxGapDays (per recurrence
+    //     rule), prev+1 otherwise. Using the exact server rule (not the
+    //     isOverdue proxy) keeps weekdays tasks with a 1-2 day gap from
+    //     bouncing through a predicted-1 before snapping to N+1.
+    //   - dueDate: one period forward from today when the task is currently
+    //     overdue, one period from the existing dueDate otherwise. The
+    //     overdue branch matches the server's catch-up so an overdue daily
+    //     task lands on tomorrow rather than still-today.
+    //   - lastCheckInDate: today.
+    // The authoritative server values reconcile below; rollback on error.
+    const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
+    const predictedStreak = willResetStreak ? 1 : prevCount + 1;
+    const dueBase = task.isRecurring && willResetStreak ? todayIso : task.dueDate;
+    const predictedDueDate = task.isRecurring && task.recurrenceRule
+      ? getNextDueDate(dueBase, task.recurrenceRule)
+      : task.dueDate;
+    setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+      ? { ...t, currentStreakCount: predictedStreak, longestStreakCount: Math.max(t.longestStreakCount ?? 0, predictedStreak), dueDate: predictedDueDate, lastCheckInDate: todayIso }
+      : t
+    ));
     const { data, error } = await tasksApi.checkIn(task.taskId, counterValue);
-    if (error) { setAdvancing(null); setError(error); return; }
+    if (error) {
+      // Roll back the optimistic patch so the row doesn't sit on a state the
+      // server never agreed to.
+      setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+        ? { ...t, currentStreakCount: prevCount, dueDate: prevDueDate, lastCheckInDate: prevLastCheckIn }
+        : t
+      ));
+      setAdvancing(null); setError(error); return;
+    }
     const awarded = data!.pointsAwarded;
     setRecurringSubmittedToday(data!.recurringDailyTotal);
     setDailySubmitted((prev) => prev + awarded);
@@ -325,6 +380,13 @@ export function useTaskActions({
       }));
       return null;
     }
+    // Optimistic streak decrement so the in-row badge updates in the same
+    // frame as the row's section move instead of waiting for the server
+    // response. Symmetric with the demo-path rollback above; the server
+    // reconciles below with the authoritative value.
+    setTasks((prev) => prev.map((t) => t.taskId === task.taskId
+      ? { ...t, currentStreakCount: Math.max(0, (t.currentStreakCount ?? 0) - 1) }
+      : t));
     const { data, error } = await tasksApi.undoCheckIn(task.taskId, cycleId);
     if (error) { setError(error); return null; }
     setBalance(data!.newBalance);

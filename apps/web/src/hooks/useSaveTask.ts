@@ -52,7 +52,7 @@ export function useSaveTask({
       category: fields.category,
       priority: fields.priority,
       status: detailTask.status,
-      pointValue: detailTask.pointValue,
+      pointValue: fields.pointValue ?? detailTask.pointValue,
       dueDate: fields.dueDate ?? undefined,
       completedAt: detailTask.completedAt ?? undefined,
       isRecurring: detailTask.isRecurring,

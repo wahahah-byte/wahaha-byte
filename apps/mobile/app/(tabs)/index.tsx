@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import {
   FILTERS,
@@ -11,6 +11,7 @@ import {
 } from "@wahaha/shared";
 
 import { getToken, usersApi } from "@/lib/api";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { CapWarningModal } from "@/components/cap-warning-modal";
 import { DemoModeBanner } from "@/components/demo-mode-banner";
 import { FilterStrip } from "@/components/filter-strip";
@@ -165,12 +166,16 @@ export default function TasksScreen() {
   const submitBarVisible =
     activeFilter === "completed" && selectedIds.size > 0;
 
+  // Manual keyboard tracking. KeyboardAvoidingView's internal layout recalc
+  // is unreliable on Android with edgeToEdgeEnabled: true (both `height` and
+  // `padding` behaviors left a ~30-40px stuck offset after dismiss — the
+  // restore under-corrected by the nav-bar height, lifting the action bar
+  // and the filter strip with it). Listening to Keyboard events ourselves
+  // and applying paddingBottom equal to the exact measured keyboard height
+  // (or zero when closed) avoids that whole class of drift.
+  const keyboardHeight = useKeyboardHeight();
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingBottom: keyboardHeight }]}>
       {!hasToken ? <DemoModeBanner /> : null}
       <View style={[styles.header, hasToken ? null : styles.headerCompact]}>
         <ThemedText
@@ -239,7 +244,6 @@ export default function TasksScreen() {
         onConfirm={() => doSubmit()}
       />
     </ThemedView>
-    </KeyboardAvoidingView>
   );
 }
 

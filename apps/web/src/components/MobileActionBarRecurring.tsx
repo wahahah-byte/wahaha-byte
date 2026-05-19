@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import FilterTray from "@/components/FilterTray";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import { CATEGORY_COLOR } from "@/lib/constants";
 
@@ -55,6 +56,11 @@ export default function MobileActionBarRecurring({
   const [showGroup, setShowGroup] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const trayElementRef = useRef<HTMLDivElement>(null);
+  // Same keyboard-aware bottom anchor as MobileActionBar — see useKeyboardInset.
+  const keyboardInset = useKeyboardInset();
+  const bottomOffset = keyboardInset > 0
+    ? `${keyboardInset}px`
+    : "env(safe-area-inset-bottom, 0px)";
 
   return (
     <>
@@ -62,7 +68,7 @@ export default function MobileActionBarRecurring({
         data-edge-drawer-block
         className="fixed left-0 right-0 sm:hidden flex items-center gap-1.5 px-2 pb-px"
         style={{
-          bottom: "env(safe-area-inset-bottom, 0px)",
+          bottom: bottomOffset,
           height: "50px",
           background: "var(--color-header)",
           borderTop: "1px solid var(--color-border-soft)",

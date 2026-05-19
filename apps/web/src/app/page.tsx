@@ -18,6 +18,7 @@ import DesktopShell from "@/components/DesktopShell";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { useOneHandedMode } from "@/hooks/useOneHandedMode";
 import { useTaskSubmission } from "@/hooks/useTaskSubmission";
 import { useTasks } from "@/hooks/useTasks";
 import { useLogCounter } from "@/hooks/useLogCounter";
@@ -53,6 +54,7 @@ function Home() {
   const scrollRefForPtr = useMemo(() => ({ current: activeScrollEl }), [activeScrollEl]);
   const pagerRef = useRef<HTMLDivElement>(null);
   const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRefForPtr, refetch);
+  const oneHanded = useOneHandedMode();
 
   const [activeFilter, setActiveFilter] = useState(initialActiveFilter);
   const [showNewTask, setShowNewTask] = useState(false);
@@ -464,15 +466,25 @@ function Home() {
       <div className="task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
         <div
           className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden"
-          style={{ maxWidth: 420 }}
+          style={{
+            maxWidth: 420,
+            transform: `translateY(${oneHanded.translateY}px)`,
+            transition: oneHanded.isTracking ? "none" : "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
+          }}
         >
           {!isAuthenticated && <DemoModeBanner />}
 
-          <div style={{ paddingTop: 32, background: "var(--color-bg)" }}>
+          <div
+            style={{ paddingTop: 32, background: "var(--color-bg)", touchAction: "pan-x" }}
+            onTouchStart={oneHanded.handleTouchStart}
+            onTouchMove={oneHanded.handleTouchMove}
+            onTouchEnd={oneHanded.handleTouchEnd}
+            onTouchCancel={oneHanded.handleTouchEnd}
+          >
             {(() => {
               const label = FILTERS.find((f) => f.value === activeFilter)?.label ?? "Tasks";
               return (
-                <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px]">
+                <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px] flex items-center justify-between">
                   <span
                     style={{
                       fontSize: 12,
@@ -484,6 +496,14 @@ function Home() {
                   >
                     {label}
                   </span>
+                  {oneHanded.isShrunk && (
+                    <span
+                      className="text-[9px] tracking-widest uppercase pr-3"
+                      style={{ color: "var(--color-fg-subtle)" }}
+                    >
+                      tap to expand
+                    </span>
+                  )}
                 </div>
               );
             })()}

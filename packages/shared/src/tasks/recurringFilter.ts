@@ -1,5 +1,5 @@
 import type { TaskDto } from "../api/tasks";
-import { canCheckInNow, isOverdue, parseLocalDate } from "../time/dateUtils";
+import { canCheckInNow, isOverdue } from "../time/dateUtils";
 
 /**
  * Recurring (Routines) tab filter. Mirrors web's `tabMatches` in
@@ -24,17 +24,16 @@ export function recurringTabMatches(task: TaskDto, tab: string): boolean {
 
 /**
  * True when a recurring task has been checked-in for its current cycle and is
- * now waiting for the next window to open. Mirrors web's `isCheckedInThisCycle`
- * in apps/web/src/app/recurring/page.tsx: the absence of an overdue dueDate
- * plus a present lastCheckInDate plus today < dueDate uniquely identifies the
- * "already done this cycle" state without needing period-derived prevStart
- * math (which mis-fires for daily tasks).
+ * now waiting for the next window to open. Uses canCheckInNow as the canonical
+ * "cycle is currently open" predicate — the inverse, with an !isOverdue guard,
+ * uniquely identifies "done this cycle, waiting for next window."
+ *
+ * Previously this used `today < dueDate` as a proxy, which mis-classified
+ * optimistic check-ins on overdue daily tasks: getNextDueDate(yesterday,
+ * "daily") = today, and today < today is false → the row stayed in Active.
  */
 export function isCheckedInThisCycle(task: TaskDto): boolean {
   if (!task.lastCheckInDate || !task.dueDate || !task.recurrenceRule) return false;
   if (isOverdue(task.dueDate)) return false;
-  const due = parseLocalDate(task.dueDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today < due;
+  return !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
 }

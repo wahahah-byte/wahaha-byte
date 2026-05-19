@@ -13,15 +13,20 @@ interface Props {
 export function StreakDisplay({ currentStreakCount, longestStreakCount }: Props) {
   const c = useColors();
   const count = currentStreakCount ?? 0;
-  if (count < 3) return null;
+  // Hide only when there's no streak at all. For counts 1-2 (below the
+  // tier-1 threshold) the panel still renders with a "STREAK" label and
+  // a progress segment toward tier 1 — hiding it entirely read as "the
+  // streak vanished" when an undo dropped the count back under 3.
+  if (count < 1) return null;
 
-  const multiplier = count >= 30 ? 2.0 : count >= 14 ? 1.8 : count >= 7 ? 1.5 : 1.2;
+  const multiplier = count >= 30 ? 2.0 : count >= 14 ? 1.8 : count >= 7 ? 1.5 : count >= 3 ? 1.2 : 1.0;
   const nextTier =
     count >= 30 ? null :
     count >= 14 ? { at: 30, mult: 2.0 } :
     count >= 7 ? { at: 14, mult: 1.8 } :
-    { at: 7, mult: 1.5 };
-  const tierStart = count >= 14 ? 14 : count >= 7 ? 7 : 3;
+    count >= 3 ? { at: 7, mult: 1.5 } :
+    { at: 3, mult: 1.2 };
+  const tierStart = count >= 14 ? 14 : count >= 7 ? 7 : count >= 3 ? 3 : 0;
   const SEGMENTS = 12;
   const filled = nextTier
     ? Math.max(1, Math.min(SEGMENTS, Math.round(((count - tierStart) / (nextTier.at - tierStart)) * SEGMENTS)))
@@ -36,7 +41,7 @@ export function StreakDisplay({ currentStreakCount, longestStreakCount }: Props)
             fontSize: 9, letterSpacing: 1.8, textTransform: "uppercase",
             fontWeight: "700", color: c.secondaryAccent,
           }}>
-            {currentStreakTier(count)?.label ?? "TIER 1"}
+            {currentStreakTier(count)?.label ?? "STREAK"}
           </ThemedText>
           <ThemedText style={{ opacity: 0.5, color: c.secondaryAccent }}>·</ThemedText>
           <ThemedText style={{

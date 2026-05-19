@@ -137,6 +137,19 @@ export interface AvatarItemRegisterByUrlInput extends AvatarItemRenderHintsInput
   grantAndEquipForCurrentUser?: boolean;
 }
 
+// Shop purchase wire types. Body is just { autoEquip } — the user being
+// purchased-for is always the caller (resolved from JWT server-side).
+// Response carries the new inventory row plus the user's updated balance
+// so a successful buy can update the grid + balance display in one shot.
+export interface PurchaseAvatarItemInput {
+  autoEquip?: boolean;
+}
+
+export interface PurchaseAvatarItemResponse {
+  inventory: UserInventoryDto;
+  newBalance: number;
+}
+
 // PagedResult is shared across feature APIs — defined in api/tasks.ts so
 // only one canonical export exists at the package root. Import from there
 // if you need it explicitly.
@@ -156,6 +169,15 @@ export function createAvatarApi(client: ApiClient) {
       client.authedGet<PagedResult<UserInventoryDto>>(`/api/UserInventory?pageNumber=${pageNumber}&pageSize=${pageSize}`),
     acquire: (itemId: number, isEquipped = false) =>
       client.authedPost<UserInventoryDto>(`/api/UserInventory`, { itemId, isEquipped }),
+    // Shop purchase — debits CurrentBalance by item.cost, creates a SPEND
+    // PointTransaction with SourceType=shop_item, and adds the inventory
+    // row (optionally auto-equipping). Server enforces no-duplicates so a
+    // stale client can't double-buy.
+    purchase: (itemId: number, input: PurchaseAvatarItemInput = {}) =>
+      client.authedPost<PurchaseAvatarItemResponse>(
+        `/api/AvatarItems/${itemId}/purchase`,
+        { autoEquip: input.autoEquip ?? false },
+      ),
     equip: (inventoryId: number) => client.authedPatch<void>(`/api/UserInventory/${inventoryId}/equip`),
     unequip: (inventoryId: number) => client.authedPatch<void>(`/api/UserInventory/${inventoryId}/unequip`),
     setPosition: (

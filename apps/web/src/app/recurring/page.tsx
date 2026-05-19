@@ -12,7 +12,7 @@ import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
 import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
-import { canCheckInNow, isOverdue, parseLocalDate, sumTodayCycleCounter } from "@/lib/dateUtils";
+import { canCheckInNow, isOverdue, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
@@ -25,6 +25,7 @@ import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import DesktopShell from "@/components/DesktopShell";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { useOneHandedMode } from "@/hooks/useOneHandedMode";
 import { withMockCycles } from "@/lib/mockTasks";
 
 const MOCK_RECURRING: TaskDto[] = ([
@@ -144,6 +145,7 @@ function Recurring() {
   const scrollRefForPtr = useMemo(() => ({ current: activeScrollEl }), [activeScrollEl]);
   const pagerRef = useRef<HTMLDivElement>(null);
   const { pullY, phase, triggerDistance } = usePullToRefresh(scrollRefForPtr, refetch);
+  const oneHanded = useOneHandedMode();
 
   function applyFilter(value: string) {
     setActiveFilter(value);
@@ -228,23 +230,17 @@ function Recurring() {
     }
   };
 
-  // A task counts as "checked in this cycle" when its dueDate has been
-  // advanced past today by a check-in. Before any check-in, dueDate equals
-  // today (open for check-in) or is in the past (overdue, filtered above).
-  // After check-in, dueDate is strictly > today and lastCheckInDate is set,
-  // so the pair (today < due, lastCheckInDate present) uniquely identifies
-  // the "already completed this cycle, waiting for the next window" state.
-  //
-  // Earlier attempts compared lastCheckInDate to a period-derived prevStart;
-  // that mis-fires for daily tasks where yesterday's check-in date and
-  // today's prevStart coincide, classifying a still-pending task as done.
+  // A task counts as "checked in this cycle" when the user has already done
+  // the current period and the next window hasn't opened yet — i.e. the
+  // canonical canCheckInNow check returns false. Using !canCheckInNow (with
+  // an !isOverdue guard so overdue rows stay in the missed bucket) handles
+  // the optimistic edge case where an overdue daily task's next dueDate
+  // lands on today: today < due is false there, so the previous proxy left
+  // the row stuck in Active until a refetch.
   function isCheckedInThisCycle(t: TaskDto): boolean {
     if (!t.lastCheckInDate || !t.dueDate || !t.recurrenceRule) return false;
     if (isOverdue(t.dueDate)) return false;
-    const due = parseLocalDate(t.dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today < due;
+    return !canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate);
   }
 
   function buildListItemsForFilter(filterValue: string): (TaskDto | Sep)[] {
@@ -524,14 +520,27 @@ function Recurring() {
   return (
     <>
       <div className="recurring-scope task-page-shell flex flex-col bg-scanlines overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-fg)" }}>
-        <div className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad" style={{ maxWidth: 420 }}>
+        <div
+          className="w-full mx-auto px-3 sm:px-4 flex flex-col flex-1 overflow-hidden has-mobile-bottom-pad"
+          style={{
+            maxWidth: 420,
+            transform: `translateY(${oneHanded.translateY}px)`,
+            transition: oneHanded.isTracking ? "none" : "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
+          }}
+        >
           {!isAuthenticated && <DemoModeBanner />}
 
-          <div style={{ paddingTop: 32, background: "var(--color-bg)" }}>
+          <div
+            style={{ paddingTop: 32, background: "var(--color-bg)", touchAction: "pan-x" }}
+            onTouchStart={oneHanded.handleTouchStart}
+            onTouchMove={oneHanded.handleTouchMove}
+            onTouchEnd={oneHanded.handleTouchEnd}
+            onTouchCancel={oneHanded.handleTouchEnd}
+          >
             {(() => {
               const label = RECURRING_FILTERS.find((f) => f.value === activeFilter)?.label ?? "Routines";
               return (
-                <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px]">
+                <div className="mb-3 sm:mb-4 pl-[14px] sm:pl-[20px] flex items-center justify-between">
                   <span
                     style={{
                       fontSize: 12,
@@ -543,6 +552,14 @@ function Recurring() {
                   >
                     {label}
                   </span>
+                  {oneHanded.isShrunk && (
+                    <span
+                      className="text-[9px] tracking-widest uppercase pr-3"
+                      style={{ color: "var(--color-fg-subtle)" }}
+                    >
+                      tap to expand
+                    </span>
+                  )}
                 </div>
               );
             })()}

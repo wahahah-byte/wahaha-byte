@@ -9,14 +9,16 @@ import {
   View,
 } from "react-native";
 
-import { CATEGORIES, COUNTER_UNITS, maxPointsFor } from "@wahaha/shared";
+import { CATEGORIES, COUNTER_UNITS, maxPointsFor, type UserInventoryDto } from "@wahaha/shared";
 
+import { ChibiAvatar } from "@/components/chibi-avatar";
 import { CompactSelect } from "@/components/compact-select";
 import { DatePicker } from "@/components/date-picker";
 import { GoalStepper } from "@/components/goal-stepper";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
+import { equippedCache } from "@/lib/equipped-cache";
 
 const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
   { label: "Once", value: "once", rule: null },
@@ -106,6 +108,20 @@ export function TaskForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Equipped avatar — same module-level cache pattern as the detail screen's
+  // CounterPanel. Renders the ChibiAvatar hero at the top of the form so all
+  // interactive fields below sit inside the one-handed thumb zone. When the
+  // keyboard opens the avatar scrolls away with the rest of the content,
+  // leaving the visible area to the fields.
+  const [equipped, setEquipped] = useState<UserInventoryDto[]>(
+    () => equippedCache.read() ?? [],
+  );
+  useEffect(() => {
+    const unsubscribe = equippedCache.subscribe(setEquipped);
+    equippedCache.revalidate();
+    return unsubscribe;
+  }, []);
+
   // Counter only applies to recurring tasks — mirror web's auto-clear.
   useEffect(() => {
     if (!isRecurring && hasCounter) setHasCounter(false);
@@ -159,10 +175,15 @@ export function TaskForm({
 
   const scrollView = (
     <ScrollView
+      style={{ flex: 1 }}
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="always"
       {...(Platform.OS === "ios" ? { automaticallyAdjustKeyboardInsets: true } : {})}
     >
+        <View style={styles.avatarHero}>
+          <ChibiAvatar equipped={equipped} height={140} />
+        </View>
+
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -222,23 +243,40 @@ export function TaskForm({
 
         {!showDetails ? (
           <Pressable onPress={() => setShowDetails(true)}>
-            <ThemedText style={{ color: c.fgSubtle, fontSize: 11, letterSpacing: 0.5, marginBottom: 12 }}>
+            <ThemedText style={{ color: c.fgSubtle, fontSize: 11, letterSpacing: 0.5, marginTop: 14, marginBottom: 12 }}>
               More details ▾
             </ThemedText>
           </Pressable>
         ) : (
-          <View style={{ gap: 14, marginBottom: 12 }}>
+          <View style={{ gap: 14, marginTop: 14, marginBottom: 12 }}>
             <Field label={isRecurring ? "First Due" : "Due"} c={c}>
               <DatePicker value={dueDate} onChange={setDueDate} />
             </Field>
 
+            <Field label="Category" c={c}>
+              <CompactSelect
+                value={category}
+                onChange={setCategory}
+                options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+              />
+            </Field>
+
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Field label="Category" c={c}>
+                <Field label="Repeat" c={c}>
                   <CompactSelect
-                    value={category}
-                    onChange={setCategory}
-                    options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                    value={isRecurring ? recurrenceRule : "once"}
+                    onChange={(v) => {
+                      if (v === "once") setIsRecurring(false);
+                      else {
+                        setIsRecurring(true);
+                        setRecurrenceRule(v);
+                      }
+                    }}
+                    options={REPEAT_OPTIONS.map((o) => ({
+                      value: o.rule ?? "once",
+                      label: o.label,
+                    }))}
                   />
                 </Field>
               </View>
@@ -253,45 +291,6 @@ export function TaskForm({
                 </Field>
               </View>
             </View>
-
-            <Field label="Repeat" c={c}>
-              <View style={styles.pillRow}>
-                {REPEAT_OPTIONS.map((opt) => {
-                  const active = opt.rule === null ? !isRecurring : isRecurring && recurrenceRule === opt.rule;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      onPress={() => {
-                        if (opt.rule === null) setIsRecurring(false);
-                        else {
-                          setIsRecurring(true);
-                          setRecurrenceRule(opt.rule);
-                        }
-                      }}
-                      style={[
-                        styles.pillCompact,
-                        {
-                          backgroundColor: active ? c.activeHighlightBg : "transparent",
-                          borderColor: active ? c.activeHighlightBorder : c.borderHairline,
-                        },
-                      ]}
-                    >
-                      <ThemedText
-                        style={{
-                          fontSize: 10,
-                          color: active ? c.activeHighlight : c.fgSubtle,
-                          fontWeight: active ? "600" : "400",
-                          letterSpacing: 1.5,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {opt.label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </Field>
 
             {/* Counter — recurring-only, mirrors web NewTaskModal. Single
                 horizontal flex-wrap row: Counter pill + Unit dropdown +
@@ -389,49 +388,53 @@ export function TaskForm({
         {error ? (
           <ThemedText style={{ color: c.danger, fontSize: 12, marginBottom: 8 }}>{error}</ThemedText>
         ) : null}
+    </ScrollView>
+  );
 
-        <View style={styles.footer}>
-          {onCancel ? (
-            <Pressable onPress={onCancel} hitSlop={8}>
-              <ThemedText
-                style={{
-                  color: c.fgSubtle,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  textTransform: "uppercase",
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                }}
-              >
-                Cancel
-              </ThemedText>
-            </Pressable>
-          ) : null}
+  // Footer pinned to the bottom of the modal — lives as a sibling of the
+  // ScrollView so it stays in the thumb zone regardless of how long the
+  // form's content gets. Mirrors the detail screen's bottomActionRow: wide
+  // pill buttons with borderHairline + uppercase labels color-coded by
+  // intent. Save = activeHighlight, Cancel = fgSubtle.
+  const footer = (
+    <View style={[styles.pinnedFooter, { borderTopColor: c.borderHairline, backgroundColor: c.bg }]}>
+      <View style={styles.bottomActionRow}>
+        {onCancel ? (
           <Pressable
-            onPress={handleSubmit}
-            disabled={submitting || !title.trim()}
-            style={[
-              styles.pixelBtn,
+            onPress={onCancel}
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.bottomActionBtn,
               {
-                borderColor: c.activeHighlightBorder,
-                opacity: submitting || !title.trim() ? 0.5 : 1,
+                borderColor: c.borderHairline,
+                backgroundColor: pressed ? c.overlayHover : "transparent",
+                opacity: submitting ? 0.5 : 1,
               },
             ]}
           >
-            <ThemedText
-              style={{
-                color: c.activeHighlight,
-                fontSize: 10,
-                fontWeight: "600",
-                letterSpacing: 1.8,
-                textTransform: "uppercase",
-              }}
-            >
-              {submitting ? "Saving…" : submitLabel}
+            <ThemedText style={[styles.bottomActionLabel, { color: c.fgSubtle }]}>
+              Cancel
             </ThemedText>
           </Pressable>
-        </View>
-    </ScrollView>
+        ) : null}
+        <Pressable
+          onPress={handleSubmit}
+          disabled={submitting || !title.trim()}
+          style={({ pressed }) => [
+            styles.bottomActionBtn,
+            {
+              borderColor: c.borderHairline,
+              backgroundColor: pressed ? c.overlayHover : "transparent",
+              opacity: submitting || !title.trim() ? 0.5 : 1,
+            },
+          ]}
+        >
+          <ThemedText style={[styles.bottomActionLabel, { color: c.activeHighlight }]}>
+            {submitting ? "Saving…" : submitLabel}
+          </ThemedText>
+        </Pressable>
+      </View>
+    </View>
   );
 
   return (
@@ -439,8 +442,11 @@ export function TaskForm({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
-      <ThemedView style={[styles.container, { backgroundColor: c.panel }]}>
+      {/* Match the detail screen's sheet background (c.bg) instead of the
+          lighter c.panel — keeps edit and detail feeling like one surface. */}
+      <ThemedView style={[styles.container, { backgroundColor: c.bg }]}>
         {scrollView}
+        {footer}
       </ThemedView>
     </KeyboardAvoidingView>
   );
@@ -451,8 +457,9 @@ function Field({ label, c, children }: { label: string; c: ReturnType<typeof use
     <View style={{ gap: 6 }}>
       <ThemedText
         style={{
-          color: c.fgSubtle,
-          fontSize: 8,
+          color: c.fgMuted,
+          fontSize: 9,
+          fontWeight: "600",
           letterSpacing: 1.8,
           textTransform: "uppercase",
         }}
@@ -467,6 +474,11 @@ function Field({ label, c, children }: { label: string; c: ReturnType<typeof use
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { padding: 20 },
+  avatarHero: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
   titleInput: {
     fontSize: 16,
     fontWeight: "600",
@@ -495,18 +507,36 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 12,
+  // Matches the detail screen's footer pill row so the two surfaces feel
+  // the same — same paddings, same hairline border, same uppercase labels.
+  footerStack: {
+    gap: 10,
+    paddingTop: 14,
     marginTop: 4,
   },
-  pixelBtn: {
+  pinnedFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  bottomActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  bottomActionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 6,
     borderWidth: 1,
-    borderRadius: 3,
-    paddingVertical: 5,
-    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bottomActionLabel: {
+    fontSize: 11,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    fontWeight: "600",
   },
   counterRow: {
     flexDirection: "row",

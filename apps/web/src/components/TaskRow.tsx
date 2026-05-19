@@ -574,7 +574,7 @@ function TaskRowImpl({
               className="w-4 h-4 flex-shrink-0 flex items-center justify-center transition-all duration-150"
               style={{
                 border: `1px solid ${selectedIds.has(task.taskId) ? "var(--color-success)" : "var(--color-border-faint)"}`,
-                borderRadius: "2px",
+                borderRadius: "3px",
                 background: selectedIds.has(task.taskId) ? "rgba(74,222,128,0.12)" : "transparent",
               }}
             >
@@ -609,9 +609,12 @@ function TaskRowImpl({
               }
               if (isActionable) onCheckIn(task);
             };
-            const boxBorder = filledThisCycle || isActionable
-              ? dot
-              : `color-mix(in srgb, ${dot} 35%, transparent)`;
+            // Mirror apps/mobile's checkinBox style: small (14×14), no fill
+            // when checked — the priority-coloured border + same-colour
+            // checkmark are enough signal, and the unfilled box reads as
+            // less heavy in dense lists. Locked state uses opacity so the
+            // whole box fades together (border + check) instead of a
+            // partially-transparent border that visually orphans the check.
             const box = (
               <button
                 onClick={isInteractive ? onBoxClick : (e) => e.stopPropagation()}
@@ -621,24 +624,24 @@ function TaskRowImpl({
                 title={label}
                 className="flex-shrink-0"
                 style={{
-                  width: 22, height: 22,
+                  width: 14, height: 14,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
                   padding: 0,
-                  borderRadius: 4,
-                  background: filledThisCycle ? dot : "transparent",
-                  border: `1.5px solid ${boxBorder}`,
+                  borderRadius: 3,
+                  background: "transparent",
+                  border: `1.5px solid ${dot}`,
                   cursor: isInteractive ? "pointer" : "default",
-                  transition: "background 0.15s ease, border-color 0.15s ease, transform 0.1s ease",
-                  opacity: isAdvancing ? 0.5 : 1,
+                  transition: "background 0.15s ease, opacity 0.15s ease, transform 0.1s ease",
+                  opacity: isAdvancing ? 0.5 : !filledThisCycle && !isActionable ? 0.35 : 1,
                 }}
                 onMouseEnter={(e) => { if (isActionable) e.currentTarget.style.background = `color-mix(in srgb, ${dot} 14%, transparent)`; }}
                 onMouseLeave={(e) => { if (isActionable) e.currentTarget.style.background = "transparent"; }}
               >
                 {filledThisCycle && (
-                  <svg width="12" height="9" viewBox="0 0 12 9" fill="none" aria-hidden>
-                    <polyline points="1.5,4.5 4.5,7.5 10.5,1.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <svg width="10" height="8" viewBox="0 0 12 9" fill="none" aria-hidden>
+                    <polyline points="1.5,4.5 4.5,7.5 10.5,1.5" stroke={dot} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                   </svg>
                 )}
               </button>

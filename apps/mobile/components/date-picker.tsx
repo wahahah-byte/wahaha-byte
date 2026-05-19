@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -81,10 +81,21 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
 
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
   const [open, setOpen] = useState(false);
+  // Stable today snapshot — recomputed only when the picker (re)opens, not
+  // on every render. Previously `const today = new Date()` ran every render,
+  // producing a fresh reference each time; that cascaded into every
+  // MonthGrid re-rendering on every parent state change (swipe progress,
+  // layout, sheet drag), which is the bulk of the perceived stutter when
+  // the sheet slides in.
+  const { today, todayMidnight } = useMemo(() => {
+    const t = new Date();
+    return {
+      today: t,
+      todayMidnight: new Date(t.getFullYear(), t.getMonth(), t.getDate()),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [showYearSelect, setShowYearSelect] = useState(false);
 
   // Reference month/year — anchors the strip. Doesn't change while
@@ -99,6 +110,12 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
   const [yearPage, setYearPage] = useState(today.getFullYear() - 1);
   const [pendingValue, setPendingValue] = useState<Date | null>(value);
   const [containerW, setContainerW] = useState(0);
+
+  // Stable picker handler — passing an inline `(d) => setPendingValue(d)`
+  // to every MonthGrid would defeat React.memo (new ref each render). The
+  // setState updater is itself stable across renders, so we can hand it
+  // through directly.
+  const handlePick = useCallback((d: Date) => setPendingValue(d), []);
 
   const sheetY = useSharedValue(screenH);
   const dragStart = useSharedValue(0);
@@ -407,7 +424,8 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
                             pendingValue={pendingValue}
                             todayMidnight={todayMidnight}
                             today={today}
-                            onPick={(d) => setPendingValue(d)}
+                            onPick={handlePick}
+                            c={c}
                           />
                         </View>
                       ))}
@@ -550,10 +568,16 @@ interface MonthGridProps {
   todayMidnight: Date;
   today: Date;
   onPick: (d: Date) => void;
+  c: ReturnType<typeof useColors>;
 }
 
-function MonthGrid({ data, pendingValue, todayMidnight, today, onPick }: MonthGridProps) {
-  const c = useColors();
+// memo'd: parent re-renders constantly while the sheet animates and the user
+// swipes between months, but only the month containing `pendingValue` (and
+// any neighbour the user just swiped onto) actually needs to repaint. `c` is
+// referentially stable per theme; `data`, `todayMidnight`, `today`, `onPick`
+// are all stabilized by the parent. pendingValue is the only frequent
+// changer, and the default shallow comparison handles it correctly.
+const MonthGrid = memo(function MonthGrid({ data, pendingValue, todayMidnight, today, onPick, c }: MonthGridProps) {
   return (
     <View style={styles.grid}>
       {data.cells.map((day, i) => {
@@ -604,7 +628,7 @@ function MonthGrid({ data, pendingValue, todayMidnight, today, onPick }: MonthGr
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   trigger: {

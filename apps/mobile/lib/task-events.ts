@@ -22,8 +22,10 @@ export interface CheckedInPayload {
 }
 
 type CheckInListener = (payload: CheckedInPayload) => void;
+type RefreshListener = () => void;
 
 const checkInListeners = new Set<CheckInListener>();
+const refreshListeners = new Set<RefreshListener>();
 
 export const taskEvents = {
   subscribeCheckedIn(fn: CheckInListener): () => void {
@@ -34,5 +36,20 @@ export const taskEvents = {
   },
   emitCheckedIn(payload: CheckedInPayload): void {
     for (const fn of checkInListeners) fn(payload);
+  },
+  // Emitted when a TaskRow detects its own state is stuck/inconsistent
+  // (e.g. checkedThisCycle but no latestCheckinCycle, because the rapid-
+  // tap flow left the list's recentCycles stale and the in-app
+  // useFocusEffect refetch hasn't fired — task/[id] is a transparentModal
+  // so the underlying list never actually blurs). TaskList subscribes
+  // and runs its fetchTasks() so the next interaction sees fresh state.
+  subscribeRefreshRequested(fn: RefreshListener): () => void {
+    refreshListeners.add(fn);
+    return () => {
+      refreshListeners.delete(fn);
+    };
+  },
+  emitRefreshRequested(): void {
+    for (const fn of refreshListeners) fn();
   },
 };

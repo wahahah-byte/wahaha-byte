@@ -20,7 +20,11 @@ import { CATEGORIES, COUNTER_UNITS, maxPointsFor, type CreateTaskRequest } from 
 import { tasksApi } from "@/lib/api";
 import { DatePicker } from "@/components/date-picker";
 import { GoalStepper } from "@/components/goal-stepper";
-import { InlineChipDropdown } from "@/components/inline-chip-dropdown";
+import {
+  InlineChipDropdown,
+  InlineDropdownBody,
+  inlineChipDropdownStyles,
+} from "@/components/inline-chip-dropdown";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
@@ -84,11 +88,15 @@ export default function NewTaskScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Which chip's inline dropdown is currently open. The Category, Repeat,
-  // and Counter-unit chips use an inline overlay (not <Modal>) so the
-  // keyboard stays up while the user picks. Date uses the full DatePicker
-  // modal which DOES dismiss the keyboard — the calendar needs the screen,
-  // and the title re-focuses on close to bring the keyboard back.
-  const [openChip, setOpenChip] = useState<"category" | "repeat" | "unit" | null>(null);
+  // Points, and Counter-unit chips use an inline overlay (not <Modal>) so
+  // the keyboard stays up while the user picks. Date uses the full
+  // DatePicker modal which DOES dismiss the keyboard — the calendar needs
+  // the screen, and the title re-focuses on close to bring the keyboard back.
+  const [openChip, setOpenChip] = useState<"category" | "repeat" | "points" | "unit" | null>(null);
+  // Points value: starts at the per-recurrence default and the user can
+  // override via the inline chip dropdown. Recurring tasks use the 1-5
+  // scale; one-shot tasks use 5/10/15/20/25 capped by the category's max.
+  const [pointValue, setPointValue] = useState<number>(initialRecurring ? 1 : 10);
 
   // Counter is recurring-only — same constraint as web NewTaskModal and the
   // edit-task form. Cleared automatically when the user picks "Once".
@@ -96,6 +104,38 @@ export default function NewTaskScreen() {
   const [counterUnit, setCounterUnit] = useState<string>("");
   const [counterGoal, setCounterGoal] = useState<string>("");
   const [capLogAtGoal, setCapLogAtGoal] = useState(false);
+
+  // Detached chip dropdowns: render the dropdown body at root level (sibling
+  // of the bar) instead of nesting it inside the chip. Why: on Android, a
+  // child rendered with position:absolute that extends past its parent's
+  // bounds doesn't receive touches in the outside-parent area, even though
+  // it's visually painted there. Nesting the dropdown inside the bar made
+  // the upper option rows un-scrollable — the swipe-up gesture passed into
+  // territory above the bar and was dropped. Lifting it out gives the
+  // dropdown its own hit-test bounds. barHeight + per-chip x are measured
+  // via onLayout so the overlay sits just above the bar, horizontally
+  // aligned with the open chip.
+  const [barHeight, setBarHeight] = useState(0);
+  // The chipRow's Y offset *within* the bar — measured separately because
+  // each chip's `y` is reported relative to the chipRow, not the bar. We
+  // sum them (rowY + chip.y) to get the chip's top within the bar.
+  const [chipRowY, setChipRowY] = useState(0);
+  const [counterRowY, setCounterRowY] = useState(0);
+  const [chipRects, setChipRects] = useState<
+    Record<string, { x: number; y: number; width: number; height: number }>
+  >({});
+  function updateChipRect(
+    name: string,
+    rect: { x: number; y: number; width: number; height: number },
+  ) {
+    setChipRects((prev) => {
+      const cur = prev[name];
+      if (cur && cur.x === rect.x && cur.y === rect.y && cur.width === rect.width && cur.height === rect.height) {
+        return prev;
+      }
+      return { ...prev, [name]: rect };
+    });
+  }
 
   const isRecurring = useMemo(
     () => REPEAT_OPTIONS.find((o) => o.value === repeatValue)?.rule != null,
@@ -105,6 +145,27 @@ export default function NewTaskScreen() {
   useEffect(() => {
     if (!isRecurring && hasCounter) setHasCounter(false);
   }, [isRecurring, hasCounter]);
+
+  // Allowed point values: 1-5 for recurring, 5/10/15/20/25 for one-shot
+  // capped by the category limit. Mirrors web NewTaskModal + task-form.
+  const pointOptions = useMemo(
+    () => (isRecurring
+      ? [1, 2, 3, 4, 5]
+      : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(category))),
+    [isRecurring, category],
+  );
+
+  // Whenever the rule or category changes the point set can shift (e.g.
+  // jumping from one-shot to recurring leaves the user at 10 which isn't a
+  // valid recurring value, or switching to a category with a lower cap).
+  // Snap to the nearest allowed value so the chip never displays a stale
+  // out-of-range number.
+  useEffect(() => {
+    if (pointOptions.length === 0) return;
+    if (!pointOptions.includes(pointValue)) {
+      setPointValue(isRecurring ? 1 : pointOptions[pointOptions.length - 1]);
+    }
+  }, [pointOptions, pointValue, isRecurring]);
 
   const titleRef = useRef<TextInput>(null);
 
@@ -188,7 +249,7 @@ export default function NewTaskScreen() {
       description: trimmedDesc.length > 0 ? trimmedDesc : undefined,
       category,
       priority: PRIORITY_API[priority],
-      pointValue: recurring ? 1 : Math.min(10, maxPointsFor(category)),
+      pointValue: pointValue,
       isRecurring: recurring,
       recurrenceRule: recurring ? repeat!.rule! : undefined,
       dueDate: fmtDate(dueDate) ?? undefined,
@@ -241,6 +302,10 @@ export default function NewTaskScreen() {
           },
           barStyle,
         ]}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h && h !== barHeight) setBarHeight(h);
+        }}
       >
         <View style={styles.titleRow}>
           <TextInput
@@ -295,7 +360,13 @@ export default function NewTaskScreen() {
           style={[styles.descInput, { color: c.fgMuted }]}
         />
 
-        <View style={styles.chipRow}>
+        <View
+          style={styles.chipRow}
+          onLayout={(e) => {
+            const y = e.nativeEvent.layout.y;
+            if (y !== chipRowY) setChipRowY(y);
+          }}
+        >
           {/* Priority — tap cycles low → med → high. */}
           <Pressable
             onPress={cyclePriority}
@@ -340,6 +411,8 @@ export default function NewTaskScreen() {
             open={openChip === "category"}
             onOpenChange={(open) => setOpenChip(open ? "category" : null)}
             onChange={setCategory}
+            detachedDropdown
+            onChipLayout={(r) => updateChipRect("category", r)}
           />
 
           {/* Repeat. */}
@@ -349,6 +422,21 @@ export default function NewTaskScreen() {
             open={openChip === "repeat"}
             onOpenChange={(open) => setOpenChip(open ? "repeat" : null)}
             onChange={setRepeatValue}
+            detachedDropdown
+            onChipLayout={(r) => updateChipRect("repeat", r)}
+          />
+
+          {/* Points — sits inline with Category + Repeat so it stays
+              visible above the keyboard (the form below the bar was
+              previously where points lived, hidden by the soft keyboard). */}
+          <InlineChipDropdown
+            value={String(pointValue)}
+            options={pointOptions.map((v) => ({ value: String(v), label: `${v} pt${v === 1 ? "" : "s"}` }))}
+            open={openChip === "points"}
+            onOpenChange={(open) => setOpenChip(open ? "points" : null)}
+            onChange={(v) => setPointValue(Number(v))}
+            detachedDropdown
+            onChipLayout={(r) => updateChipRect("points", r)}
           />
 
           {/* Counter — recurring-only. Tapping the pill toggles the counter
@@ -379,7 +467,13 @@ export default function NewTaskScreen() {
 
         {/* Counter sub-row — unit dropdown + goal stepper + cap-at-goal pill. */}
         {isRecurring && hasCounter ? (
-          <View style={styles.counterRow}>
+          <View
+            style={styles.counterRow}
+            onLayout={(e) => {
+              const y = e.nativeEvent.layout.y;
+              if (y !== counterRowY) setCounterRowY(y);
+            }}
+          >
             <InlineChipDropdown
               value={counterUnit}
               triggerLabel={counterUnit || "no unit"}
@@ -390,6 +484,8 @@ export default function NewTaskScreen() {
               open={openChip === "unit"}
               onOpenChange={(open) => setOpenChip(open ? "unit" : null)}
               onChange={setCounterUnit}
+              detachedDropdown
+              onChipLayout={(r) => updateChipRect("unit", r)}
             />
             <ThemedText
               style={{
@@ -442,6 +538,66 @@ export default function NewTaskScreen() {
           </ThemedText>
         ) : null}
       </Animated.View>
+
+      {/* Detached chip-dropdown overlay — rendered as a sibling of the bar
+          (NOT a child) so its hit-test bounds are independent. The
+          Animated.View shares the bar's `barStyle` transform so the overlay
+          tracks the bar as the soft keyboard slides it up — without this,
+          the overlay stayed at the screen bottom and got covered by the
+          keyboard. Position is computed to sit *directly* above the open
+          chip: the chip's top inside the bar = (rowY within bar) +
+          (chip.y within row), and `bottom: barHeight - chipTopInBar + 6`
+          puts the dropdown's bottom edge 6 px above the chip's top edge.
+          The bar's horizontal padding (14) plus chip.x gives the left. */}
+      {openChip && chipRects[openChip] ? (() => {
+        const rect = chipRects[openChip];
+        // Only the unit chip lives in the counter row; everything else is
+        // in the main chip row. Pick the right row Y so the dropdown lands
+        // on whichever row the chip is actually on.
+        const rowY = openChip === "unit" ? counterRowY : chipRowY;
+        const chipTopInBar = rowY + rect.y;
+        return (
+        <Animated.View
+          style={[
+            inlineChipDropdownStyles.detachedDropdown,
+            {
+              backgroundColor: c.input,
+              borderColor: c.border,
+              bottom: Math.max(0, barHeight - chipTopInBar + 6),
+              left: 14 + rect.x,
+              maxWidth: 240,
+            },
+            barStyle,
+          ]}
+        >
+          {openChip === "category" ? (
+            <InlineDropdownBody
+              options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+              value={category}
+              onChange={(v) => { setCategory(v); setOpenChip(null); }}
+            />
+          ) : openChip === "repeat" ? (
+            <InlineDropdownBody
+              options={REPEAT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              value={repeatValue}
+              onChange={(v) => { setRepeatValue(v); setOpenChip(null); }}
+            />
+          ) : openChip === "points" ? (
+            <InlineDropdownBody
+              options={pointOptions.map((v) => ({ value: String(v), label: `${v} pt${v === 1 ? "" : "s"}` }))}
+              value={String(pointValue)}
+              onChange={(v) => { setPointValue(Number(v)); setOpenChip(null); }}
+            />
+          ) : openChip === "unit" ? (
+            <InlineDropdownBody
+              options={[{ value: "", label: "no unit" }, ...COUNTER_UNITS.map((u) => ({ value: u, label: u }))]}
+              value={counterUnit}
+              onChange={(v) => { setCounterUnit(v); setOpenChip(null); }}
+            />
+          ) : null}
+        </Animated.View>
+        );
+      })() : null}
     </View>
   );
 }
