@@ -13,23 +13,18 @@ interface Props {
   onCategoryChange: (next: string | null) => void;
 }
 
-/** Hex-with-alpha helper. `mix(#94d9d6, 18)` → `#94d9d62E` (18% alpha hex). */
+// Hex-with-alpha helper; passes through non-hex strings.
 function alphaHex(hex: string, percent: number): string {
   const a = Math.round((percent / 100) * 255).toString(16).padStart(2, "0");
-  // For rgb()/rgba() strings, fall back to mixing with the surface — pass through.
   if (!hex.startsWith("#")) return hex;
-  // For 3-digit hex, expand.
+  // Expand 3-digit hex.
   const clean = hex.length === 4
     ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
     : hex;
   return `${clean}${a}`;
 }
 
-/**
- * Bottom bar specific to the Routines tab. Mirrors web's MobileActionBarRecurring:
- * horizontal scroll strip of category icons that filters the list, plus a "+"
- * button to open the New Task modal.
- */
+// Routines tab bottom bar — category filter strip + new-task plus button.
 export function RoutinesActionBar({ availableCategories, activeCategory, onCategoryChange }: Props) {
   const c = useColors();
 

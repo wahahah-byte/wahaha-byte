@@ -18,13 +18,10 @@ export function usePullToRefresh<T extends HTMLElement>(
   const startXRef = useRef<number | null>(null);
   const lockedRef = useRef(false);
   const abortedRef = useRef(false);
-  // Mirror of pullY for synchronous reads inside onTouchEnd; the React state
-  // copy lags because state updates are batched and the effect doesn't re-bind
-  // on every change (it would race with rapid touch events).
+  // Sync mirror of pullY for onTouchEnd reads; state lags due to batching.
   const pullYRef = useRef(0);
 
-  // Snapshot the element each render so the effect re-runs when it goes from
-  // null → element (e.g. when a parent gates rendering on a "mounted" flag).
+  // Re-bind effect when ref flips from null to element (parent gating on mount).
   const el = containerRef.current;
 
   useEffect(() => {
@@ -60,10 +57,7 @@ export function usePullToRefresh<T extends HTMLElement>(
       }
       const dy = e.touches[0].clientY - start;
       const dx = e.touches[0].clientX - startX;
-      // Axis lock: if the user has moved more horizontally than vertically
-      // by the time they cross the deadzone, treat this as a horizontal
-      // gesture (e.g. swipe-to-delete on a row) and abort pull-to-refresh
-      // for the rest of the touch.
+      // Axis lock: abort PtR if horizontal motion wins (e.g. swipe-to-delete).
       if (!lockedRef.current && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
         abortedRef.current = true;
         return;
@@ -74,10 +68,10 @@ export function usePullToRefresh<T extends HTMLElement>(
         }
         return;
       }
-      // Lock the gesture as a pull once the user has moved past a small deadzone
+      // Commit to pull gesture once past the deadzone.
       if (!lockedRef.current && dy > 6) lockedRef.current = true;
       if (!lockedRef.current) return;
-      // Damped pull: linear up to TRIGGER, then resistance.
+      // Linear pull up to TRIGGER, dampened resistance beyond.
       const damped =
         dy <= TRIGGER_DISTANCE
           ? dy

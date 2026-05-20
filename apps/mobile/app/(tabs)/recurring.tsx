@@ -31,9 +31,7 @@ export default function RoutinesScreen() {
     [activeFilter, activeCategory]
   );
 
-  // Web's recurring page uses `{ isRecurring: true }` only — does NOT pass
-  // isArchived: false. Match that exactly so the archived-routines visibility
-  // matches what the backend returns by default.
+  // Match web: { isRecurring: true } only, no isArchived filter.
   const listFilters = useMemo(() => ({ isRecurring: true }), []);
 
   const availableCategories = useMemo(() => {
@@ -42,9 +40,7 @@ export default function RoutinesScreen() {
     return [...seen].sort();
   }, [loadedTasks]);
 
-  // Mirrors web's recurring page: dot the Today tab when something is
-  // actionable right now, dot Missed when anything's overdue. Web uses
-  // `--color-active-highlight-alt` for today and `--color-danger` for missed.
+  // Dot Today when actionable; dot Missed when overdue.
   const todayCount = useMemo(
     () => loadedTasks.filter(
       (t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate) && !isOverdue(t.dueDate),
@@ -85,9 +81,7 @@ export default function RoutinesScreen() {
           filters={listFilters}
           activeFilter="all"
           preFilter={preFilter}
-          // Match web's mobile recurring view: on the "all" filter, surface
-          // tasks already checked-in this cycle under a "Checked In" section
-          // beneath the still-actionable routines.
+          // On "all" filter, split checked-in routines under their own section.
           splitCheckedIn={activeFilter === "all"}
           onTasksLoaded={setLoadedTasks}
           emptyText={emptyText}
@@ -100,9 +94,7 @@ export default function RoutinesScreen() {
         value={activeFilter}
         onChange={(v) => setActiveFilter(v as RecurringFilter)}
         getCount={(v) =>
-          // Per-filter counts derived from the already-loaded routine set.
-          // For "all" we mean every recurring task in view; the other filters
-          // narrow by recurringTabMatches.
+          // Per-filter counts from already-loaded routine set.
           v === "all"
             ? loadedTasks.length
             : loadedTasks.filter((t) => recurringTabMatches(t, v)).length

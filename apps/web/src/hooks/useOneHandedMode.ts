@@ -2,15 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Samsung-style one-handed shrink. Pull DOWN on a designated handle (typically
-// the page header — separate from the scroll container so pull-to-refresh
-// doesn't fight) to translate the page content downward into the bottom thumb
-// zone. Past TRIGGER the gesture commits and the content stays shrunk until
-// the user taps the empty top area or pulls back up.
-//
-// Lives outside the scroll surface on purpose: PtR owns "drag down inside the
-// list", this owns "drag down on the header / chrome above the list". No axis
-// negotiation needed.
+// Samsung-style one-handed shrink; pull DOWN on header handle to push content into thumb zone.
+// Lives outside the scroll surface — PtR owns "drag inside list", this owns "drag on header chrome".
 
 const TRIGGER = 110;          // pixels of pull required to commit
 const MAX_PULL = 280;         // absolute cap while finger is down
@@ -45,8 +38,7 @@ export function useOneHandedMode(): OneHandedMode {
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
-    // From shrunk: any tap on the handle restores immediately. Lets the user
-    // exit the mode without having to remember a specific gesture.
+    // From shrunk: tap on handle restores immediately.
     if (phase === "shrunk") {
       dismiss();
       return;
@@ -62,9 +54,7 @@ export function useOneHandedMode(): OneHandedMode {
     const dy = t.clientY - drag.startY;
     const dx = t.clientX - drag.startX;
     if (drag.axis === "none") {
-      // Need a few pixels of motion before we commit to an axis. Once we
-      // commit to vertical-down, we own the rest of the touch. Horizontal
-      // or upward motion releases ownership so other handlers can take over.
+      // Need a few px of motion to commit axis; horizontal/upward releases ownership.
       if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
       if (Math.abs(dx) > Math.abs(dy) || dy <= 0) {
         dragRef.current = null;
@@ -88,9 +78,7 @@ export function useOneHandedMode(): OneHandedMode {
       }
       return;
     }
-    // The committed translateY at release. If past trigger, snap to shrunk
-    // and persist. Otherwise spring back to zero. The CSS transition on the
-    // container handles the actual animation; we just set the target.
+    // Past trigger snaps to shrunk; otherwise springs back. CSS handles animation.
     if (translateY >= TRIGGER) {
       setPhase("shrunk");
       setTranslateY(shrunkOffset());
@@ -100,9 +88,7 @@ export function useOneHandedMode(): OneHandedMode {
     }
   }, [phase, translateY, shrunkOffset]);
 
-  // Snap back if the viewport resizes while shrunk (orientation change,
-  // browser chrome reveal). Keeps the offset proportional rather than
-  // leaving a stale absolute pixel value.
+  // Re-snap offset on resize while shrunk (keeps it proportional).
   useEffect(() => {
     if (phase !== "shrunk") return;
     function onResize() { setTranslateY(shrunkOffset()); }

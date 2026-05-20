@@ -24,16 +24,16 @@ export interface SidebarFilterGroup {
   title: string;
   items: SidebarFilterItem[];
   onSelect: (value: string) => void;
-  // Used so the same value across different groups doesn't collide.
+  // Disambiguator across groups.
   groupKey?: string;
 }
 
 interface Props {
   navItems: SidebarNavItem[];
   filterGroups?: SidebarFilterGroup[];
-  // Nav items pinned to the sidebar's bottom (rendered as nav rows).
+  // Nav items pinned to sidebar bottom.
   footerNavItems?: SidebarNavItem[];
-  // Optional bottom slot (e.g., user/settings shortcut).
+  // Bottom slot (e.g., user/settings).
   footer?: ReactNode;
 }
 

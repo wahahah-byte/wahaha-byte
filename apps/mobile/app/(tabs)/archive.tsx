@@ -30,9 +30,7 @@ export default function ArchiveScreen() {
   );
 }
 
-// Match web's mobile archive layout: outer wrapper uses `px-3` (12 px) — same
-// as the rest of the web mobile pages. The header sits flush with the list's
-// left edge so the column rule lines up.
+// Matches web mobile archive layout (px-3, flush header).
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 12, paddingTop: 64, paddingBottom: 10 },

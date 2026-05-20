@@ -3,10 +3,7 @@
 import { useCallback, useState } from "react";
 import type { TaskDto } from "@/lib/api/tasks";
 
-// Tracks the task being "restarted" from the overdue prompt — i.e. the user
-// hit Restart on an overdue row and the detail modal opened in edit mode.
-// On save, the page checks `isRestart(detailTask)` and calls `clearRestart()`
-// to dismiss the prompt state.
+// Tracks task being restarted from overdue prompt; detail modal opens in edit mode.
 export function useOverdueRestart() {
   const [overdueRestartTaskId, setOverdueRestartTaskId] = useState<string | null>(null);
 

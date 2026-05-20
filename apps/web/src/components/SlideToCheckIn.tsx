@@ -8,14 +8,14 @@ interface Props {
   onConfirm: () => void;
 }
 
-const COMMIT_FRACTION = 0.78;     // need to drag this far across to commit
+const COMMIT_FRACTION = 0.78;     // drag fraction to commit
 const SPRING_BACK_MS = 260;
-const COMMIT_GLIDE_MS = 320;       // ease-into-end after threshold crossed
-const DRAG_SMOOTH_MS = 80;         // tiny transition during drag — kills jitter without feeling laggy
-const COMMIT_FIRE_DELAY = COMMIT_GLIDE_MS - 40; // fire onConfirm just before the glide settles
+const COMMIT_GLIDE_MS = 320;       // ease-into-end after threshold
+const DRAG_SMOOTH_MS = 80;         // smooths drag jitter without lag
+const COMMIT_FIRE_DELAY = COMMIT_GLIDE_MS - 40; // fire onConfirm just before glide settles
 const THUMB_SIZE = 48;
 const TRACK_HEIGHT = 52;
-const TRACK_PAD = 2;              // inner padding so thumb doesn't touch the rim
+const TRACK_PAD = 2;              // inner padding
 
 type Phase = "idle" | "dragging" | "committing" | "springing";
 
@@ -45,7 +45,7 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
     const next = Math.max(0, Math.min(d.max, clientX - d.startX));
     setOffset(next);
     if (next / d.max >= COMMIT_FRACTION) {
-      // Commit — glide smoothly to the end instead of snapping.
+      // Commit; glide to end.
       dragRef.current = null;
       setPhase("committing");
       setOffset(d.max);
@@ -62,7 +62,7 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
     setTimeout(() => setPhase("idle"), SPRING_BACK_MS);
   }, []);
 
-  // Mouse handlers (desktop / hybrid devices).
+  // Mouse handlers for desktop / hybrid devices.
   const onMouseMove = useCallback((e: MouseEvent) => moveDrag(e.clientX), [moveDrag]);
   const onMouseUp = useCallback(() => {
     window.removeEventListener("mousemove", onMouseMove);
@@ -70,16 +70,12 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
     endDrag();
   }, [onMouseMove, endDrag]);
 
-  // Fade the label as the thumb advances; cap progress at 1.
+  // Fade label as thumb advances.
   const max = maxOffset();
   const progress = max > 0 ? offset / max : 0;
   const labelOpacity = committed ? 0 : Math.max(0, 1 - progress * 1.4);
 
-  // Per-phase easing — each transition models a different physical feel:
-  //  - dragging: 80ms light low-pass that smooths input jitter without obvious lag
-  //  - committing: 320ms slow-out so crossing the threshold glides into the end
-  //  - springing: 260ms back-ease for a soft return when released early
-  //  - idle: no transition (thumb pinned at 0)
+  // Per-phase easing.
   const thumbTransition =
     phase === "dragging"   ? `transform ${DRAG_SMOOTH_MS}ms cubic-bezier(0.18, 0.7, 0.4, 1)`
   : phase === "committing" ? `transform ${COMMIT_GLIDE_MS}ms cubic-bezier(0.22, 0.85, 0.3, 1)`
@@ -121,7 +117,7 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
         touchAction: "pan-y",
       }}
     >
-      {/* Centered hint label — fades out as the thumb moves */}
+      {/* Hint label, fades with progress */}
       <span
         aria-hidden
         style={{
@@ -143,7 +139,7 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
         {label}
       </span>
 
-      {/* Thumb — layered gradient + inset highlights for a glossy 3D pill */}
+      {/* Glossy 3D pill thumb */}
       <div
         aria-hidden
         style={{
@@ -165,11 +161,11 @@ export default function SlideToCheckIn({ label = "Slide to check in", disabled, 
           transform: `translateX(${offset}px)`,
           transition: thumbTransition,
           boxShadow: [
-            "inset 0 1.5px 0.5px rgba(255, 255, 255, 0.55)",   // top sheen
-            "inset 0 -1.5px 0.5px rgba(0, 0, 0, 0.22)",        // bottom shading
-            "inset 0 0 0 1px rgba(0, 0, 0, 0.10)",             // crisp rim
-            "0 4px 10px rgba(0, 0, 0, 0.32)",                  // primary lift
-            "0 1px 2px rgba(0, 0, 0, 0.22)",                   // contact shadow
+            "inset 0 1.5px 0.5px rgba(255, 255, 255, 0.55)",
+            "inset 0 -1.5px 0.5px rgba(0, 0, 0, 0.22)",
+            "inset 0 0 0 1px rgba(0, 0, 0, 0.10)",
+            "0 4px 10px rgba(0, 0, 0, 0.32)",
+            "0 1px 2px rgba(0, 0, 0, 0.22)",
           ].join(", "),
           willChange: "transform",
         }}

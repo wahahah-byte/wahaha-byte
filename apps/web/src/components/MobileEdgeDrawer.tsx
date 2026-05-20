@@ -36,8 +36,7 @@ export default function MobileEdgeDrawer() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasToken(token);
     if (!token) return;
-    // Mobile no longer renders <AuthHeader>, so this drawer is responsible
-    // for hydrating the points context on every route change.
+    // Drawer hydrates points context on route changes (no AuthHeader on mobile).
     usersApi.getMe().then(({ data }) => {
       if (!data) return;
       setBalance(data.currentBalance);
@@ -48,8 +47,7 @@ export default function MobileEdgeDrawer() {
     });
   }, [pathname, setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday]);
 
-  // Close the account popup whenever the drawer itself closes — covers
-  // swipe-to-close, backdrop tap, route change, and Escape key.
+  // Close account popup whenever drawer closes.
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -58,13 +56,11 @@ export default function MobileEdgeDrawer() {
   }, [open]);
   const [dragX, setDragX] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
-  // Track viewport so we can disable the drawer + its document-level swipe
-  // listeners on desktop (>=1024px), where DesktopSidebar replaces it.
+  // Desktop replaces drawer with DesktopSidebar.
   const [isDesktop, setIsDesktop] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; startedOpen: boolean; locked: "h" | "v" | null } | null>(null);
 
-  // Defer the portal until after hydration so server (no DOM) and first client
-  // render both return null — otherwise React sees a mismatch.
+  // Defer portal until after hydration to avoid SSR mismatch.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
@@ -77,7 +73,7 @@ export default function MobileEdgeDrawer() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Escape closes (mostly defensive — mobile-only component).
+  // Escape closes.
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
@@ -85,7 +81,7 @@ export default function MobileEdgeDrawer() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // Lock body scroll while the drawer is open so the page underneath doesn't scroll.
+  // Lock body scroll while drawer is open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -93,13 +89,7 @@ export default function MobileEdgeDrawer() {
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  // Document-level open gesture: when the drawer is closed, any horizontal
-  // right-swipe on the page opens the drawer. Swipes that begin on a row that
-  // is currently revealed are owned by the row's swipe-to-close gesture and
-  // must not also trigger the drawer; swipes elsewhere in the task list panel
-  // (closed rows, empty area) do open the drawer. The bottom action bar, the
-  // filter strip + handle, and any open modal opt out via the
-  // data-edge-drawer-block attributes so their gestures stay intact.
+  // Document-level right-swipe to open; opted out via data-edge-drawer-block.
   useEffect(() => {
     if (open || isDesktop) return;
     const dragXRef: { current: number | null } = { current: null };
@@ -108,14 +98,11 @@ export default function MobileEdgeDrawer() {
       if (e.touches.length > 1) return;
       const t = e.touches[0];
       const target = e.target as Element | null;
-      // A revealed row's right-swipe must close that row, not open the drawer.
+      // Revealed row owns its right-swipe.
       if (target?.closest('.task-row-wrapper[data-revealed="true"]')) return;
-      // Bottom action bar, filter tray + handle, and any open modal mark
-      // themselves with this attribute so their gestures aren't hijacked.
+      // Action bar, tray, modals opt-out.
       if (target?.closest("[data-edge-drawer-block]")) return;
-      // Some elements (the FilterTray handle pill) are visually narrow but
-      // sit in a row a user is likely reaching for — block the entire
-      // horizontal band at that Y.
+      // Block entire horizontal band for narrow row-blockers (e.g. tray handle).
       const rowBlockers = document.querySelectorAll("[data-edge-drawer-block-row]");
       for (let i = 0; i < rowBlockers.length; i++) {
         const r = rowBlockers[i].getBoundingClientRect();
@@ -136,9 +123,7 @@ export default function MobileEdgeDrawer() {
       const dy = t.clientY - d.startY;
       if (d.locked === null) {
         if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
-        // The closed-drawer open gesture is right-swipe only. A leftward
-        // horizontal motion shouldn't render a transparent backdrop or fight
-        // with a task row's reveal swipe.
+        // Open gesture is right-swipe only.
         if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
           d.locked = "h";
         } else {
@@ -197,8 +182,7 @@ export default function MobileEdgeDrawer() {
       if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
       if (Math.abs(dx) > Math.abs(dy)) {
         d.locked = "h";
-        // Hide the account popup the moment the drawer starts dragging so
-        // it doesn't translate along with the panel mid-swipe.
+        // Hide popup at drag start so it doesn't translate with the panel.
         setAccountMenuOpen(false);
       } else {
         d.locked = "v";
@@ -222,32 +206,29 @@ export default function MobileEdgeDrawer() {
     setDragX(null);
     if (d.locked !== "h" || final === null) return;
 
-    // Snap based on how far past the threshold we've dragged.
+    // Snap based on threshold crossing.
     const openIfPast = -DRAWER_WIDTH + DRAWER_WIDTH * COMMIT_FRACTION;
     const closeIfBefore = -DRAWER_WIDTH * COMMIT_FRACTION;
     if (d.startedOpen) {
-      // open → close requires dragging left past the close threshold
       if (final < closeIfBefore) setOpen(false);
     } else {
-      // closed → open requires dragging right past the open threshold
       if (final > openIfPast) setOpen(true);
     }
   }, [dragX]);
 
   if (!mounted) return null;
-  // On desktop the static DesktopSidebar replaces this drawer entirely.
+  // Desktop replaces this with DesktopSidebar.
   if (isDesktop) return null;
   if (pathname === "/login" || pathname === "/register") return null;
 
-  // Where the drawer's left edge sits — interpolated during a drag, snapped otherwise.
+  // Drawer left-edge position; interpolated during drag.
   const drawerX = dragX !== null ? dragX : (open ? 0 : -DRAWER_WIDTH);
   const visibleFraction = (drawerX + DRAWER_WIDTH) / DRAWER_WIDTH;
   const isActive = open || dragX !== null;
 
   return createPortal(
     <>
-      {/* Backdrop — rendered while open OR mid-drag, fades with progress.
-          Tap closes; swiping left from here also closes (same drag handlers as the panel). */}
+      {/* Backdrop; tap or swipe-left closes */}
       {isActive && (
         <div
           aria-hidden
@@ -267,9 +248,7 @@ export default function MobileEdgeDrawer() {
         />
       )}
 
-      {/* Drawer panel — fixed-width column anchored to the left edge. Nav
-          items stack from the top; the user footer is pinned to the bottom
-          via marginTop:auto. */}
+      {/* Drawer panel; footer pinned to bottom via marginTop:auto */}
       <nav
         aria-label="Page navigation"
         className="sm:hidden"
@@ -296,10 +275,7 @@ export default function MobileEdgeDrawer() {
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
       >
-        {/* Footer cluster: nav buttons + points + caps + user identity.
-            Pinned to the bottom of the drawer via marginTop:auto. Nav buttons
-            sit at the top of this cluster, just above the points/caps
-            section, so they're inside thumb reach. */}
+        {/* Footer: nav + points + caps + user identity */}
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
           {!hasToken && (() => {
             const active = pathname === "/avatar";
@@ -387,8 +363,7 @@ export default function MobileEdgeDrawer() {
             );
           })()}
 
-          {/* User identity row — clicking the avatar opens a popup with
-              Theme + Sign Out anchored to the row's top edge. */}
+          {/* User identity row with account menu popup */}
           <div
             style={{
               position: "relative",
@@ -463,7 +438,7 @@ export default function MobileEdgeDrawer() {
 
             {accountMenuOpen && (
               <>
-                {/* Click-outside catcher — sits below the menu but above page content. */}
+                {/* Click-outside catcher */}
                 <div
                   onClick={() => setAccountMenuOpen(false)}
                   style={{ position: "fixed", inset: 0, zIndex: 41 }}

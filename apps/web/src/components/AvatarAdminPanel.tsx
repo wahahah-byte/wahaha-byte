@@ -9,37 +9,25 @@ import { useToast } from "@/context/ToastContext";
 import AvatarItemFormModal, { type FormMode } from "@/components/AvatarItemFormModal";
 
 interface Props {
-  // Whether the current viewer can delete (Admin) or only manage
-  // (Admin/Moderator). Passed from the page so the panel doesn't have to
-  // re-read the JWT — keeps the role check single-sourced.
+  // Admin can delete; both Admin/Moderator can manage.
   isAdmin: boolean;
   isModerator: boolean;
-  // Fired when the admin creates a new item or updates one — the host page
-  // refreshes the user's inventory state so the new/updated item appears
-  // immediately in the existing inventory grid without a manual reload.
+  // Fires after catalogue mutations so the host page can refresh inventory.
   onCatalogueChange?: () => void;
 }
 
-// Collapsible admin panel that sits below the inventory grid on /avatar.
-// Renders a list of every catalogue item with inline actions for the
-// operations the API exposes — create, update, toggle availability, delete.
-// Visibility is gated by canManageAvatarItems() upstream; this component
-// assumes it should render when mounted.
+// Collapsible admin panel on /avatar; create/update/toggle/delete items.
 export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChange }: Props) {
   const { setError, setSuccess } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<AvatarItemDto[]>([]);
   const [filter, setFilter] = useState("");
-  // Item IDs currently mid-request (toggle/delete) — disables the row's
-  // buttons so a double-click can't queue two conflicting writes.
+  // Item IDs currently mid-request to block double-click writes.
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
-  // Active modal mode — null means closed. Driven by "+ New item" (create)
-  // and the per-row Edit button (edit). Save callback handles list updates.
+  // Active modal mode (create / edit); null when closed.
   const [formMode, setFormMode] = useState<FormMode | null>(null);
-  // Active grant target — null when the grant modal is closed. Stores the
-  // AvatarItemDto so the modal can show name + thumbnail without an
-  // extra lookup. Driven by the per-row Grant button.
+  // Active grant target; null when grant modal is closed.
   const [grantTarget, setGrantTarget] = useState<AvatarItemDto | null>(null);
 
   const refresh = useCallback(async () => {
@@ -50,9 +38,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     setItems(data?.data ?? []);
   }, [setError]);
 
-  // Lazy-load: only fetch when the panel is first opened. Saves an HTTP
-  // round-trip for the common case where a moderator visits /avatar without
-  // intending to manage anything.
+  // Lazy-load: only fetch when first opened.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open && items.length === 0 && !loading) refresh();
@@ -71,8 +57,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
   const onToggleAvailability = useCallback(async (item: AvatarItemDto) => {
     if (busyIds.has(item.itemId)) return;
     setBusyIds((prev) => new Set(prev).add(item.itemId));
-    // Optimistic flip — server inverts isAvailable on its side, so we just
-    // mirror the same inversion locally and roll back on error.
+    // Optimistic flip; roll back on error.
     setItems((prev) => prev.map((i) =>
       i.itemId === item.itemId ? { ...i, isAvailable: !i.isAvailable } : i,
     ));
@@ -102,11 +87,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     setFormMode({ kind: "edit", item });
   }, []);
 
-  // Re-scans the item's PreviewAssetUrl on the server and stores fresh
-  // content bounds. Splices the returned DTO back into the local list so
-  // the inventory grid's auto-centre transform sees the new bounds on the
-  // next render — the host page also rebuilds its catalogue from this same
-  // list via onCatalogueChange.
+  // Re-scan PreviewAssetUrl on server, store fresh bounds, splice locally.
   const onRecenter = useCallback(async (item: AvatarItemDto) => {
     if (busyIds.has(item.itemId)) return;
     setBusyIds((prev) => new Set(prev).add(item.itemId));
@@ -119,17 +100,10 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     }
   }, [busyIds, setError, onCatalogueChange]);
 
-  // Tracks how many items the bulk recenter is still chewing through so the
-  // button can show progress instead of spinning silently. Cleared back to
-  // null when the run finishes (success or fail).
+  // Progress for the bulk recenter run; null when idle.
   const [recenterAllProgress, setRecenterAllProgress] = useState<{ done: number; total: number } | null>(null);
 
-  // One-click fix for legacy rows that don't have content bounds yet — runs
-  // the recompute endpoint for every item missing bounds whose
-  // PreviewAssetUrl is an absolute http(s) URL (relative seed paths can't
-  // be fetched server-side and are skipped). Sequential to keep the API
-  // honest about its load — each scan downloads a PNG and runs ImageSharp,
-  // a parallel storm would be unkind.
+  // One-click fix for legacy rows missing bounds; sequential to be API-friendly.
   const onRecenterAll = useCallback(async () => {
     const targets = items.filter((i) => {
       const hasBounds =
@@ -145,8 +119,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
       const t = targets[i];
       const { data, error } = await avatarApi.recomputeBounds(t.itemId);
       if (error) {
-        // Don't abort the whole batch on a single failure (third-party CDN
-        // outage etc.) — surface it via toast and keep going.
+        // Surface failure via toast; don't abort the batch.
         setError(`Recenter failed for "${t.name}": ${error}`);
       } else if (data) {
         setItems((prev) => prev.map((it) => (it.itemId === data.itemId ? data : it)));
@@ -157,41 +130,33 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     onCatalogueChange?.();
   }, [items, setError, onCatalogueChange]);
 
-  // Open the grant modal for a specific item. The modal itself is rendered
-  // at the bottom of this component and reads grantTarget directly; this
-  // helper just sets state.
+  // Opens the grant modal for the chosen item.
   const onGrant = useCallback((item: AvatarItemDto) => {
     setGrantTarget(item);
   }, []);
 
-  // Submit handler from the grant modal. Calls the API and on success
-  // notifies the host page so it can refresh the user's inventory (so a
-  // grant-to-self lands in the inventory grid right away).
+  // Grant modal submit; notifies host so grant-to-self updates inventory.
   const handleGrantSubmit = useCallback(async (
     item: AvatarItemDto,
     targetEmail: string,
     autoEquip: boolean,
   ): Promise<string | null> => {
     const { data, error } = await avatarApi.grantItem(item.itemId, {
-      // Empty string → null so the backend interprets it as "grant to self".
+      // Empty string → null = grant to self.
       targetEmail: targetEmail.trim() || null,
       autoEquip,
     });
     if (error) return error;
     const who = targetEmail.trim() ? `to ${targetEmail.trim()}` : "to you";
     setSuccess(`Granted "${item.name}" ${who}${autoEquip ? " (equipped)" : ""}.`);
-    // Always notify — a grant-to-self should re-render the inventory grid
-    // immediately, and even other-user grants can affect catalogue state
-    // the host page cares about (point cost, availability flags).
+    // Always notify host so inventory re-renders.
     onCatalogueChange?.();
     setGrantTarget(null);
     void data;
     return null;
   }, [setSuccess, onCatalogueChange]);
 
-  // Count of items that would actually do something on "Recenter all" —
-  // missing bounds AND have a scannable URL. Drives both the button's
-  // disabled state and its label.
+  // Count of items eligible for bulk recenter (no bounds + scannable URL).
   const recenterableCount = useMemo(() => items.filter((i) => {
     const hasBounds =
       i.contentMinX != null && i.contentMinY != null
@@ -200,10 +165,7 @@ export default function AvatarAdminPanel({ isAdmin, isModerator, onCatalogueChan
     return !hasBounds && httpUrl;
   }).length, [items]);
 
-  // Saves from the modal — splice the returned item into the local list so
-  // the row updates / new row appears without a full refetch. Notifies the
-  // host page so it can refresh the user's inventory if the catalogue
-  // change might affect equipped items.
+  // Splice modal-saved item into local list; notify host.
   const onSavedFromModal = useCallback((saved: AvatarItemDto) => {
     setItems((prev) => {
       const idx = prev.findIndex((i) => i.itemId === saved.itemId);
@@ -400,10 +362,7 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
   const hasBounds =
     item.contentMinX != null && item.contentMinY != null
     && item.contentMaxX != null && item.contentMaxY != null;
-  // Same auto-centring pipeline the inventory cards use, but the thumb is
-  // always a 1×1 square regardless of the item's storage footprint —
-  // override cols/rows so the math doesn't apply letterbox-correction
-  // meant for a 1×2 or 2×1 card.
+  // 1x1 thumbnail bounds transform regardless of storage footprint.
   const clientBounds = useClientBounds(
     item.previewAssetUrl ? assetPath(item.previewAssetUrl) : null,
   );
@@ -427,9 +386,7 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
       <div
         style={{
           width: 80, height: 80,
-          // Lighter than the previous 0.25 black so the PNG silhouette
-          // stands out against a softer panel-coloured backdrop rather
-          // than a hard near-black square.
+          // Soft panel-coloured backdrop for PNG silhouette.
           background: "rgba(255, 255, 255, 0.06)",
           border: "1px solid var(--color-border-hairline)",
           borderRadius: 8,
@@ -470,8 +427,7 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
         <span style={{ color: "var(--color-fg-subtle)", fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase" }}>
           {item.slot} · {item.rarity} · {item.cost}p
           {item.category ? <> · {item.category}</> : null}
-          {/* Bounds status — handy for spotting items that need a Recenter
-              run (no green dot = card falls back to slot defaults). */}
+          {/* Bounds status dot */}
           <span
             title={hasBounds ? "Content bounds stored" : "No content bounds — using slot default"}
             aria-hidden
@@ -551,10 +507,7 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
   );
 }
 
-// Tiny inline modal for the Grant action. Kept in this file rather than a
-// separate component because it's small and only used here. Returns the
-// error string from the submit promise (or null on success); the caller
-// closes the modal on success via the same submit handler.
+// Inline modal for the Grant action.
 interface GrantModalProps {
   item: AvatarItemDto;
   onClose: () => void;
@@ -582,8 +535,7 @@ function GrantItemModal({ item, onClose, onSubmit }: GrantModalProps) {
     const err = await onSubmit(item, targetEmail, autoEquip);
     setSubmitting(false);
     if (err) setError(err);
-    // Success path: parent closes the modal via setGrantTarget(null) in
-    // its onSubmit handler — no work needed here.
+    // Parent closes modal on success via setGrantTarget(null).
   }
 
   return (

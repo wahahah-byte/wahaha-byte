@@ -16,7 +16,7 @@ interface Particle {
 function buildParticles(): Particle[] {
   const cols = ["var(--color-active-highlight-alt)", "var(--color-success)", "var(--color-warning)"];
   return Array.from({ length: PARTICLE_COUNT }, (_, i) => {
-    // Spray upward in a wide cone for visible burst on a row.
+    // Spray upward in a wide cone.
     const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI * 0.95);
     const dist = 36 + Math.random() * 28;
     return {
@@ -34,9 +34,7 @@ interface Props {
   active: boolean;
 }
 
-// Small confetti burst rendered absolutely inside its parent. Parent should be
-// position:relative; the burst originates from its center-bottom area, which
-// reads as "rising from the row" when placed on a TaskRow.
+// Small confetti burst rising from a position:relative parent.
 export default function CheckInBurstEffect({ active }: Props) {
   const [particles, setParticles] = useState<Particle[] | null>(null);
 

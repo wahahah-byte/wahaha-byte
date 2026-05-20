@@ -2,16 +2,7 @@ import { applyHints, type UserInventoryDto } from "@wahaha/shared";
 
 import { avatarApi } from "@/lib/api";
 
-// Module-level cache for the user's equipped-avatar payload. Without this,
-// every detail-modal open re-fetched /api/avatar/equipped and waited for
-// the network before the chibi could render — visibly the largest source
-// of the "modal opens slow" feel. With it, second-and-later opens read the
-// last-known equipped set synchronously and the chibi is on screen in the
-// same frame the modal mounts. A background revalidate fires on every
-// mount to pick up changes from the avatar screen.
-//
-// Single equipped set per user, so a single global cache is correct — no
-// need to key by user id.
+// Module cache for equipped-avatar payload; sync read + bg revalidate on mount.
 
 let cached: UserInventoryDto[] | null = null;
 let inflight: Promise<UserInventoryDto[] | null> | null = null;
@@ -33,11 +24,11 @@ async function fetchAndUpdate(): Promise<UserInventoryDto[] | null> {
 }
 
 export const equippedCache = {
-  /** Synchronous read of the cached equipped set. null on cold start. */
+  // Sync read; null on cold start.
   read(): UserInventoryDto[] | null {
     return cached;
   },
-  /** Fire-and-forget revalidation. Coalesces concurrent callers. */
+  // Fire-and-forget revalidation, coalesces callers.
   revalidate(): Promise<UserInventoryDto[] | null> {
     if (inflight) return inflight;
     inflight = fetchAndUpdate().finally(() => {
@@ -45,15 +36,14 @@ export const equippedCache = {
     });
     return inflight;
   },
-  /** Subscribe to background updates. Returns an unsubscribe fn. */
+  // Subscribe to bg updates; returns unsubscribe.
   subscribe(fn: (equipped: UserInventoryDto[]) => void): () => void {
     listeners.add(fn);
     return () => {
       listeners.delete(fn);
     };
   },
-  /** Replace the cache directly — call after a successful equip mutation
-   *  so the next modal open already sees the new state. */
+  // Replace cache directly after equip mutation.
   set(next: UserInventoryDto[]): void {
     cached = next;
     notify(next);

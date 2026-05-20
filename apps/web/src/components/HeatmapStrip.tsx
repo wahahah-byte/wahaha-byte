@@ -7,7 +7,7 @@ const HEATMAP_WEEKS = 12;
 const CELL_SIZE = 14;
 const CELL_GAP = 3;
 const LABEL_COL = 22;
-// Empty / 4 filled levels — driven via opacity on the highlight color.
+// Empty + 4 filled levels via opacity.
 const LEVEL_OPACITY = [0, 0.30, 0.55, 0.80, 1.0];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -19,9 +19,7 @@ interface Props {
 }
 
 export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }: Props) {
-  // GitHub-style 7×N grid: rows are days-of-week (Sun..Sat), columns are weeks
-  // oldest-on-left. Today always sits in the rightmost column at row=todayDow;
-  // any cells in that column past today render invisibly so the grid keeps shape.
+  // GitHub-style 7xN grid: rows = day-of-week, cols = weeks oldest-first.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayKey = dateKey(today);
@@ -48,9 +46,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
     columns.push(col);
   }
 
-  // A day can have multiple cycles (a check-in plus one or more logs), so
-  // aggregate per date: sum counterValue across all cycles that day, and track
-  // presence separately so non-counter tasks still light up the cell.
+  // Aggregate cycles per date (sum counterValue, track presence).
   const dayByDate = new Map<string, { sum: number; hasValue: boolean }>();
   for (const c of cycles) {
     const key = c.checkInDate.split("T")[0];
@@ -61,10 +57,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
     }
     dayByDate.set(key, entry);
   }
-  // Fold the buffered +/- delta into today's cell so the heatmap mirrors the
-  // avatar total during the in-flight window. Without this the avatar can
-  // display X+1 while the heatmap still reads X for the duration of the
-  // debounce + API roundtrip.
+  // Fold buffered +/- delta into today's cell so heatmap matches avatar.
   if (pendingTodayDelta !== 0) {
     const entry = dayByDate.get(todayKey) ?? { sum: 0, hasValue: false };
     entry.sum += pendingTodayDelta;
@@ -89,15 +82,14 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
     return 4;
   }
 
-  // Tally over the visible window. For "weekdays" tasks, weekends aren't
-  // expected check-in days so they shouldn't count against the denominator.
+  // Tally over visible window; weekdays rule excludes weekends.
   const visibleCells = columns.flat().filter((c) => !c.isFuture);
   const totalExpected = rule === "weekdays"
     ? visibleCells.filter((c) => !c.isWeekend).length
     : visibleCells.length;
   const checkedCount = visibleCells.reduce((n, c) => (dayByDate.has(c.key) ? n + 1 : n), 0);
 
-  // Month label per column — only shown when the month changes from the column to its left.
+  // Month label per column, only when month changes from prior column.
   const monthLabels: (string | null)[] = columns.map((col, ci) => {
     const m = col[0].date.getMonth();
     if (ci === 0) return MONTHS_SHORT[m];
@@ -127,11 +119,10 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
             rowGap: CELL_GAP,
           }}
         >
-          {/* Top-left corner spacer */}
+          {/* Corner spacer */}
           <div style={{ gridColumn: 1, gridRow: 1 }} />
 
-          {/* Month labels along the top. Allow overflow so a label can extend past
-              its single-column track without clipping the next column's start. */}
+          {/* Month labels (overflow allowed) */}
           {monthLabels.map((m, c) => (
             <div
               key={`m-${c}`}
@@ -151,7 +142,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
             </div>
           ))}
 
-          {/* Day-of-week labels (Mon/Wed/Fri only — matches GitHub's compact style) */}
+          {/* Day-of-week labels (Mon/Wed/Fri only) */}
           {[0, 1, 2, 3, 4, 5, 6].map((r) => (
             <div
               key={`d-${r}`}
@@ -170,7 +161,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
             </div>
           ))}
 
-          {/* Cells: 7 rows × HEATMAP_WEEKS cols */}
+          {/* Cells: 7 rows x HEATMAP_WEEKS cols */}
           {columns.flatMap((col, c) =>
             col.map((cell, r) => {
               if (cell.isFuture) {
@@ -213,8 +204,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
                     border: isWeekendOff && !checked
                       ? "1px dashed var(--color-border-faint)"
                       : undefined,
-                    // Inset ring on today so the highlight stays inside the cell —
-                    // an outset outline gets clipped by DetailPager's overflow: hidden.
+                    // Inset today ring; outset would clip in DetailPager.
                     boxShadow: isToday
                       ? "inset 0 0 0 1.5px var(--color-active-highlight)"
                       : undefined,
@@ -226,7 +216,7 @@ export default function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDel
         </div>
       </div>
 
-      {/* Legend — meaningful only when intensity varies (counter tasks). */}
+      {/* Legend (counter tasks only) */}
       {hasCounter && (
         <div
           className="flex items-center self-end"

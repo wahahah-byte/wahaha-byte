@@ -16,23 +16,16 @@ import { useSwipeRow } from "@/components/swipe-row-context";
 
 export interface SwipeAction {
   key: string;
-  /** SVG node rendered inside the chip. */
+  // SVG node rendered inside the chip.
   icon: ReactNode;
-  /** Tint behind the icon when the chip is pressed; defaults to a muted hover. */
+  // Tint behind icon on press (default muted hover).
   pressBg?: string;
   onPress: () => void;
 }
 
 interface Props {
   actions: SwipeAction[];
-  /**
-   * Fired after the row's Gesture.Tap recognizes a tap. Receives the touch
-   * location relative to the row so consumers can hit-test against interior
-   * widgets (e.g. an inline Undo pill) and decide whether to navigate vs.
-   * handle the tap locally. Nested GestureDetectors don't reliably win over
-   * the row's outer Gesture.Race(pan, tap) — coord-based dispatch is the
-   * reliable alternative.
-   */
+  // Tap callback with row-relative coords for interior hit-testing.
   onTap?: (e: { x: number; y: number }) => void;
   actionWidth?: number;
   backgroundColor?: string;
@@ -40,21 +33,10 @@ interface Props {
   rowId?: string;
   prevId?: string;
   nextId?: string;
-  /**
-   * Opt-in "full swipe" commit. If provided, swiping the row past
-   * `fullSwipeThreshold` (fraction of the row's measured width, default
-   * 0.5) and releasing fires this callback and animates the row
-   * off-screen — no chip tap required. Used by subtasks to make
-   * swipe-far-enough = delete in one motion.
-   */
+  // Opt-in swipe-past-threshold commit (default 0.5 of row width).
   fullSwipeAction?: () => void;
   fullSwipeThreshold?: number;
-  /**
-   * Background color the action panel flashes to when swipe progress
-   * crosses the full-swipe threshold — visual "release to commit" cue.
-   * Only takes effect when `fullSwipeAction` is set. Defaults to the
-   * row's danger color from the palette.
-   */
+  // Bg color flash when past full-swipe threshold (default danger).
   fullSwipeColor?: string;
 }
 
@@ -83,10 +65,7 @@ export function SwipeableRow({
   const panelWidth = actions.length * actionWidth;
   const tx = useSharedValue(0);
   const dragStart = useSharedValue(0);
-  // Row width measured via onLayout. Used as the basis for the
-  // full-swipe-to-commit threshold (otherwise we'd have no idea what
-  // "far enough" means for the row's width). Stored as a shared value so
-  // the gesture worklet can read it without bouncing to JS.
+  // Row width via onLayout; shared value so worklet reads without JS bounce.
   const rowWidth = useSharedValue(0);
 
   const progress = useDerivedValue(() => {
@@ -96,18 +75,10 @@ export function SwipeableRow({
     return Math.max(0, Math.min(1, p));
   }, [panelWidth]);
 
-  // React-side mirror of whether this row is in its committed-open state.
-  // The pan's activeOffsetX depends on this — when closed, only LEFT swipes
-  // activate the row (so right-swipes fall through to the global drawer);
-  // when open, BOTH directions activate so a right-swipe drags the row
-  // closed BEFORE the drawer's gesture has a chance to win.
+  // React mirror of committed-open state; closed=left-only, open=both.
   const [rowOpen, setRowOpen] = useState(false);
   const swipeCtx = useSwipeRow();
-  // Pull the stable callbacks out so this effect only re-fires when the row
-  // itself changes — not when register/unregister bump the provider's version
-  // state. Depending on `swipeCtx` directly caused an infinite loop: every
-  // register bumps `version` → new context value identity → effect re-runs →
-  // cleanup unregisters → bumps version again → loop.
+  // Pull stable callbacks to avoid version-bump infinite loop.
   const register = swipeCtx?.register;
   const unregister = swipeCtx?.unregister;
   useEffect(() => {
@@ -120,8 +91,7 @@ export function SwipeableRow({
   const nextProgress = swipeCtx?.get(nextId) ?? null;
   const openRowId = swipeCtx?.openRowId ?? null;
 
-  // When another row opens (openRowId changes to a different id), or when
-  // closeAll fires (openRowId → null), auto-close this row if it's open.
+  // Auto-close when another row opens or closeAll fires.
   useAnimatedReaction(
     () => openRowId?.value ?? null,
     (current) => {
@@ -139,12 +109,7 @@ export function SwipeableRow({
     return (Math.sign(x) * (abs * RUBBER_C)) / (abs + RUBBER_C);
   }
 
-  // Dynamic axis-activation based on row state:
-  //   closed: only LEFT activates  → right-swipes pass to the drawer
-  //   open:   BOTH directions       → right-swipe closes the row, winning
-  //                                    over the drawer because this gesture
-  //                                    is deeper in the tree and activates
-  //                                    first (8 px) vs drawer (10 px).
+  // Dynamic axis: closed=left-only (right falls to drawer), open=both.
   const pan = Gesture.Pan()
     .activeOffsetX(rowOpen ? [-8, 8] : [-8, 9999])
     .failOffsetY([-12, 12])
@@ -153,14 +118,10 @@ export function SwipeableRow({
     })
     .onUpdate((e) => {
       let next = dragStart.value + e.translationX;
-      // Clamp overshoot past 0 — a right-swipe on an open row should bottom
-      // out at the closed position without bouncing past.
+      // Clamp overshoot past 0 — right-swipe on open row stops at closed.
       if (next > 0) next = 0;
       else if (fullSwipeAction) {
-        // Full-swipe mode: let the user drag freely up to the row's
-        // measured width (so the swipe-far-enough gesture has somewhere
-        // to go). Rubber-banding at panelWidth would fight the gesture
-        // and make it feel locked at the chip reveal.
+        // Full-swipe mode: drag freely up to row width.
         const w = rowWidth.value;
         if (w > 0 && next < -w) next = -w;
       } else if (next < -panelWidth) {
@@ -169,9 +130,7 @@ export function SwipeableRow({
       tx.value = next;
     })
     .onEnd(() => {
-      // Full-swipe commit (opt-in via fullSwipeAction). If the user
-      // dragged past `fullSwipeThreshold` of the row width, slide the
-      // row off-screen and fire the action — no chip tap required.
+      // Full-swipe commit — past threshold slides row off-screen + fires action.
       const w = rowWidth.value;
       if (fullSwipeAction && w > 0 && tx.value < -w * fullSwipeThreshold) {
         tx.value = withTiming(
@@ -226,12 +185,7 @@ export function SwipeableRow({
     };
   });
 
-  // Full-swipe threshold indicator. When the user has dragged past
-  // `fullSwipeThreshold` of the row width, swap the action panel's
-  // background from the neutral surfaceDeep to the danger color so the
-  // user gets a clear "release to delete" cue. Hard switch (not
-  // interpolated) because the actual commit threshold is hard too — a
-  // gradient would mislead the user about when the release will fire.
+  // Hard-switch action panel bg to danger past threshold (matches hard commit).
   const dangerBg = fullSwipeColor ?? c.danger;
   const actionsPanelStyle = useAnimatedStyle(() => {
     if (!fullSwipeAction) return { backgroundColor: c.surfaceDeep };
@@ -251,11 +205,7 @@ export function SwipeableRow({
   }
 
   return (
-    // Wrapper bg fills the area revealed when the row slides left. In
-    // full-swipe mode it animates to dangerBg past the threshold so the
-    // whole revealed strip (not just the chip's 44px slot) signals
-    // "release to commit". Static c.surfaceDeep otherwise — matches the
-    // action-panel reveal pattern used by task-list rows.
+    // Wrapper bg fills slide-reveal area; flashes danger in full-swipe mode.
     <Animated.View
       style={[styles.wrapper, actionsPanelStyle]}
       onLayout={(e) => {

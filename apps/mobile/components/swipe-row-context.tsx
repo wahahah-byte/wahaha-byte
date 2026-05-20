@@ -5,10 +5,9 @@ interface SwipeRowContextValue {
   register: (id: string, progress: SharedValue<number>) => void;
   unregister: (id: string) => void;
   get: (id: string | null | undefined) => SharedValue<number> | null;
-  /** ID of the currently-open row (null when none). Each row watches this; if
-   *  the value changes to anything other than its own id, the row closes. */
+  // ID of currently-open row; rows close when it changes to anything else.
   openRowId: SharedValue<string | null>;
-  /** Force every open row to close. Used by the container's tap-elsewhere handler. */
+  // Force every open row to close.
   closeAll: () => void;
 }
 

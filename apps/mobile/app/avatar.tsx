@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -29,6 +29,7 @@ import {
 } from "@wahaha/shared";
 
 import { avatarApi } from "@/lib/api";
+import { bustedAssetUrl } from "@/lib/avatar-asset";
 import { equippedCache } from "@/lib/equipped-cache";
 import { ChibiAvatar } from "@/components/chibi-avatar";
 import { ThemedText } from "@/components/themed-text";
@@ -40,20 +41,11 @@ const GRID_ROWS = 7;
 const CELL_PX = 56;
 const CELL_GAP = 1;
 const CELL_STEP = CELL_PX + CELL_GAP;
-// Inner padding between the dark frame's border and the first/last cell —
-// gives the grid a small breathing room from the bright border so the border
-// reads as a frame rather than touching the cells directly.
+// Inner padding between frame border and first/last cell.
 const FRAME_PAD = 1;
-// Outer border thickness on the frame. Must be reflected in frameWidth /
-// frameHeight below because RN positions absolute children relative to the
-// PADDING BOX (inside the border) — so the frame's outer width has to be
-// gridWidth + 2·(FRAME_PAD + FRAME_BORDER) for cells at `left: FRAME_PAD …
-// FRAME_PAD + gridWidth` to fit inside the padding box without overflowing
-// over (and covering) the border on the right and bottom edges.
+// Outer border thickness; frame width sums FRAME_PAD + FRAME_BORDER.
 const FRAME_BORDER = 1;
-// 150 ms long-press to start a drag — same as web's TouchSensor activation
-// delay so a quick tap goes to equip/unequip and an intentional hold begins
-// drag-to-rearrange.
+// 150ms long-press starts drag (tap=equip, hold=drag).
 const LONG_PRESS_MS = 150;
 const DRAG_TAP_TOLERANCE = 8;
 
@@ -81,12 +73,11 @@ function rectFits(
 }
 
 function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
-  // Items with a valid persisted position go down first so subsequent
-  // unplaced rows can't collide with them.
+  // Persisted positions go down first to avoid collisions.
   const placed: Placed[] = [];
   const out: UserInventoryDto[] = new Array(rows.length);
 
-  // Phase 1 — honour rows that already carry a valid position.
+  // Phase 1: honour rows with valid stored position.
   rows.forEach((row, idx) => {
     if (!row.avatarItem) { out[idx] = row; return; }
     const size = getItemSize(row.avatarItem);
@@ -100,7 +91,7 @@ function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
     }
   });
 
-  // Phase 2 — first-fit scan for everything still missing a slot.
+  // Phase 2: first-fit scan for missing slots.
   rows.forEach((row, idx) => {
     if (out[idx] || !row.avatarItem) return;
     const size = getItemSize(row.avatarItem);
@@ -142,25 +133,19 @@ export default function AvatarScreen() {
     }
     const hinted = res.data.data
       .filter((r) => r.avatarItem?.previewAssetUrl)
-      // Hydrate positionX/Y from the mobile-shape backend columns so the
-      // rest of the screen (which reads positionX/Y) renders the user's
-      // RN layout. Falls back to the desktop column if no mobile coord is
-      // stored yet — gives existing users a sane first paint before they
-      // rearrange. Writes go to the mobile column via handleMove.
+      // Hydrate from mobile columns; fall back to desktop columns.
       .map((r) => ({
         ...r,
         avatarItem: applyHints(r.avatarItem!),
         positionX: r.positionXMobile ?? r.positionX ?? null,
         positionY: r.positionYMobile ?? r.positionY ?? null,
       }));
-    // Auto-place per tab — hair and equipment share grid coords, so they
-    // need separate placement passes.
+    // Auto-place per tab — hair and equipment share coords.
     const equipRows = hinted.filter((r) => !isHairSlot(r.avatarItem?.slot));
     const hairRows = hinted.filter((r) => isHairSlot(r.avatarItem?.slot));
     const placed = [...autoPlace(equipRows), ...autoPlace(hairRows)];
     setInventory(placed);
-    // Persist freshly auto-placed items (those without a stored mobile
-    // position) so the layout sticks across reloads.
+    // Persist freshly auto-placed items.
     for (let i = 0; i < placed.length; i++) {
       const row = placed[i];
       const original = hinted[i];
@@ -214,21 +199,17 @@ export default function AvatarScreen() {
       await load();
       return;
     }
-    // Push the new equipped set into the module-level cache so the next
-    // detail-modal open renders the chibi instantly with the latest gear.
+    // Refresh equipped cache for next detail-modal open.
     equippedCache.revalidate();
   }
 
-  // Drag commit — called from the card on drag end. Returns true when the
-  // proposed slot was accepted; the card uses this to decide whether to
-  // animate back to its starting position or pin at the new cell.
+  // Drag commit — returns true on accept (card pins at new cell).
   const handleMove = useCallback(
     (invId: number, newX: number, newY: number): boolean => {
       const moving = inventory.find((r) => r.inventoryId === invId);
       if (!moving?.avatarItem) return false;
       const size = getItemSize(moving.avatarItem);
-      // Same-tab collision check — hair and equipment have independent
-      // coordinate spaces so a drop only competes with cards in its own tab.
+      // Same-tab collision — hair and equipment have independent coords.
       const movingIsHair = isHairSlot(moving.avatarItem.slot);
       const sameTab = inventory.filter(
         (r) =>
@@ -253,11 +234,9 @@ export default function AvatarScreen() {
           r.inventoryId === invId ? { ...r, positionX: newX, positionY: newY } : r,
         ),
       );
-      // Persist to the mobile-shape backend column. Fire-and-forget — local
-      // state is already optimistic and rollback on transient API errors
-      // would just bounce the card back unexpectedly. A reload will reconcile.
+      // Fire-and-forget persist; reload reconciles on transient errors.
       avatarApi.setPosition(invId, newX, newY, undefined, "mobile").catch(() => {
-        // Ignore; the next load() will reflect whatever the server actually has.
+        // Next load() reconciles with server state.
       });
       return true;
     },
@@ -274,8 +253,7 @@ export default function AvatarScreen() {
 
   const gridWidth = GRID_COLS * CELL_PX + (GRID_COLS - 1) * CELL_GAP;
   const gridHeight = GRID_ROWS * CELL_PX + (GRID_ROWS - 1) * CELL_GAP;
-  // Add 2·border so the cells (positioned in the padding box, inside the
-  // border) don't overflow and cover the right/bottom borders.
+  // 2·border padding so cells (inside border) don't overflow edges.
   const frameWidth = gridWidth + (FRAME_PAD + FRAME_BORDER) * 2;
   const frameHeight = gridHeight + (FRAME_PAD + FRAME_BORDER) * 2;
   const gridLeftMargin = Math.max(0, Math.floor((screenW - frameWidth) / 2));
@@ -292,9 +270,26 @@ export default function AvatarScreen() {
 
         <View style={{ alignItems: "center", marginTop: 8 }}>
           <View style={{ width: frameWidth }}>
-            <ThemedText style={[styles.sectionHeader, { color: c.fgSubtle }]}>
-              Inventory {!loading && `(${visibleInventory.length})`}
-            </ThemedText>
+            <View style={styles.sectionHeaderRow}>
+              <ThemedText style={[styles.sectionHeader, { color: c.fgSubtle }]}>
+                Inventory {!loading && `(${visibleInventory.length})`}
+              </ThemedText>
+              <Pressable
+                onPress={() => router.push("/shop")}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.shopBtn,
+                  {
+                    borderColor: c.activeHighlightBorder,
+                    backgroundColor: pressed ? c.activeHighlightBg : "transparent",
+                  },
+                ]}
+              >
+                <ThemedText style={[styles.shopBtnLabel, { color: c.activeHighlight }]}>
+                  SHOP
+                </ThemedText>
+              </Pressable>
+            </View>
             <View style={styles.tabBar}>
               {(["equipment", "hair"] as Tab[]).map((tab) => {
                 const active = tab === activeTab;
@@ -399,10 +394,7 @@ interface InventoryCardProps {
   onDragEnd: (targetX: number, targetY: number) => boolean;
 }
 
-// Hysteresis fraction — matches web's SNAP_HYSTERESIS_FRACTION. The dragged
-// card only flips to the next cell once the finger has crossed 70% of the
-// cell step from the last snapped position, killing the back-and-forth
-// flicker that happens when the finger hovers near a cell boundary.
+// 70% snap-hysteresis to kill boundary flicker during drag.
 const SNAP_HYSTERESIS = CELL_STEP * 0.7;
 
 function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDragEnd }: InventoryCardProps) {
@@ -417,17 +409,10 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
   const secondaryInFront = item.slot === "CAPE";
   const t = resolveCardTransform(item, { cols: size.cols, rows: size.rows, isTwoLayer: hasSecondary });
 
-  // Layout is driven by these SharedValues, NOT by React state. This is the
-  // only way to avoid a one-frame visual jump on drop: when the drag commits,
-  // we update cellX/cellY directly in the gesture's onEnd worklet and the
-  // view re-positions atomically on the UI thread. React state (inv.positionX)
-  // is updated via runOnJS for collision-detection logic only — when it
-  // changes externally (e.g. an unrelated drop displaces this row, or the
-  // parent refetches inventory), the useEffect below mirrors it back.
+  // SharedValue-driven layout; avoids one-frame jump on drop.
   const cellX = useSharedValue(inv.positionX ?? 0);
   const cellY = useSharedValue(inv.positionY ?? 0);
-  // Captured at drag start so onUpdate can derive the delta-cells from the
-  // gesture translation without closure-capturing a stale inv.positionX.
+  // Captured at drag start so onUpdate doesn't closure stale state.
   const dragStartX = useSharedValue(inv.positionX ?? 0);
   const dragStartY = useSharedValue(inv.positionY ?? 0);
   useEffect(() => {
@@ -445,10 +430,7 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
     })
     .onUpdate((e) => {
       "worklet";
-      // Snap-to-cell during drag with 70% hysteresis: the card only flips to
-      // the next cell once the finger crosses 70% of CELL_STEP past the
-      // current snapped position. Without it the card flickers between two
-      // cells when the finger hovers near a boundary.
+      // Snap-to-cell with 70% hysteresis.
       const curDCol = cellX.value - dragStartX.value;
       const curDRow = cellY.value - dragStartY.value;
       let dCol = curDCol;
@@ -481,15 +463,11 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
   function handleDropEnd(targetX: number, targetY: number, origX: number, origY: number) {
     const accepted = onDragEnd(targetX, targetY);
     if (!accepted) {
-      // Drop landed on an occupied cell — animate the card back to its
-      // original slot. cellX/Y are still at the target position from the
-      // drag's onUpdate, so withTiming smoothly returns them.
+      // Animate back to origin on rejected drop.
       cellX.value = withTiming(origX, { duration: 180, easing: Easing.bezier(0.22, 1, 0.36, 1) });
       cellY.value = withTiming(origY, { duration: 180, easing: Easing.bezier(0.22, 1, 0.36, 1) });
     }
-    // On accept, cellX/Y is already at target; the React state update from
-    // onDragEnd → handleMove will eventually flow through useEffect but the
-    // values match what's already on the worklet so it's a no-op visually.
+    // On accept, cellX/Y is already at target; useEffect mirror is a no-op.
   }
 
   const tap = Gesture.Tap()
@@ -499,8 +477,7 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
       runOnJS(onTap)();
     });
 
-  // Pan + Tap race so a quick press goes to equip and a held press starts
-  // drag. Reanimated handles both natively without needing a wrapper.
+  // Race pan + tap: quick press = equip, held press = drag.
   const composed = Gesture.Race(pan, tap);
 
   const cardStyle = useAnimatedStyle(() => ({
@@ -510,15 +487,11 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
     ],
   }));
 
-  // Each layer's transform mirrors the chosen card transform. translate
-  // percentages convert to px against the card box.
+  // Per-layer transform; translate % → px against card box.
   const tx = (t.translateXPercent / 100) * w;
   const ty = (t.translateYPercent / 100) * h;
 
-  // Drag visual — bright yellow accent tint (active-highlight) on the
-  // moving card, matching web's `var(--color-active-highlight-bg)` fill +
-  // 2 px inset border. Drives via React props since these are static
-  // per-render (dragging state changes via React state, not worklet).
+  // Drag visual — active-highlight bg + 2px inset border.
   const bg = isDragging
     ? "rgba(243, 236, 206, 0.18)"
     : inv.isEquipped
@@ -543,28 +516,20 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
             borderColor,
             borderWidth,
             opacity: busy ? 0.5 : dimmed ? 0.35 : 1,
-            // Lift the dragged card above its neighbours so its drag-yellow
-            // border doesn't get clipped by adjacent cards. Static zIndex
-            // here (not in the animated style) keeps the render order stable.
+            // Lift dragged card so its border isn't clipped by neighbours.
             zIndex: isDragging ? 10 : 1,
             elevation: isDragging ? 10 : 0,
           },
           cardStyle,
         ]}
       >
-        {/* Each layer is a View with explicit pixel dimensions matching the
-            card, and the transform applied to the View. The Image inside
-            fills the View with resizeMode="contain". This keeps RN's
-            transform composition predictable — applying transform directly
-            to <Image> can interact unevenly with Image's intrinsic-size
-            handling on some RN versions, leaving the sprite uncentered
-            even when the math is right. */}
+        {/* View-on-View layers so RN transform composition stays predictable. */}
         {hasSecondary && !secondaryInFront ? (
-          <LayerImage uri={item.secondaryAssetUrl!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
+          <LayerImage uri={bustedAssetUrl(item, item.secondaryAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
         ) : null}
-        <LayerImage uri={item.previewAssetUrl!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
+        <LayerImage uri={bustedAssetUrl(item, item.previewAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
         {hasSecondary && secondaryInFront ? (
-          <LayerImage uri={item.secondaryAssetUrl!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
+          <LayerImage uri={bustedAssetUrl(item, item.secondaryAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
         ) : null}
 
         {inv.isEquipped ? (
@@ -575,28 +540,7 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
   );
 }
 
-// Renders a single item layer by pre-computing the final absolute position
-// and pixel dimensions of the (scaled) Image — equivalent to applying
-// `transform: scale(s) translate(tx%, ty%)` in CSS, but expressed as
-// position + size so RN's layout pipeline handles it unambiguously.
-//
-// Math — CSS `transform: scale(s) translate(tx, ty)` with transform-origin
-// at the element centre produces the matrix M = S × T:
-//
-//   [ s  0  s·tx ]
-//   [ 0  s  s·ty ]
-//   [ 0  0   1   ]
-//
-// Note the `s·` factor on the translate: with the scale applied AFTER
-// translate, the px-distance of the visual shift is multiplied by `s`.
-// For w=56, scale=1.7, ty=22%, the translate y in screen px is
-// 22%×56×1.7 = 20.94 — NOT 22%×56 = 12.32 (which is what an earlier
-// version of this code computed). Hats/capes/shoes look correctly
-// centred only when the *s multiplier is included.
-//
-// Top-left of the transformed box:
-//   left = (w − scaledW) / 2 + tx · scale
-//   top  = (h − scaledH) / 2 + ty · scale
+// Layer image with pre-computed left/top/scaled-size; equivalent to CSS scale+translate.
 function LayerImage({
   uri,
   w,
@@ -650,6 +594,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 8,
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  shopBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    marginBottom: 6,
+  },
+  shopBtnLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
   tabBar: {
     flexDirection: "row",
     gap: 6,
@@ -668,25 +626,16 @@ const styles = StyleSheet.create({
   },
   frame: {
     position: "relative",
-    // Brighter than web's 0.18 so the 1 px CELL_GAP between cells reads
-    // reliably as a grid line at all device pixel ratios — at fractional
-    // zooms the gap can sub-pixel out and disappear if the frame fill is
-    // too close to the cell fill in luminance.
+    // Brighter than web (0.32 vs 0.18) so 1px grid lines hold at fractional DPRs.
     backgroundColor: "rgba(220, 230, 235, 0.32)",
     borderWidth: 1,
     borderColor: "rgba(220, 230, 235, 0.6)",
   },
   cell: {
     position: "absolute",
-    // Background sits between the brighter frame fill and the inset shadow
-    // — closer to web's 0.65 alpha so the inset vignette has something to
-    // darken (a fully-opaque cell would absorb the shadow). The shadow is
-    // what gives the RE4 attaché-case "recessed pocket" depth.
+    // Cell bg under inset shadow — gives RE4 "recessed pocket" depth.
     backgroundColor: "rgba(28, 30, 32, 0.78)",
-    // Web uses `boxShadow: "inset 0 0 18px rgba(0, 0, 0, 0.55)"` on its
-    // .re-cell. RN supports the same CSS-style shorthand (including
-    // `inset`) since 0.76 — produces an identical radial darken-from-edges
-    // vignette inside each pocket.
+    // Inset shadow vignette (RN 0.76+ supports CSS-style inset).
     boxShadow: "inset 0 0 18px rgba(0, 0, 0, 0.55)",
   },
   card: {

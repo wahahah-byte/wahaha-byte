@@ -11,8 +11,7 @@ import {
   View,
 } from "react-native";
 
-// Enable LayoutAnimation on Android — iOS supports it out of the box. Without
-// this the row-moves-between-sections transition stays a hard jump on Android.
+// Enable LayoutAnimation on Android (iOS supports it natively).
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -29,7 +28,7 @@ import { SLASH_MS, SlashingRow } from "@/components/slashing-row";
 import { SwipeRowProvider, useSwipeRow } from "@/components/swipe-row-context";
 import { SwipeableRow, type SwipeAction } from "@/components/swipeable-row";
 
-/** Wraps children in a gesture detector that closes any open swipe row on tap. */
+// Closes any open swipe row on tap.
 function CloseOnTap({ children }: { children: ReactNode }) {
   const ctx = useSwipeRow();
   const close = ctx?.closeAll;
@@ -45,9 +44,7 @@ function CloseOnTap({ children }: { children: ReactNode }) {
   );
 }
 
-/** Top-of-screen pill that surfaces transient errors without replacing the
- *  list. Auto-dismisses after 7 s; resets the timer if the message changes
- *  (a fresh error supersedes any pending dismissal of the previous one). */
+// Transient error pill, auto-dismisses after 7s.
 function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   const c = useColors();
   useEffect(() => {
@@ -87,8 +84,7 @@ function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => 
 }
 
 function CoinIcon({ overdue }: { overdue?: boolean }) {
-  // Pixel-coin from web TaskRow.tsx — 10×12 viewBox.
-  const fill = "rgb(245, 158, 11)"; // matches --color-warning
+  const fill = "rgb(245, 158, 11)";
   return (
     <Svg width={10} height={12} viewBox="0 0 10 12" fill="none">
       <Path
@@ -137,31 +133,22 @@ interface Props {
   activeFilter?: "pending" | "in_progress" | "completed" | "all";
   groupMode?: GroupMode;
   sortMode?: SortMode;
-  /** Bump to force a refetch from the parent (e.g. after a quick-add). */
+  // Bump to force refetch.
   refreshKey?: number;
-  /** Optional client-side predicate applied before buildListItems. Used by the
-   *  Routines tab to filter by today/upcoming/missed. */
+  // Optional client-side predicate before buildListItems.
   preFilter?: (task: TaskDto) => boolean;
-  /** Routines-only: split out tasks that are checked-in for their current cycle
-   *  into a separate "Checked In" section below the active routines. Matches
-   *  web's recurring page behavior for the "all" filter. */
+  // Routines-only: split checked-in tasks into a separate section.
   splitCheckedIn?: boolean;
-  /** Called whenever a fetch lands. Lets parent screens inspect the loaded set. */
+  // Called whenever a fetch lands.
   onTasksLoaded?: (tasks: TaskDto[]) => void;
-  /** Submit/bank flow. When provided, completed-tab rows render a check pill
-   *  and tapping it toggles the task into the parent's selection set. */
+  // Submit/bank flow selection set.
   selectedIds?: Set<string>;
   onToggleSelect?: (taskId: string) => void;
-  /** IDs of tasks that have been submitted in this session — they're filtered
-   *  out of the completed list (mirrors web's behaviour). */
+  // IDs filtered out of the completed list this session.
   submittedTaskIds?: Set<string>;
-  /** IDs currently playing the bank-burst animation. Set by the parent right
-   *  after a successful submit; the parent should clear them once the burst
-   *  has had time to play (~2 s). Mirrors web's BankBurstEffect trigger. */
+  // IDs playing bank-burst animation.
   bankingIds?: Set<string>;
-  /** Routines-only: swap the leading priority dot for a priority-coloured
-   *  checkbox. Tapping it checks in (or undoes today's check-in) without
-   *  navigating into the detail screen. */
+  // Routines-only: swap priority dot for check-in checkbox.
   useCheckinCheckbox?: boolean;
 }
 
@@ -201,26 +188,11 @@ export function TaskList({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Monotonic counter bumped on every successful fetchTasks. Threaded down to
-  // each TaskRow so its inFlightActionRef can self-clear on refresh — gives
-  // the user a manual recovery path (pull-to-refresh) for any row whose
-  // guard somehow latched without a natural clear. The 2 s safety timeout
-  // is still the primary recovery; this just makes it user-driven.
+  // Refresh counter — lets TaskRow self-clear stuck guards on pull-to-refresh.
   const [refreshTick, setRefreshTick] = useState(0);
-  // Per-task timestamp of the most recent in-session check-in. Drives the
-  // sort order inside the Checked In section so a freshly-checked-in row
-  // always lands on top — even if it was previously undone and re-checked
-  // in. For tasks the user hasn't touched this session, we fall back to
-  // the latest cycle's createdAt so prior-session check-ins still order
-  // most-recent-first.
+  // Pin freshly-checked-in rows to top of Checked In section.
   const [recentCheckinTs, setRecentCheckinTs] = useState<Map<string, number>>(new Map());
-  // Global navigation lock — prevents rapid taps from stacking multiple
-  // detail-screen modals on top of each other. Expo Router's push is
-  // fire-and-forget; without this, three quick taps push three modals,
-  // each requiring its own back gesture to dismiss, and an over-stack of
-  // modals leaves the underlying tab screen unable to handle other
-  // gestures (drawer swipe, new-task tap). 600 ms covers the modal-open
-  // animation; subsequent taps after that animate normally.
+  // Global nav lock — prevents rapid taps from stacking modals.
   const lastNavAtRef = useRef<number>(0);
   const tryNavigate = useCallback((): boolean => {
     const now = Date.now();
@@ -228,19 +200,44 @@ export function TaskList({
     lastNavAtRef.current = now;
     return true;
   }, []);
-  // Web's `uncompletedCollapsed` — toggles whether the chunks before the
-  // Completed separator are rendered. Only relevant on the "all" filter.
+  // Active-section collapse toggle (only on "all" filter).
   const [uncompletedCollapsed, setUncompletedCollapsed] = useState(false);
-  // Task currently playing the check-in burst animation. Cleared after
-  // ~900 ms so the row's particle effect goes away naturally.
+  // Check-in burst animation owner.
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
   const burstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Task currently playing the slash-to-delete animation. Mirrors web's
-  // `slashingId` — the row stays mounted for SLASH_MS while SlashingRow
-  // plays the underline + collapse, then we yank it from the list.
+  // Slash-to-delete animation owner.
   const [slashingId, setSlashingId] = useState<string | null>(null);
   useEffect(() => () => {
     if (burstTimeoutRef.current) clearTimeout(burstTimeoutRef.current);
+  }, []);
+
+  // Guard against fetchTasks clobbering optimistic check-in state.
+  const PENDING_CHECKIN_TTL_MS = 5000;
+  const pendingCheckInsRef = useRef<Map<string, number>>(new Map());
+  const markPendingCheckIn = useCallback((taskId: string) => {
+    pendingCheckInsRef.current.set(taskId, Date.now());
+  }, []);
+  const clearPendingCheckIn = useCallback((taskId: string) => {
+    pendingCheckInsRef.current.delete(taskId);
+  }, []);
+  // Undos queued while the check-in POST is still in flight.
+  const queuedUndosRef = useRef<Set<string>>(new Set());
+  const queueUndoOnCommit = useCallback((taskId: string) => {
+    queuedUndosRef.current.add(taskId);
+  }, []);
+  // Forward-ref so subscribeCheckInCommitted calls the latest closure.
+  const performUndoRef = useRef<(taskId: string, cycleId: number) => Promise<void>>(
+    () => Promise.resolve(),
+  );
+  // True while a check-in POST is genuinely in flight.
+  const isCheckInPending = useCallback((taskId: string) => {
+    const ts = pendingCheckInsRef.current.get(taskId);
+    if (ts === undefined) return false;
+    if (Date.now() - ts > PENDING_CHECKIN_TTL_MS) {
+      pendingCheckInsRef.current.delete(taskId);
+      return false;
+    }
+    return true;
   }, []);
 
   const fetchTasks = useCallback(async () => {
@@ -250,14 +247,40 @@ export function TaskList({
       setError(res.error ?? "Failed to load tasks.");
       return;
     }
-    setTasks(res.data.data);
+    const incoming = res.data.data;
+    // Drop stale pending-checkin entries.
+    const now = Date.now();
+    for (const [tid, ts] of pendingCheckInsRef.current) {
+      if (now - ts > PENDING_CHECKIN_TTL_MS) pendingCheckInsRef.current.delete(tid);
+    }
+    if (pendingCheckInsRef.current.size === 0) {
+      setTasks(incoming);
+    } else {
+      const todayKey = todayLocalKey();
+      setTasks((prev) => {
+        const prevById = new Map(prev.map((t) => [t.taskId, t]));
+        return incoming.map((fresh) => {
+          if (!pendingCheckInsRef.current.has(fresh.taskId)) return fresh;
+          // Server caught up — trust fresh data.
+          const freshLastCheckInToday =
+            (fresh.lastCheckInDate ?? "").split("T")[0] === todayKey;
+          const freshHasTodaysCheckin = (fresh.recentCycles ?? []).some(
+            (c) =>
+              c.cycleType === "checkin" &&
+              c.checkInDate.split("T")[0] === todayKey,
+          );
+          if (freshLastCheckInToday && freshHasTodaysCheckin) {
+            pendingCheckInsRef.current.delete(fresh.taskId);
+            return fresh;
+          }
+          // Preserve optimistic patch until server catches up.
+          return prevById.get(fresh.taskId) ?? fresh;
+        });
+      });
+    }
     setRefreshTick((t) => t + 1);
-    // Seed the task cache so the detail modal can render synchronously
-    // when the user taps a row — eliminates the spinner-then-content flash.
-    taskCache.setMany(res.data.data);
-    // No need to call onTasksLoaded here — the effect below mirrors the
-    // local `tasks` state to the parent on every change, including this
-    // initial setTasks call.
+    // Seed cache so detail modal renders synchronously.
+    taskCache.setMany(incoming);
   }, [filters]);
 
   useEffect(() => {
@@ -267,70 +290,83 @@ export function TaskList({
 
   useFocusEffect(useCallback(() => { fetchTasks(); }, [fetchTasks]));
 
-  // Stuck-row recovery. A TaskRow that detects checkedThisCycle=true but
-  // latestCheckinCycle=null (rapid-tap session left local recentCycles
-  // stale) emits this event; we refetch so the next interaction sees
-  // canonical state. useFocusEffect alone doesn't catch this because
-  // /task/[id] is presented as a transparentModal — the list never blurs.
+  // Stuck-row recovery refresh.
   useEffect(() => {
     return taskEvents.subscribeRefreshRequested(() => { fetchTasks(); });
   }, [fetchTasks]);
 
-  // Mirror the local tasks state to the parent so derived UI (filter
-  // counts, submit bar totals, etc.) reflects optimistic mutations the
-  // moment they happen — check-ins, completes, archives, deletes, undos.
-  // Previously onTasksLoaded only fired after a full fetchTasks call, so
-  // local setTasks calls (which exist precisely to avoid round-trips)
-  // left the parent's view of the list stale.
+  // Mirror local tasks to parent for live derived UI.
   useEffect(() => {
     onTasksLoaded?.(tasks);
   }, [tasks, onTasksLoaded]);
 
-  // Optimistic check-in updates from the detail modal — see lib/task-events.
-  // The modal emits the moment the slide commits, so the row visibly moves
-  // into the "Checked In" / "Upcoming" section under the modal while the
-  // slide's celebration animation is still playing. We patch dueDate too
-  // because isCheckedInThisCycle gates on `today < dueDate` — without the
-  // advance, daily tasks (dueDate = today) wouldn't move sections.
+  // Optimistic check-in patch from detail modal.
   useEffect(() => {
-    return taskEvents.subscribeCheckedIn(({ taskId, lastCheckInDateIso, nextDueDateIso }) => {
+    return taskEvents.subscribeCheckedIn(({ taskId, lastCheckInDateIso, nextDueDateIso, currentStreakCount, longestStreakCount }) => {
+      markPendingCheckIn(taskId);
       setTasks((prev) =>
         prev.map((t) => {
           if (t.taskId !== taskId) return t;
-          // Capture pre-checkin dueDate so the inline undo can restore the
-          // original overdue state instantly — mirrors handleCheckIn's
-          // bookkeeping for check-ins committed via the leading checkbox.
+          // Remember pre-checkin dueDate for instant undo restore.
           preCheckinDueDateRef.current.set(taskId, t.dueDate);
-          return { ...t, lastCheckInDate: lastCheckInDateIso, dueDate: nextDueDateIso };
+          return {
+            ...t,
+            lastCheckInDate: lastCheckInDateIso,
+            dueDate: nextDueDateIso,
+            currentStreakCount,
+            longestStreakCount,
+          };
         })
       );
-      // Pin to top of Checked In — same logic as handleCheckIn's optimistic
-      // path, just triggered by a check-in committed from the detail modal.
+      // Pin to top of Checked In.
       setRecentCheckinTs((prev) => {
         const next = new Map(prev);
         next.set(taskId, Date.now());
         return next;
       });
     });
-  }, []);
+  }, [markPendingCheckIn]);
+
+  // Authoritative server response — append real cycleId for undo path.
+  useEffect(() => {
+    return taskEvents.subscribeCheckInCommitted(({ taskId, cycleId, checkInDateIso, nextDueDateIso, currentStreakCount, longestStreakCount }) => {
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.taskId !== taskId) return t;
+          const cycles = t.recentCycles ?? [];
+          // Guard against double-append on retried emit.
+          const alreadyAppended = cycles.some((c) => c.cycleId === cycleId);
+          const newCycle: CheckInCycleDto = {
+            cycleId,
+            taskId,
+            checkInDate: checkInDateIso,
+            counterValue: null,
+            createdAt: new Date().toISOString(),
+            cycleType: "checkin",
+          };
+          return {
+            ...t,
+            dueDate: nextDueDateIso || t.dueDate,
+            currentStreakCount,
+            longestStreakCount,
+            recentCycles: alreadyAppended ? cycles : [newCycle, ...cycles],
+          };
+        })
+      );
+      clearPendingCheckIn(taskId);
+      // Drain queued undos now that real cycleId is known.
+      if (queuedUndosRef.current.has(taskId)) {
+        queuedUndosRef.current.delete(taskId);
+        void performUndoRef.current(taskId, cycleId);
+      }
+    });
+  }, [clearPendingCheckIn]);
 
 
-  // Per-task debounce. Without this, rapidly tapping the same row's checkbox
-  // (or alternating check-in / undo too fast) caused overlapping server
-  // requests — partial-write states on the backend (task.LastCheckInDate
-  // updated but no cycle written, etc.) and DbUpdateConcurrencyException on
-  // shared rows like streaks. 400ms is long enough to absorb a triple-tap
-  // burst but short enough that intentional sequential taps feel fine.
+  // Per-task action debounce — prevents overlapping server requests.
   const lastActionAtRef = useRef<Map<string, number>>(new Map());
   const ACTION_DEBOUNCE_MS = 400;
-  // Remember the dueDate each task had at check-in time so the immediate
-  // undo path can restore it optimistically. Without this, the undo's
-  // optimistic patch rolls dueDate back by one period via getPrevPeriodStart
-  // (e.g. tomorrow → today), which is correct for tasks that weren't overdue
-  // but loses the original overdue state for tasks that were behind multiple
-  // periods. The server response carries previousDueDate ~300 ms later, but
-  // until then the red overdue border doesn't reappear — that's the gap
-  // the user was seeing.
+  // Snapshot of pre-checkin dueDate for instant undo restore.
   const preCheckinDueDateRef = useRef<Map<string, string | null>>(new Map());
   const tryClaimAction = useCallback((taskId: string): boolean => {
     const now = Date.now();
@@ -339,11 +375,7 @@ export function TaskList({
     lastActionAtRef.current.set(taskId, now);
     return true;
   }, []);
-  // Read-only peek for the tap handler: returns true iff a tryClaimAction call
-  // RIGHT NOW would succeed. Used to short-circuit the row's armGuard so it
-  // doesn't latch the inFlight ref on a tap whose underlying handler is about
-  // to be debounce-blocked anyway — that combination produced a stuck checkbox
-  // (guard set, no in-flight work to clear it, 2 s safety timeout to recover).
+  // Read-only peek for tap-handler short-circuit.
   const canActNow = useCallback((taskId: string): boolean => {
     const now = Date.now();
     const last = lastActionAtRef.current.get(taskId) ?? 0;
@@ -352,10 +384,10 @@ export function TaskList({
 
   async function handleCheckIn(task: TaskDto) {
     if (!tryClaimAction(task.taskId)) return;
+    // Guard fetchTasks during in-flight commit.
+    markPendingCheckIn(task.taskId);
 
-    // Fire the burst on the row that's about to check in. Matches web's
-    // recurringPopups pattern — the row stays visible while the particles
-    // animate, then on refetch the task lands in the "Checked In" section.
+    // Fire check-in burst.
     if (burstTimeoutRef.current) clearTimeout(burstTimeoutRef.current);
     setBurstTaskId(task.taskId);
     burstTimeoutRef.current = setTimeout(() => {
@@ -363,81 +395,41 @@ export function TaskList({
       burstTimeoutRef.current = null;
     }, 900);
 
-    // Haptic feedback. Stronger pulse when this check-in crosses a streak
-    // tier boundary (3/7/14/30) — mirrors web's useTaskActions distinction.
-    // Skipped on web (expo-haptics is a no-op there anyway, but the guard
-    // avoids the async call entirely).
+    // Haptic — heavy pulse on tier crossing.
     if (Platform.OS !== "web") {
       const prevStreak = task.currentStreakCount ?? 0;
       const nextStreak = prevStreak + 1;
       const crosses = [3, 7, 14, 30].some((at) => prevStreak < at && nextStreak >= at);
       Haptics.impactAsync(
         crosses ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
-      ).catch(() => {/* swallow — haptics are best-effort */});
+      ).catch(() => {});
     }
 
-    // Optimistic patch right away so the row visibly moves to "Checked In"
-    // before the network round-trip. We then apply the server response in
-    // place — no fetchTasks() refetch afterward, which was a major source
-    // of perceived sluggishness (extra network + extra full-list re-render
-    // after every action). useFocusEffect already refreshes on tab focus
-    // so any drift is reconciled when the user navigates away and back.
+    // Optimistic patch — no refetch on success.
     const todayIso = todayLocalKey();
-    // Remember the original dueDate so an immediate undo can restore the
-    // pre-checkin overdue state instantly (see preCheckinDueDateRef).
+    // Remember original dueDate for instant undo restore.
     preCheckinDueDateRef.current.set(task.taskId, task.dueDate);
-    // Advance dueDate optimistically too — without this the row stays in the
-    // active section until the server response lands (~300 ms), because
-    // isCheckedInThisCycle requires today < dueDate. Mirrors server's
-    // ComputeNextDueDate so the row jumps straight to "Checked In". Fall
-    // back to "daily" if recurrenceRule is somehow missing — only recurring
-    // tasks reach this handler, and the worst-case is one extra day of
-    // optimistic dueDate that the server response immediately corrects.
-    // For overdue tasks, base the next-period advance on today, not on the
-    // past dueDate — a daily task overdue by a day would otherwise land on
-    // today (yesterday + 1) instead of tomorrow, and the row would visibly
-    // correct itself once the server response (which already does this
-    // catch-up) landed ~300 ms later.
+    // Advance dueDate optimistically; overdue rebases on today.
     const dueBase = task.isRecurring && isOverdue(task.dueDate) ? todayIso : task.dueDate;
     const optimisticDue = task.isRecurring
       ? getNextDueDate(dueBase, task.recurrenceRule ?? "daily")
       : task.dueDate;
-    // Pin this row to the top of the Checked In section — even if the user
-    // had previously undone and re-checked in, the fresh timestamp wins
-    // over its earlier position.
+    // Pin row to top of Checked In.
     setRecentCheckinTs((prev) => {
       const next = new Map(prev);
       next.set(task.taskId, Date.now());
       return next;
     });
-    // Smooth the SectionList re-layout. Even though the optimistic patch
-    // recomputes `sections` synchronously and the row's new home is the
-    // Checked In section, RN's SectionList has a perceptible delay when an
-    // item crosses a section boundary (it unmounts in the old section and
-    // remounts in the new one) — the user reads that as the row briefly
-    // "staying" at the bottom of active before snapping into place. A short
-    // ease-in-out smooths the transition so the row visibly slides into its
-    // new home in one motion instead of two paint stages.
+    // Smooth SectionList cross-section re-layout.
     LayoutAnimation.configureNext({
       duration: 220,
       create: { type: "easeInEaseOut", property: "opacity" },
       update: { type: "easeInEaseOut" },
       delete: { type: "easeInEaseOut", property: "opacity" },
     });
-    // Optimistic streak increment so the in-row badge reflects the new
-    // value in the same frame as the row's section move. Mirrors the
-    // server's reset rule in CheckInTask.cs (daysSinceLast > maxGapDays
-    // per recurrence rule) so the prediction matches the authoritative
-    // value with no intermediate bounce. Previously this used isOverdue
-    // as the proxy, which over-predicted reset for weekdays tasks (a 1-2
-    // day gap is within the 3-day tolerance but is still "overdue" by
-    // dueDate) and made the streak briefly drop to 1 before snapping
-    // back to N+1.
+    // Optimistic streak increment (mirrors server reset rule).
     const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
     const predictedStreak = willResetStreak ? 1 : (task.currentStreakCount ?? 0) + 1;
-    // longestStreakCount tracks the all-time peak — only bump it when the
-    // prediction exceeds the current peak (so the same +1 doesn't double-
-    // count when the user re-checks-in after an undo).
     setTasks((prev) => prev.map((t) => {
       if (t.taskId !== task.taskId) return t;
       const prevLongest = t.longestStreakCount ?? 0;
@@ -452,31 +444,16 @@ export function TaskList({
 
     const res = await tasksApi.checkIn(task.taskId);
     if (res.error) {
-      // "Already checked in for this cycle" is a race-condition false
-      // positive — a previous tap (or a parallel request) already created
-      // the cycle server-side. Our optimistic state matches reality, so do
-      // nothing: don't toast, don't refetch. Refetching here would flicker
-      // the row back to unchecked because fetchTasks can race ahead of the
-      // FIRST tap's in-flight success response (which hasn't committed the
-      // cycle to the DB yet), returning pre-checkin server state. When the
-      // first response finally lands it patches recentCycles anyway, and
-      // the next tab focus / pull-to-refresh reconciles cleanly.
+      // "Already checked in" — race false positive, ignore.
       if (/already\s+checked\s*in/i.test(res.error)) return;
-      // Other errors (cap reached, task vanished, etc.) — refresh from the
-      // server to reconcile rather than rolling back blindly. Same end
-      // result as a rollback for true-error cases (row returns to Active
-      // because the server says it isn't checked in), but without the
-      // intermediate "checked → unchecked → checked" flicker that the old
-      // rollback caused on false positives.
+      // Other errors — refetch to reconcile.
       setError(res.error);
       fetchTasks();
       return;
     }
     if (res.data) {
       const data = res.data;
-      // Apply the authoritative server response in place — covers nextDueDate,
-      // updated streak counts, and the new cycle id so the leading checkbox's
-      // undo path has the right cycleId for an immediate within-day undo.
+      // Apply authoritative server response.
       const newCycle: CheckInCycleDto = {
         cycleId: data.cycleId,
         taskId: task.taskId,
@@ -487,14 +464,7 @@ export function TaskList({
       };
       setTasks((prev) => prev.map((t) => {
         if (t.taskId !== task.taskId) return t;
-        // Race-aware patch (symmetric to performUndoCheckIn). If the user
-        // optimistically undid AFTER our optimistic check-in, t.lastCheckInDate
-        // is null — we set it in the optimistic check-in patch above, and an
-        // undo's optimistic patch is the only thing that nulls it. Restoring
-        // dueDate to tomorrow here would pop the row back to the Checked In
-        // section even though the user has since unchecked. Skip the state
-        // restore in that case; still add the cycle for accurate history
-        // (the undo's own server response will remove it if/when it lands).
+        // Race-aware: skip state restore if user has since undone.
         if (t.lastCheckInDate == null || t.lastCheckInDate === "") {
           return { ...t, recentCycles: [newCycle, ...(t.recentCycles ?? [])] };
         }
@@ -509,44 +479,19 @@ export function TaskList({
     }
   }
 
-  // Shared optimistic undo — mirrors web's useTaskActions.handleUndoCheckIn:
-  // patch the row in-place from the server response (filter out the undone
-  // cycle, restore lastCheckInDate + dueDate from the snapshot fields the
-  // API returns). fetchTasks alone wasn't enough — the underlying list was
-  // sometimes still rendering the old recentCycles[0] after the refresh,
-  // leaving the Undo pill stuck on a now-active row.
+  // Shared optimistic undo — patch row in-place from server response.
   async function performUndoCheckIn(taskId: string, cycleId: number) {
-    // Optimistic-first: patch the row immediately so the checkbox flips
-    // back to unchecked on tap, then reconcile with the server response.
-    // Without the optimistic step, a second tap fired during the ~200–800 ms
-    // server round-trip still sees the undone cycle in recentCycles[0] and
-    // tries to delete it again → "Check-in cycle N was not found" 404.
+    // Optimistic-first patch.
     let snapshot: TaskDto | null = null;
-    // Prefer the remembered pre-checkin dueDate (set in handleCheckIn) when
-    // the user is undoing a check-in committed in this session. This restores
-    // the precise original state — critical for previously-overdue tasks
-    // whose dueDate was N periods in the past: getPrevPeriodStart only rolls
-    // back ONE period (tomorrow → today), so the red overdue border wouldn't
-    // re-appear until the server response landed ~300 ms later. Falls back
-    // to the one-period rollback for cycles that weren't created in this
-    // session (no remembered value).
+    // Prefer remembered pre-checkin dueDate for exact restore.
     const rememberedDue = preCheckinDueDateRef.current.get(taskId);
-    // For cycles loaded from a previous session, the ref above is empty —
-    // look up the cycle's previousDueDate (newly surfaced on the DTO) as
-    // the next-best signal. This restores the precise overdue state on
-    // undo without waiting for the server response, so the red border
-    // re-appears in the same render.
+    // Fallback: cycle's previousDueDate snapshot.
     const cycleSnapshot = (() => {
       const t = tasks.find((x) => x.taskId === taskId);
       return t?.recentCycles?.find((c) => c.cycleId === cycleId) ?? null;
     })();
     const cyclePreviousDue = cycleSnapshot?.previousDueDate ?? undefined;
-    // Smooth the cross-section move on the undo path too — mirrors the
-    // LayoutAnimation in handleCheckIn. Without it, the row's animation
-    // from Checked In back to Active is a hard jump (and the red overdue
-    // border / cleared tier badge appear with a perceptible beat once the
-    // section re-mount finishes). The eased layout transition keeps the
-    // visual change in one motion.
+    // Smooth cross-section move back to Active.
     LayoutAnimation.configureNext({
       duration: 220,
       create: { type: "easeInEaseOut", property: "opacity" },
@@ -557,15 +502,7 @@ export function TaskList({
       if (t.taskId !== taskId) return t;
       snapshot = t;
       const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-      // Three-tier dueDate restore, most precise first:
-      //   1. In-session preCheckinDueDateRef — exact pre-checkin dueDate
-      //      captured at handleCheckIn time.
-      //   2. Cycle's previousDueDate snapshot — exact value from the DB,
-      //      handles cycles from prior sessions.
-      //   3. getPrevPeriodStart fallback — one period back from current
-      //      dueDate; close enough for the common case but loses the
-      //      "originally overdue by multiple periods" detail until the
-      //      server response patches it.
+      // Three-tier dueDate restore: remembered → cycle snapshot → period rollback.
       const optimisticDue = rememberedDue !== undefined
         ? rememberedDue
         : cyclePreviousDue !== undefined && cyclePreviousDue !== null && cyclePreviousDue !== ""
@@ -573,14 +510,7 @@ export function TaskList({
           : (t.dueDate && t.recurrenceRule
             ? dateKey(getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule))
             : t.dueDate);
-      // Optimistic streak decrement. Unlike handleCheckIn — where a +1
-      // prediction can bounce when the server resets the streak first
-      // (gap crossed) — an undo against a specific cycleId is deterministic:
-      // the server returns current-1 in the common case, so predicting it
-      // here lets the in-row badge update in the same frame as the row's
-      // section move instead of lagging until the response lands. longest
-      // is left alone — the server preserves the all-time peak across
-      // undos so a prediction would mis-fire on the boundary check-in.
+      // Optimistic streak decrement (longest left alone — server preserves peak).
       const prevCount = t.currentStreakCount ?? 0;
       return {
         ...t,
@@ -590,18 +520,12 @@ export function TaskList({
         currentStreakCount: Math.max(0, prevCount - 1),
       };
     }));
-    // Clear the remembered value — a subsequent check-in will repopulate it
-    // with the fresh pre-checkin state. Leaving stale entries around would
-    // mis-fire on a future undo whose check-in came from a refetch.
+    // Clear remembered value to avoid mis-fire on later undo.
     preCheckinDueDateRef.current.delete(taskId);
 
     const res = await tasksApi.undoCheckIn(taskId, cycleId);
     if (res.error || !res.data) {
-      // 404 / "not found" means the cycle is already deleted server-side
-      // (a previous undo for the same cycle landed first). Our optimistic
-      // state already removed it — rolling back would visibly snap the
-      // box from unchecked → checked, which reads as "the tap didn't
-      // work". Leave the optimistic state alone and don't toast.
+      // 404 = already deleted server-side; keep optimistic state.
       const cycleAlreadyGone = !!res.error && /not\s*found/i.test(res.error);
       if (!cycleAlreadyGone && snapshot) {
         const captured = snapshot;
@@ -616,43 +540,18 @@ export function TaskList({
     setTasks((prev) => prev.map((t) => {
       if (t.taskId !== taskId) return t;
       const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-      // Guard against out-of-order responses corrupting the row state. If
-      // the user did check-in → undo → check-in in quick succession, the
-      // undo's response (carrying the snapshot from BEFORE the first
-      // check-in) can arrive after the second check-in's optimistic patch
-      // OR its server response has already advanced dueDate / set
-      // lastCheckInDate to today. Overwriting with the stale snapshot would
-      // leave the row in a "grey but empty checkbox" zombie state where
-      // lastCheckInDate is a prior date but dueDate is in the future.
-      // Two signals say "a newer check-in already owns this row":
-      //   - A higher cycleId in recentCycles (post-server-response).
-      //   - lastCheckInDate is non-null (post-optimistic-patch). We
-      //     EXPLICITLY set it to null in our undo's optimistic patch above,
-      //     so a non-null value here means a re-checkin's optimistic patch
-      //     intervened between our optimistic patch and this response.
-      //     Without this second signal, the flicker shows up as: undo →
-      //     optimistic re-checkin (row jumps to Checked In) → undo's
-      //     server response lands first (row pops BACK to Active) →
-      //     re-checkin's response lands (row settles in Checked In).
+      // Guard against out-of-order responses corrupting row state.
       const hasNewerCheckin = cycles.some(
         (c) => c.cycleType === "checkin" && c.cycleId > cycleId,
       ) || (t.lastCheckInDate != null && t.lastCheckInDate !== "");
-      // Empty string from server = "no prior check-in" — null it so
-      // canCheckInNow() unlocks the task.
+      // Empty string from server = "no prior check-in" — null it.
       const restoredLastCheckIn = hasNewerCheckin
         ? t.lastCheckInDate
         : (data.previousLastCheckInDate || null);
-      // If the server has no previousDueDate snapshot (older cycles created
-      // before the rollback fields were added), compute it client-side by
-      // rolling dueDate back one period. Without this, dueDate stays at
-      // "tomorrow" and isCheckedInThisCycle keeps the row pinned to the
-      // Checked In section even though lastCheckInDate is cleared.
+      // Keep optimistic dueDate when server snapshot is empty.
       const restoredDueDate = hasNewerCheckin
         ? t.dueDate
-        : (data.previousDueDate
-          || (t.dueDate && t.recurrenceRule
-            ? dateKey(getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule))
-            : t.dueDate));
+        : (data.previousDueDate || t.dueDate);
       return {
         ...t,
         recentCycles: cycles,
@@ -662,27 +561,19 @@ export function TaskList({
         lastCheckInDate: restoredLastCheckIn,
       };
     }));
-    // NOTE: deliberately NOT firing emitRefreshRequested here. It
-    // triggered a follow-up fetchTasks that raced the response patch
-    // above and, when the streak's IsActive flipped (legitimate reset
-    // restore), the refresh returned currentStreakCount=null — making
-    // the tier badge vanish until another full refresh. The detail
-    // screen still syncs on focus via its own useFocusEffect.
+    // NOTE: do NOT fire emitRefreshRequested here — races the response patch.
   }
 
-  // Within-day inline undo — fires from the leading checkbox on each row
-  // (see TaskRow). Available until midnight so the user can reverse a
-  // check-in long after the moment of action.
+  // Within-day inline undo from leading checkbox.
   async function handleUndoCheckIn(task: TaskDto, cycleId: number) {
     if (!tryClaimAction(task.taskId)) return;
     await performUndoCheckIn(task.taskId, cycleId);
   }
+  // Mirror latest closure into ref.
+  performUndoRef.current = performUndoCheckIn;
 
   async function handleComplete(task: TaskDto) {
-    // Optimistic patch only — the local state already reflects the new
-    // status. fetchTasks was running unconditionally and re-rendering the
-    // entire list after each completion, which was a major source of
-    // perceived lag. On error, refetch to reconcile.
+    // Optimistic only; refetch on error.
     setTasks((prev) =>
       prev.map((t) => (t.taskId === task.taskId ? { ...t, status: "completed" } : t))
     );
@@ -693,9 +584,7 @@ export function TaskList({
     }
   }
 
-  // Pending → in_progress. Mirrors web's useTaskActions.handleAdvance
-  // pending-branch: optimistic status flip, hit the dedicated /start endpoint,
-  // refetch on error to reconcile.
+  // pending → in_progress.
   async function handleStart(task: TaskDto) {
     setTasks((prev) =>
       prev.map((t) => (t.taskId === task.taskId ? { ...t, status: "in_progress" } : t))
@@ -707,10 +596,7 @@ export function TaskList({
     }
   }
 
-  // in_progress → pending. Web's handlePause uses tasksApi.update with the
-  // full task payload because there's no dedicated /pause endpoint. We do the
-  // same — the update call carries every required field so the server-side
-  // validator doesn't reject a partial payload.
+  // in_progress → pending (no dedicated endpoint — full update).
   async function handlePause(task: TaskDto) {
     setTasks((prev) =>
       prev.map((t) => (t.taskId === task.taskId ? { ...t, status: "pending" } : t))
@@ -746,10 +632,7 @@ export function TaskList({
   }
 
   async function handleDelete(task: TaskDto) {
-    // No confirm — swipe-action commitment is enough intent. Mirrors web's
-    // useTaskActions.handleDelete: fire the API request in parallel with
-    // the slash animation; after SLASH_MS the row is pulled from the list
-    // so the collapse plays to completion before the layout shifts.
+    // No confirm — swipe commitment is enough intent.
     setSlashingId(task.taskId);
     const deletePromise = tasksApi.delete(task.taskId);
     await new Promise((r) => setTimeout(r, SLASH_MS));
@@ -773,29 +656,21 @@ export function TaskList({
       submittedTaskIds: submittedTaskIds ?? new Set(),
     });
 
-    // Routines-only: pull tasks that are checked-in for this cycle out of the
-    // top section and put them under a "Checked In" separator below — only when
-    // both sets are non-empty, matching web's mobile recurring view.
+    // Routines split: checked-in tasks under "Checked In" separator.
     let finalItems = items;
     if (splitCheckedIn) {
       const active: TaskDto[] = [];
       const checkedIn: TaskDto[] = [];
       for (const it of items) {
         if ("__sep" in it) {
-          // The base recurring list shouldn't carry any separators (groupMode
-          // = "none" + activeFilter = "all"), but if a future caller uses
-          // groupMode we preserve their layout untouched.
+          // Preserve any pre-existing separators.
           active.push(it as unknown as TaskDto);
           continue;
         }
         if (isCheckedInThisCycle(it)) checkedIn.push(it);
         else active.push(it);
       }
-      // Most-recent check-in on top: in-session timestamp wins over the
-      // latest cycle's createdAt fallback (which keeps prior-session rows
-      // ordered most-recent-first too). An undo+recheckin re-stamps the
-      // timestamp, so the row jumps back to the top regardless of where
-      // it sat before.
+      // Most-recent check-in on top.
       const tsOf = (t: TaskDto): number => {
         const sessionTs = recentCheckinTs.get(t.taskId);
         if (sessionTs !== undefined) return sessionTs;
@@ -803,11 +678,7 @@ export function TaskList({
         return latestCycle ? new Date(latestCycle.createdAt).getTime() : 0;
       };
       checkedIn.sort((a, b) => tsOf(b) - tsOf(a));
-      // Three layout cases: both buckets non-empty → render with the
-      // "Checked In" separator; only checkedIn non-empty → render the
-      // sorted checkedIn list directly (no separator needed when nothing
-      // is left to do); only active non-empty → fall back to the buildList
-      // ordering (no checkedIn to put on top of).
+      // Layout cases: both → separator; only checkedIn → list directly.
       if (active.length > 0 && checkedIn.length > 0) {
         finalItems = [...active, sep("Checked In", "__sep-checked-in"), ...checkedIn];
       } else if (checkedIn.length > 0) {
@@ -816,9 +687,7 @@ export function TaskList({
     }
 
     const chunks = chunkListItems(finalItems);
-    // Active-section collapse — when the user is on the "all" filter and the
-    // list has a Completed separator, expose the uncompleted-chunk count and
-    // (when collapsed) drop those chunks entirely.
+    // Active-section collapse for "all" filter.
     const compIdx = chunks.findIndex((c) => c.sep?.sepKey === "__sep-completed");
     const hasComp = compIdx >= 0;
     const showCollapse = activeFilter === "all" && hasComp;
@@ -839,10 +708,7 @@ export function TaskList({
     setRefreshing(false);
   }
 
-  // Errors no longer replace the entire list — see <ErrorToast/> injected in
-  // the main and empty renders below. Replacing the SectionList wiped the
-  // pull-to-refresh control too, leaving the user with no way out except a
-  // tab switch.
+  // Errors render via <ErrorToast/> overlay (no list replacement).
 
   if (loading && tasks.length === 0) {
     return <ActivityIndicator color={c.activeHighlight} />;
@@ -877,19 +743,11 @@ export function TaskList({
       sections={sections}
       keyExtractor={(item) => item.taskId}
       stickySectionHeadersEnabled={false}
-      // Virtualization tuning. Each row hosts ~9 shared values (gestures
-      // + slash + bank-burst) so mount cost is real. Trimming the window
-      // keeps fewer offscreen rows alive at any time without affecting
-      // visible-area scroll smoothness on a phone-sized list.
+      // Virtualization tuning — rows are expensive to mount.
       initialNumToRender={10}
       maxToRenderPerBatch={8}
       windowSize={5}
-      // Intentionally not using removeClippedSubviews — it caused the row to
-      // visibly stall at the bottom of the active section for a beat before
-      // settling into the Checked In section after a check-in. The clipping
-      // pass appears to delay the cross-section re-mount on Android in
-      // particular. Routines lists are short enough (~20-30 rows) that the
-      // memory savings aren't worth the perceived UX hitch.
+      // removeClippedSubviews intentionally off — stalls cross-section re-mount on Android.
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.activeHighlight} />}
       ListHeaderComponent={
         showCollapse ? (
@@ -937,6 +795,8 @@ export function TaskList({
               tryNavigate={tryNavigate}
               refreshTick={refreshTick}
               useCheckinCheckbox={useCheckinCheckbox}
+              isCheckInPending={isCheckInPending}
+              queueUndoOnCommit={queueUndoOnCommit}
             />
           </SlashingRow>
         );
@@ -969,15 +829,14 @@ interface TaskRowProps {
   tryNavigate: () => boolean;
   refreshTick: number;
   useCheckinCheckbox?: boolean;
+  // True while check-in POST is in flight.
+  isCheckInPending: (taskId: string) => boolean;
+  // Queues undo intent until real cycleId lands.
+  queueUndoOnCommit: (taskId: string) => void;
 }
 
 const TaskRow = memo(TaskRowImpl, (prev, next) => {
-  // Skip re-rendering when only the parent's callback identities change —
-  // the handler bodies are stable in behavior even though their refs churn
-  // every render (they're defined inside the TaskList function). Comparing
-  // just the data + state props keeps the row from re-rendering on every
-  // tasks-state mutation in TaskList. Without this memo, ANY check-in
-  // triggered a full re-render of every visible row.
+  // Skip re-render on callback identity churn — handlers are stable in behavior.
   return (
     prev.item === next.item &&
     prev.activeFilter === next.activeFilter &&
@@ -1013,23 +872,17 @@ function TaskRowImpl({
   tryNavigate,
   refreshTick,
   useCheckinCheckbox,
+  isCheckInPending,
+  queueUndoOnCommit,
 }: TaskRowProps) {
   const isInProgress = item.status === "in_progress";
   const isCompleted = item.status === "completed";
-  // LOCAL date key, not UTC. toISOString returns UTC, which silently drifts
-  // a day off in any timezone behind UTC late in the evening — comparing
-  // a server-stored local date string against a UTC string then never
-  // matches and the row loses its "checked-in today" indicators.
+  // LOCAL date key — UTC drifts late-evening in negative offsets.
   const todayKey = todayLocalKey();
   const wasCheckedInToday = item.isRecurring && item.lastCheckInDate
     ? item.lastCheckInDate.split("T")[0] === todayKey
     : false;
-  // Latest check-in cycle (any date) — used by the leading checkbox to undo
-  // a committed check-in from anywhere in the current cycle (today's, or e.g.
-  // a weekly routine checked in 3 days ago). Counter tasks can log values
-  // after the check-in lands (cycleType === "log"), and those logs sit at
-  // the head of recentCycles ahead of the check-in itself — so we scan for
-  // the most recent "checkin" rather than reading index 0.
+  // Latest check-in cycle (skips counter "log" cycles at head).
   const latestCheckinCycle = (() => {
     if (!item.isRecurring) return null;
     const cycles = item.recentCycles ?? [];
@@ -1038,27 +891,11 @@ function TaskRowImpl({
     }
     return null;
   })();
-  // Same hit-test pattern as the (removed) dateColBoundsRef — used when the
-  // leading priority dot is rendered as a check-in checkbox so a tap there
-  // routes to onCheckIn / onUndoCheckIn instead of opening the detail screen.
+  // Checkbox hit-test bounds (Pressables are swallowed by SwipeableRow).
   const checkboxBoundsRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
-  // Guards against rapid double-taps on the check-in checkbox. Stores the
-  // cycleId currently being undone (or 0 for an in-flight check-in) so any
-  // follow-up tap that would re-fire the same action is dropped. Cleared
-  // after a generous upper-bound timeout in case the server hangs.
+  // In-flight action guard, cleared by natural observation or safety timeout.
   const inFlightActionRef = useRef<{ kind: "check-in" | "undo"; cycleId: number } | null>(null);
-  // Proactive clear for check-in only: once today's check-in cycle has
-  // landed in recentCycles (server response from handleCheckIn patched the
-  // row), the in-flight guard is stale — clearing it here lets the user
-  // tap the next action without waiting for the safety-net timeout.
-  //
-  // Intentionally NO undo branch: the undo's optimistic patch removes the
-  // cycle from recentCycles BEFORE the network call settles, so a
-  // symmetric "cycle disappeared → clear" rule fired immediately on the
-  // optimistic patch and effectively disabled the lock. Without it the
-  // tap handler's `if (inFlight) return;` gate works as advertised — the
-  // undo's guard is cleared by the safety timeout (or by a subsequent
-  // refresh) once the server has had time to settle.
+  // Proactive clear once today's check-in cycle lands.
   useEffect(() => {
     const cycles = item.recentCycles ?? [];
     const inFlight = inFlightActionRef.current;
@@ -1070,23 +907,14 @@ function TaskRowImpl({
       if (todaysCheckin) inFlightActionRef.current = null;
     }
   }, [item.recentCycles, todayKey]);
-  // User-driven recovery: bumping refreshTick (parent's fetchTasks completed)
-  // clears any latched guard so a stuck row becomes tappable again after a
-  // pull-to-refresh. The natural clear above handles the happy path; this
-  // covers the rare case where the guard is stuck because the action never
-  // produced an observable outcome (handler debounce-blocked, network
-  // dropped silently, etc.) and the 2 s safety timeout hasn't fired yet.
+  // User-driven recovery — pull-to-refresh clears latched guards.
   useEffect(() => {
     inFlightActionRef.current = null;
   }, [refreshTick]);
   const overdueRecurring = item.isRecurring && !isInProgress && !isCompleted && isOverdue(item.dueDate);
   const overdueRegular = !item.isRecurring && !isCompleted && isOverdue(item.dueDate);
   const overdueRow = overdueRecurring || overdueRegular;
-  // Always grey a recurring row whose current cycle is already closed
-  // (= committed for this period), regardless of the active filter — so the
-  // user sees at a glance which routines are done. The pending-tab leg
-  // additionally greys rows that aren't actionable yet (lockouts /
-  // in-progress).
+  // Grey closed cycles and locked/in-progress pending rows.
   const checkedInThisCycle = item.isRecurring && isCycleClosed(item.dueDate, item.lastCheckInDate);
   const isGreyed = checkedInThisCycle || (activeFilter === "pending" && (
     (item.isRecurring && !canCheckInNow(item.dueDate, item.recurrenceRule, item.lastCheckInDate))
@@ -1108,11 +936,7 @@ function TaskRowImpl({
     item.isRecurring &&
     !overdueRecurring &&
     canCheckInNow(item.dueDate, item.recurrenceRule, item.lastCheckInDate);
-  // Non-recurring task action gating — mirrors web's TaskRow swipe panel.
-  // Start shows for any pending task (overdue or not); web routes overdue
-  // through onRestartOverdue with a danger-red icon, which we'll add later.
-  // Pause and Complete both show on in_progress so the user can either back
-  // off or finish from the swipe without a round-trip through the modal.
+  // Non-recurring swipe action gating.
   const canStart = !item.isRecurring && item.status === "pending";
   const canPause = !item.isRecurring && isInProgress;
   const canComplete = !item.isRecurring && isInProgress;
@@ -1151,13 +975,7 @@ function TaskRowImpl({
       });
     }
   }
-  // Archive is hidden for recurring tasks — routines aren't meant to be
-  // archived; delete is the right exit for them. Backend rule
-  // (ArchiveTask.cs): only completed tasks can be archived. On top of
-  // that we also require the task to be *submitted* (points banked)
-  // before archiving — completed-but-not-yet-banked rows belong in the
-  // bulk-submit flow, not the archive. Unarchive is fine on any archived
-  // task, so we keep that branch open.
+  // Archive hidden for recurring; only completed+submitted regulars qualify.
   const isSubmittedForArchive = item.submitted === true || !!item.pointsAwarded;
   if (
     !item.isRecurring &&
@@ -1178,8 +996,7 @@ function TaskRowImpl({
   });
 
   const rowBg = isGreyed ? c.rowGreyed : isCompleted ? c.bg : c.surface;
-  // Web's isSelectable check: completed-tab + status=completed + not submitted
-  // yet (web filters by `!isSubmitted`; we approximate via `pointsAwarded`).
+  // Completed-tab selection gate (mirrors web's !isSubmitted).
   const isSelectable =
     activeFilter === "completed" &&
     isCompleted &&
@@ -1194,39 +1011,19 @@ function TaskRowImpl({
       actions={actions}
       backgroundColor={rowBg}
       onTap={(e) => {
-        // Leading checkbox hit-test (Routines tab): tap inside the priority-
-        // coloured square commits or undoes the cycle's check-in. Same coord-
-        // based routing as the dateCol/undo pill — Pressables are swallowed
-        // by SwipeableRow's pointerEvents:none. The visible box is small so
-        // we pad the hit area by SLOP px on each side; the row is otherwise
-        // tappable for navigation, but the checkbox owns its slop region.
+        // Leading checkbox hit-test (Routines tab).
         if (useCheckinCheckbox && item.isRecurring && !isInProgress && !isCompleted && checkboxBoundsRef.current) {
           const b = checkboxBoundsRef.current;
-          // Generous hit-slop — the checkbox itself stays small, but the
-          // tap zone extends ~22 px past its visible bounds on every side
-          // so a finger landing anywhere near it commits/undoes instead
-          // of falling through to the row tap (which opens the detail
-          // modal). Capped at 22 to avoid swallowing taps meant for the
-          // task title / due date pill that sit to its right.
+          // Generous hit-slop around the small visible box.
           const SLOP = 22;
           if (e.x >= b.left - SLOP && e.x <= b.right + SLOP && e.y >= b.top - SLOP && e.y <= b.bottom + SLOP) {
-            // Drop the tap if the SAME action is mid-flight. Cycle-id matching
-            // keeps the row responsive (uncheck-then-recheck still works once
-            // the optimistic state lands) while preventing duplicate server
-            // calls on rapid same-direction double-taps.
+            // Drop tap if same action mid-flight.
             const inFlight = inFlightActionRef.current;
             const cycleClosedNow = isCycleClosed(item.dueDate, item.lastCheckInDate);
             const checkedThisCycle = wasCheckedInToday || cycleClosedNow;
             const armGuard = (kind: "check-in" | "undo", cycleId: number) => {
               inFlightActionRef.current = { kind, cycleId };
-              // Lock window — taps on this row are dropped until this
-              // clears. Check-in clears naturally when the server's new
-              // cycle lands in recentCycles (~300 ms typically). Undo has
-              // no natural clear (the cycle is removed optimistically
-              // before the server settles), so this 1 s timeout is the
-              // only release. 1 s covers typical network response time
-              // while still feeling responsive — the user's first action
-              // commits before the second is allowed through.
+              // 1s lock — covers typical response time, then auto-clears.
               setTimeout(() => {
                 if (inFlightActionRef.current?.kind === kind
                     && inFlightActionRef.current.cycleId === cycleId) {
@@ -1234,26 +1031,10 @@ function TaskRowImpl({
                 }
               }, 1000);
             };
-            // Strict in-flight gate: block ALL taps on this row until the
-            // previous action's outcome is observable. Previously the gate
-            // was per-direction (check-in tap blocked if a check-in was in
-            // flight, but an undo tap was allowed to clear the guard and
-            // proceed). That meant rapid alternating taps queued up
-            // sequential server calls — the user saw the row flip back and
-            // forth as each one landed in turn. With a unidirectional gate
-            // the row stays in whatever state the FIRST tap set it to until
-            // that action's response (or the 2 s safety timeout) clears
-            // inFlight, then the next tap is free to commit.
+            // Strict in-flight gate — blocks alternating taps too.
             if (inFlight) return;
             if (checkedThisCycle && latestCheckinCycle) {
-              // Server rule (UndoCheckIn.cs): "Check-ins can only be undone
-              // on the same day they were made." Two independent signals
-              // say "today's check-in is the one to undo":
-              //   - task.lastCheckInDate equals todayKey
-              //   - latest cycle's checkInDate equals todayKey
-              // Either is sufficient. For genuinely-old multi-day check-ins
-              // (weekly etc. committed days ago), BOTH signals are false
-              // and we fall through to the default tap (opens detail).
+              // Server allows undo only on same-day check-ins.
               const couldBeTodaysCheckin =
                 wasCheckedInToday ||
                 latestCheckinCycle.checkInDate.split("T")[0] === todayKey;
@@ -1263,52 +1044,35 @@ function TaskRowImpl({
                 onUndoCheckIn(item, latestCheckinCycle.cycleId);
                 return;
               }
-              // Neither signal points to today → fall through (open detail)
+              // Multi-day cadence past its commit day — fall through.
             } else if (canCheckInThisCycle || overdueRecurring) {
-              // Overdue routines check in too: server reschedules the dueDate
-              // on commit, so a missed routine recovers in one tap.
+              // Overdue routines check in (server reschedules).
               if (!canActNow(item.taskId)) return;
               armGuard("check-in", 0);
               onCheckIn(item);
               return;
             }
-            // Stuck-state direct repair. checkedThisCycle=true but no
-            // checkin cycles exist means the task has task.LastCheckInDate
-            // set without any backing cycle row (residue from a CheckInTask
-            // request that crashed between updating the task and creating
-            // the cycle — they're separate SaveChanges calls in
-            // CheckInTask.cs, not transactional). The user's intent here
-            // is "undo this", so we fire the dedicated repair endpoint
-            // which clears LastCheckInDate and rolls DueDate back, then
-            // refresh to surface the cleaned-up state. No detail-screen
-            // detour because the action IS the recovery.
+            // Stuck-state repair: closed cycle with no backing cycle row.
             if (checkedThisCycle && !latestCheckinCycle) {
+              // Active POST in flight — queue undo for when cycleId lands.
+              if (isCheckInPending(item.taskId)) {
+                queueUndoOnCommit(item.taskId);
+                return;
+              }
               tasksApi.repairCheckIn(item.taskId).finally(() => {
                 taskEvents.emitRefreshRequested();
               });
               return;
             }
-            // Otherwise (locked not-yet-due, or some other "no action
-            // applies" state), fall through to the default tap so the
-            // user gets feedback (detail screen opens).
+            // Else fall through to default tap.
           }
         }
-        // Selection-tap on the Completed tab — same pattern as web's checkbox,
-        // but mobile users tap anywhere on the row since the action-bar slot
-        // is given over to SubmitBar in this mode.
+        // Selection tap on Completed.
         if (isSelectable) onToggleSelect?.(item.taskId);
         else {
-          // Global nav lock — drops the tap if another navigation just fired.
-          // Without this, rapid taps stack multiple modals, requiring as many
-          // back gestures to dismiss; an over-stacked screen also leaves the
-          // underlying tab unable to handle drawer-swipe or new-task taps.
+          // Global nav lock.
           if (!tryNavigate()) return;
-          // Prime the per-id cache right before navigation so the detail
-          // screen mounts with task data on its very first render — that
-          // skips the loading-spinner branch (which would render the sheet
-          // without a footer and make the slider "pop in" late). setMany
-          // on list fetch already populates this; the explicit set here is
-          // belt-and-suspenders for any path that bypassed a fresh fetch.
+          // Prime cache so detail mounts with data on first render.
           taskCache.set(item);
           router.push({ pathname: "/task/[id]", params: { id: item.taskId } });
         }
@@ -1325,17 +1089,13 @@ function TaskRowImpl({
           },
         ]}
       >
-          {/* Particle burst on routine check-in. Origin is the row's centre;
-              particles spray upward in a cone for ~900 ms. Overflows the row's
-              top edge intentionally — the row's parent doesn't clip. */}
+          {/* Check-in particle burst. */}
           <CheckInBurstEffect active={burstActive} />
-          {/* Bank-stamp underline + "+N" popup when this row's points are
-              submitted. Mirrors web's BankBurstEffect. */}
+          {/* Bank-stamp underline + "+N" popup on submit. */}
           <BankBurstEffect active={bankActive} amount={item.pointValue} />
           <View style={styles.rowLeft}>
             {isSelectable ? (
-              // Visual-only — the surrounding row's onTap toggles selection.
-              // A Pressable here is swallowed by SwipeableRow's pointerEvents:none.
+              // Visual-only — row's onTap toggles selection.
               <View
                 style={[
                   styles.selectBox,
@@ -1360,27 +1120,9 @@ function TaskRowImpl({
               </View>
             ) : null}
             {useCheckinCheckbox && item.isRecurring && !isInProgress && !isCompleted ? (() => {
-              // Priority-coloured checkbox lead. Tapping it (via the row's
-              // onTap hit-test against checkboxBoundsRef) checks in or undoes
-              // today's check-in. Filled for the full cycle; undoable only
-              // on the day the cycle was committed (matches the Undo pill).
+              // Priority-coloured checkbox lead — taps commit/undo via hit-test.
               const checkedThisCycle = wasCheckedInToday || isCycleClosed(item.dueDate, item.lastCheckInDate);
-              // Multi-day cadences (weekly / biweekly / monthly) can be in a
-              // "checked this cycle but the check-in itself was days ago"
-              // state. The server only allows same-day undo (UndoCheckIn.cs
-              // gates on cycle.CheckInDate.Date == today), so the checkbox
-              // tap is a no-op for those rows. Surface that via the same
-              // locked opacity used for not-yet-due rows so users don't
-              // wonder why nothing happens when they tap.
-              //
-              // The "could be today" predicate mirrors the tap handler
-              // exactly — either the task's own lastCheckInDate is today
-              // (wasCheckedInToday, what the server actually compares
-              // against) or the cycle's CheckInDate string matches today.
-              // Without both signals the box was getting locked on any
-              // task whose cycle row date and task.lastCheckInDate had
-              // drifted apart, even though tapping it would have fired
-              // a valid undo.
+              // Multi-day cadences: lock the box on prior-day check-ins (server only undoes same-day).
               const couldBeTodaysCheckin = wasCheckedInToday
                 || (!!latestCheckinCycle
                   && latestCheckinCycle.checkInDate.split("T")[0] === todayKey);
@@ -1393,14 +1135,11 @@ function TaskRowImpl({
                     styles.checkinBox,
                     {
                       borderColor: dot,
-                      // Locked state stays subtle; use opacity rather than
-                      // alpha-mixing the colour (c.fgMuted is rgba so string
-                      // concatenation isn't safe).
+                      // Opacity rather than colour mix (rgba).
                       opacity: isLocked ? 0.35 : 1,
                     },
                   ]}
-                  // Record bounds in the row's coord space so onTap can
-                  // hit-test against them (same trick as dateColBoundsRef).
+                  // Record bounds in row coord space for hit-test.
                   onLayout={(e) => {
                     const { x, y, width, height } = e.nativeEvent.layout;
                     checkboxBoundsRef.current = { left: x, top: y, right: x + width, bottom: y + height };
@@ -1467,14 +1206,7 @@ function TaskRowImpl({
                   </View>
                 ) : null}
                 {item.isRecurring && (() => {
-                  // Show the streak for any positive count, even below the
-                  // tier-1 threshold. Hiding the badge entirely once the
-                  // count drops under 3 read as "the streak vanished" when
-                  // the user undid a check-in that brought them back to
-                  // 1 or 2 — really their streak is just one tier-up away
-                  // again, not gone. The tier label only appears above the
-                  // tier-1 boundary so the original tier ladder still
-                  // signals progression.
+                  // Streak badge shows any positive count; tier label only above tier-1.
                   const count = item.currentStreakCount ?? 0;
                   if (count < 1) return null;
                   const tier = currentStreakTier(count);
@@ -1494,8 +1226,7 @@ function TaskRowImpl({
             </View>
           </View>
           <View style={styles.dateCol}>
-            {/* Overdue cue is conveyed entirely by the date colour going
-                red — the prior ⚠ glyph was visual noise on top of that. */}
+            {/* Overdue cue is the date colour going red. */}
             <ThemedText style={{
               fontSize: 12,
               color: overdueRow ? c.danger : c.fgMuted,

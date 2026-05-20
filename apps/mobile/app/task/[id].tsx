@@ -31,6 +31,7 @@ import {
   getNextDueDate,
   isOverdue,
   parseLocalDate,
+  todayLocalKey,
   willStreakResetOnCheckIn,
   PRIORITY_DOT,
   type Subtask,
@@ -68,11 +69,7 @@ function fmtFull(dateStr: string | null | undefined): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// Drag handle pill shown at the very top of the sheet. @gorhom/bottom-sheet
-// uses this as both the visual affordance and a guaranteed drag target —
-// even when the body content is a scrollable list, dragging the handle
-// dismisses immediately. Top inset padding lives here (not on the body)
-// so the pill sits below the status bar in landscape / notched devices.
+// Drag handle pill at top of sheet; always a guaranteed drag target.
 function makeSheetHandle(c: ReturnType<typeof useColors>, topInset: number) {
   return function SheetHandle() {
     return (
@@ -88,17 +85,14 @@ function makeSheetHandle(c: ReturnType<typeof useColors>, topInset: number) {
   };
 }
 
-// Solid sheet background — keeps the sheet opaque against whatever screen
-// the transparent-modal route is presented over.
+// Solid sheet bg — opaque against transparent-modal route's underlying screen.
 function makeSheetBackground(bg: string) {
   return function SheetBackground({ style }: BottomSheetBackgroundProps) {
     return <View style={[style, { backgroundColor: bg }]} />;
   };
 }
 
-// Full-page header shared by every render path. Renders the back arrow on
-// the left and an optional right-side slot (overflow / Cancel). Keeps the
-// loading / error / edit / main screens visually aligned.
+// Full-page header with back arrow + optional right slot.
 function PageHeader({
   c,
   onBack,
@@ -127,22 +121,7 @@ function PageHeader({
   );
 }
 
-// Wraps the edit-mode body and adds swipe-right-to-dismiss that works
-// anywhere on the form — including over Pressables (Save / Cancel /
-// dropdowns) and TextInputs.
-//
-// The trick is `manualActivation(true)`. A plain Pan with `activeOffsetX`
-// only worked over inert areas (titles, labels) because Pressables claim
-// the JS touch responder synchronously on touch-down, before RNGH gets to
-// evaluate the Pan's offset criteria. With manual activation, the Pan
-// observes touches passively and only calls `state.activate()` from
-// `onTouchesMove` once we've actually seen >12px of dominantly-horizontal
-// motion. Until then, taps & vertical scrolls behave normally; once
-// activated, the Pan claims the touch and Pressables get a cancel event.
-//
-// The activation threshold is also subtracted from `translationX` when
-// computing tx, so the form's position starts at 0 the moment the
-// gesture activates — no visible jump (the source of the previous jitter).
+// Edit-mode swipe-right-to-dismiss via manualActivation pan over Pressables.
 function EditPaneSwipeWrapper({
   onDismiss,
   children,
@@ -151,9 +130,7 @@ function EditPaneSwipeWrapper({
   children: React.ReactNode;
 }) {
   const screenWidth = Dimensions.get("window").width;
-  // Commit thresholds: either drag the form past ~25% of screen width, or
-  // flick it with enough rightward velocity. Velocity-first matches the
-  // detail sheet's drag-down dismiss feel.
+  // Commit: drag past 25% of screen width OR flick with rightward velocity.
   const COMMIT_DISTANCE = screenWidth * 0.25;
   const COMMIT_VELOCITY = 700;
   const SWIPE_THRESHOLD = 12;
@@ -174,27 +151,24 @@ function EditPaneSwipeWrapper({
       if (!t) return;
       const dx = t.x - startX.value;
       const dy = t.y - startY.value;
-      // Horizontal-dominant + rightward + over threshold → activate.
+      // Horizontal-dominant rightward past threshold → activate.
       if (dx > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
         state.activate();
       } else if (Math.abs(dy) > SWIPE_THRESHOLD) {
-        // Vertical-dominant motion → hand off to the form's ScrollView.
+        // Vertical → hand off to ScrollView.
         state.fail();
       }
     })
     .onUpdate((e) => {
       "worklet";
-      // Subtract threshold so the form position starts at 0 on activation
-      // (no visible jump as the gesture transitions PENDING → ACTIVE).
+      // Subtract threshold so position starts at 0 on activation.
       tx.value = Math.max(0, e.translationX - SWIPE_THRESHOLD);
     })
     .onEnd((e) => {
       "worklet";
       const commit = e.translationX > COMMIT_DISTANCE || e.velocityX > COMMIT_VELOCITY;
       if (commit) {
-        // Slide fully off-screen, then flip state. Setting state during
-        // the animation makes the underlying detail view appear before
-        // the slide finishes, which looks jarring.
+        // Slide off-screen, then flip state to avoid jarring underlying reveal.
         tx.value = withTiming(screenWidth, { duration: 220 }, (done) => {
           if (done) runOnJS(onDismiss)();
         });
@@ -219,69 +193,43 @@ export default function TaskDetailScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
 
-  // Seed from the list's task cache so the screen renders with full content
-  // on the first frame — no spinner flash while the round-trip lands. The
-  // background fetch below replaces this with canonical state (subtasks,
-  // recentCycles, etc. that aren't included in the list endpoint rows).
+  // Seed from list task cache so first frame renders content without spinner.
   const [task, setTask] = useState<TaskDto | null>(() => taskCache.read(id) ?? null);
   const [loading, setLoading] = useState(() => !taskCache.read(id));
   const [error, setError] = useState<string | null>(null);
   const [newSubtask, setNewSubtask] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  // Overflow menu (Archive) anchored to the page header.
+  // Overflow menu (Archive) anchored to header.
   const [menuOpen, setMenuOpen] = useState(false);
-  // Lazy add-subtask input — the field only renders once the user taps the
-  // "+ Add subtask" affordance, saving a row's worth of space until needed.
+  // Lazy add-subtask input.
   const [addingSubtaskOpen, setAddingSubtaskOpen] = useState(false);
-  // Imperative handle for the body BottomSheetScrollView. The subtask add
-  // row asks for a scrollToEnd on focus so the input rises above the keyboard.
+  // Body scroll ref for scrollToEnd on subtask focus.
   const scrollRef = useRef<React.ComponentRef<typeof BottomSheetScrollView>>(null);
-  // Measured header + footer heights. Both are absolute-positioned at the
-  // top / bottom of the sheet content, and the body box is then absolute-
-  // positioned between them (top=headerHeight, bottom=footerHeight). That
-  // gives the body a *guaranteed* bounded height — independent of any
-  // flex propagation through BottomSheet's internal wrappers — so the
-  // subtasks BottomSheetScrollView inside actually has a parent to scroll
-  // against. Without this, the body's flex:1 silently collapses to its
-  // content size in some sheet configurations and the panel grows to fit
-  // every row, pushing the footer past the screen edge.
+  // Measured header + footer heights so absolute-positioned body has bounded height.
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
-  // Keyboard handling for the "+ Add subtask" input lives in the
-  // SubtaskAddBar component below — it renders OUTSIDE the BottomSheet
-  // as an absolute-positioned floating bar (same pattern as
-  // app/new-task.tsx) so it can lift above the keyboard via translateY
-  // without depending on BottomSheet's full-screen-broken keyboard math.
+  // Blocks sheet dismissal while check-in POST is in flight (~200ms).
+  const [checkingIn, setCheckingIn] = useState(false);
 
-  // BottomSheet ref + a single full-screen snap point. The sheet handles
-  // its own slide-up mount animation and the pan-down-to-close gesture —
-  // BottomSheetScrollView below it coordinates inner scroll with the
-  // dismiss pan, so a downward drag at scroll offset 0 dismisses in ONE
-  // gesture (no more "swipe-once-to-stop-scrolling, then again to close").
+  // BottomSheet ref + single full-screen snap.
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["100%"], []);
   const SheetHandle = useMemo(() => makeSheetHandle(c, insets.top), [c, insets.top]);
   const SheetBackground = useMemo(() => makeSheetBackground(c.bg), [c.bg]);
 
   const handleSheetChange = useCallback((index: number) => {
-    // Sheet animated past its last snap point → pop the route. We pop on
-    // -1 (closed) so the route stays alive during the slide-down animation.
+    // Pop route on close (-1) so route stays alive during slide-down.
     if (index === -1) router.back();
   }, []);
 
-  // Header back / edit-cancel: animate the sheet down first so the exit
-  // matches the user's drag gesture. router.back() fires from onClose.
+  // Animate sheet down on close; suppressed during in-flight check-in.
   const closeSheet = useCallback(() => {
+    if (checkingIn) return;
     sheetRef.current?.close();
-  }, []);
+  }, [checkingIn]);
 
-  // Once we've shown the slider in this screen session, keep it mounted even
-  // after commit flips canCheckIn → false. Otherwise the slider unmounts the
-  // moment onConfirm fires, the footer column collapses by ~62 px, and the
-  // body shifts. The slider's own fade-out already drops it to opacity 0,
-  // so keeping it mounted just preserves the layout slot. MUST be declared
-  // before any early return so hook order stays stable across render paths.
+  // Keep slider mounted after commit so footer doesn't collapse.
   const sliderEverShownRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -291,13 +239,7 @@ export default function TaskDetailScreen() {
       setError(res.error ?? "Task not found.");
       return;
     }
-    // Merge into the existing task instead of replacing wholesale. The list
-    // endpoint (getAll) and the detail endpoint (getById) sometimes return
-    // different subsets of TaskDto — notably the list includes
-    // currentStreakCount while a fresh getById may omit it. Replacing the
-    // whole object made the streak bar visibly flash off after the
-    // background fetch landed; this preserves any cached field whose fresh
-    // counterpart is undefined.
+    // Merge into existing task to preserve cached fields (e.g. streak from list).
     const fresh = res.data;
     let mergedForCache: TaskDto | null = null;
     setTask((prev) => {
@@ -310,16 +252,12 @@ export default function TaskDetailScreen() {
       mergedForCache = merged;
       return merged;
     });
-    // Cache the merged task (not just fresh) so the cache accumulates all
-    // known fields — otherwise subsequent reads would lose any field that
-    // getById doesn't return but getAll does.
+    // Cache merged task so all known fields accumulate.
     if (mergedForCache) taskCache.set(mergedForCache);
   }, [id]);
 
   useEffect(() => {
-    // Only show the spinner when we have no cached snapshot to render. With
-    // a cache hit, the fetch runs silently in the background and quietly
-    // replaces state when canonical data lands — no spinner flash.
+    // Spinner only on cache miss; cached snapshot fetches silently in bg.
     const hadCache = !!taskCache.read(id);
     if (!hadCache) setLoading(true);
     load().finally(() => setLoading(false));
@@ -327,19 +265,10 @@ export default function TaskDetailScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // Sync detail with mutations coming from the underlying TaskList — e.g.
-  // an undo fired via the leading checkbox in the list (after the user
-  // closes detail, undoes, reopens). Without this the StreakDisplay (which
-  // reads `task.currentStreakCount`) keeps showing the pre-undo value
-  // until something else triggers `load()`. The list emits this event
-  // after any task mutation that affects values displayed in detail.
+  // Sync with underlying TaskList mutations (e.g. list-fired undo).
   useEffect(() => {
     return taskEvents.subscribeRefreshRequested(() => { load(); });
   }, [load]);
-
-  // (scrollToEnd is now consolidated into the keyboardDidShow handler
-  // above — it always fires after the keyboardHeight-driven re-render
-  // so the input lands at the bottom of the shrunken visible panel.)
 
   async function toggleSubtask(sub: Subtask) {
     const next = !sub.completed;
@@ -394,51 +323,56 @@ export default function TaskDetailScreen() {
 
   async function handleCheckIn() {
     if (!task) return;
-    // Optimistic broadcast: TaskList instances behind the screen pick this
-    // up and reshuffle the row into the "Checked In" / "Upcoming" section
-    // instantly. We advance dueDate locally with getNextDueDate so the
-    // splitCheckedIn predicate (`today < dueDate`) actually flips — daily
-    // tasks have dueDate = today before check-in, so without the advance
-    // the row visibly gets a "checked-in today" border but doesn't move.
-    // The server call below is authoritative; TaskList's useFocusEffect
-    // refetches on focus for correctness.
+    // Block dismissal until POST returns (~200ms) so list sees cycleId before user.
+    setCheckingIn(true);
+    // Optimistic broadcast — TaskList reshuffles row to "Checked In" instantly.
     const todayIso = new Date().toISOString().split("T")[0];
-    // For overdue tasks, advance from today (not from the past dueDate) so
-    // the optimistic next-due lands on tomorrow for a daily task instead of
-    // today. Without this, the row's date label and the underlying list
-    // briefly show the stale value before load() reconciles to the server's
-    // already-caught-up dueDate.
+    // Overdue: advance from today so daily lands tomorrow, not stale today.
     const dueBase = task.recurrenceRule && isOverdue(task.dueDate) ? todayIso : task.dueDate;
     const nextDueIso = task.recurrenceRule
       ? getNextDueDate(dueBase, task.recurrenceRule)
       : task.dueDate ?? todayIso;
+    // Predict streak (matches server logic) so list badge updates same frame.
+    const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
+    const predictedStreak = willResetStreak ? 1 : (task.currentStreakCount ?? 0) + 1;
+    const predictedLongest = Math.max(task.longestStreakCount ?? 0, predictedStreak);
     taskEvents.emitCheckedIn({
       taskId: task.taskId,
       lastCheckInDateIso: todayIso,
       nextDueDateIso: nextDueIso,
+      currentStreakCount: predictedStreak,
+      longestStreakCount: predictedLongest,
     });
-    // Optimistic local patch so canCheckIn flips immediately — the slider
-    // fade-out completes and the footer unmounts in one beat instead of
-    // briefly re-rendering at opacity 1 after the slide finishes its
-    // commit animation but before load() lands. Server is authoritative;
-    // load() reconciles below. Streak prediction mirrors the server's
-    // reset rule (CheckInTask.cs: daysSinceLast > maxGapDays per rule).
-    const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
-    const predictedStreak = willResetStreak ? 1 : (task.currentStreakCount ?? 0) + 1;
+    // Optimistic local patch so canCheckIn flips immediately.
     setTask((prev) => {
       if (!prev) return prev;
-      const prevLongest = prev.longestStreakCount ?? 0;
       return {
         ...prev,
         lastCheckInDate: todayIso,
         dueDate: nextDueIso ?? prev.dueDate,
         currentStreakCount: predictedStreak,
-        longestStreakCount: Math.max(prevLongest, predictedStreak),
+        longestStreakCount: predictedLongest,
       };
     });
-    const res = await tasksApi.checkIn(task.taskId);
-    if (res.error) { setError(res.error); return; }
-    await load();
+    try {
+      const res = await tasksApi.checkIn(task.taskId);
+      if (res.error) { setError(res.error); return; }
+      if (res.data) {
+        // Hand authoritative cycle data to list so subsequent row tap routes to undo.
+        taskEvents.emitCheckInCommitted({
+          taskId: task.taskId,
+          cycleId: res.data.cycleId,
+          checkInDateIso: todayIso,
+          nextDueDateIso: res.data.nextDueDate || nextDueIso || todayIso,
+          currentStreakCount: res.data.streakCount,
+          longestStreakCount: res.data.longestCount,
+        });
+      }
+      await load();
+    } finally {
+      // Release dismissal lock; list is now fully consistent.
+      setCheckingIn(false);
+    }
   }
 
   async function handleStart() {
@@ -475,9 +409,7 @@ export default function TaskDetailScreen() {
     await load();
   }
 
-  // Mirrors web's `canUndo` path in useTaskActions.handleAdvance — reverts a
-  // completed-but-not-submitted task to in_progress so the user can edit and
-  // re-complete it. The server side is a regular update; no special API.
+  // Reverts completed-but-not-submitted task to in_progress.
   async function handleUndoComplete() {
     if (!task) return;
     const dto: UpdateTaskRequest = {
@@ -509,8 +441,7 @@ export default function TaskDetailScreen() {
 
   async function handleDelete() {
     if (!task) return;
-    // No confirm dialog — the overflow-menu tap is enough intent, and an
-    // extra prompt is friction. Mirrors the swipe-delete on the task list.
+    // No confirm — overflow tap is enough intent; mirrors swipe-delete.
     const res = await tasksApi.delete(task.taskId);
     if (res.error) { setError(res.error); return; }
     taskCache.remove(task.taskId);
@@ -596,9 +527,7 @@ export default function TaskDetailScreen() {
   const catColor = CATEGORY_COLOR[task.category] ?? c.fg;
   const dateLabel = task.completedAt ? fmtFull(task.completedAt) : fmtShort(task.dueDate);
 
-  // Computed pre-early-return so all hooks below run on every render path —
-  // React errors with "rendered fewer hooks than expected" if a useRef
-  // (sliderEverShownRef) sits after a conditional return.
+  // Computed before any early return so hook order stays stable.
   const canCheckIn =
     task.status === "pending" &&
     task.isRecurring &&
@@ -627,10 +556,7 @@ export default function TaskDetailScreen() {
         ref={sheetRef}
         index={0}
         snapPoints={snapPoints}
-        // Edit mode disables every sheet-owned pan — we add our own
-        // horizontal swipe-to-dismiss via EditPaneSwipeWrapper below, and
-        // any competing pan on the sheet wrapper would either fight it
-        // for the touch responder or eat the Pressables underneath.
+        // Edit mode disables sheet-owned pans; our own swipe-wrapper handles dismiss.
         enablePanDownToClose={false}
         enableContentPanningGesture={false}
         enableHandlePanningGesture={false}
@@ -658,26 +584,15 @@ export default function TaskDetailScreen() {
     );
   }
 
-  // Web's canUndo: completed (one-off) but not submitted yet and no points
-  // awarded — the row is still rollback-able from "completed" → "in_progress".
+  // canUndo: completed one-off, not yet submitted/awarded.
   const canUndo =
     task.status === "completed" &&
     task.submitted !== true &&
     !task.pointsAwarded;
 
-  // Edit is hidden for completed tasks (web behaviour) — only Undo and
-  // Delete are useful from there.
+  // Edit hidden for completed tasks.
   const showEdit = task.status !== "completed";
-  // Archive only makes sense for one-off tasks; recurring routines are
-  // exited via delete instead. Backend rule (ArchiveTask.cs): only
-  // *completed* one-off tasks can be archived. We also require the task
-  // to be *submitted* (points banked) before exposing Archive — a
-  // completed-but-unsubmitted task still owes the user a bank-burst from
-  // the bulk-submit flow, archiving it from here would skip that. Once a
-  // task IS archived, we still want the menu (so the user can Unarchive),
-  // hence the OR on task.isArchived.
-  // The triple-dot overflow only exists to host Archive/Unarchive, so it
-  // disappears entirely when the action wouldn't be available.
+  // Archive only for completed+submitted one-off tasks (or already-archived).
   const isSubmittedForArchive = task.submitted === true || !!task.pointsAwarded;
   const showArchive =
     !task.isRecurring &&
@@ -737,21 +652,13 @@ export default function TaskDetailScreen() {
       ref={sheetRef}
       index={0}
       snapPoints={snapPoints}
-      enablePanDownToClose
+      // Block pan-down-to-close while check-in POST in flight (~200ms).
+      enablePanDownToClose={!checkingIn}
       enableDynamicSizing={false}
       onChange={handleSheetChange}
       handleComponent={SheetHandle}
       backgroundComponent={SheetBackground}
-      // "extend" shrinks the sheet's content area to sit above the keyboard
-      // (BottomSheetContent.tsx subtracts keyboardHeightWithinContainer from
-      // contentHeight). At our 100% snap that means the sheet stops just
-      // above the keyboard instead of being covered by it, so the absolute-
-      // positioned footer rides up and the scrollToEnd call below lands the
-      // "+ Add subtask" input at the bottom of the visible panel.
-      // "interactive" was wrong for our use case — it's for cases where the
-      // user drags the sheet to dismiss the keyboard, not where we want the
-      // sheet to automatically resize. Android also needs adjustResize so the
-      // window itself shrinks when the soft input opens.
+      // "extend" shrinks content above keyboard so footer rides up.
       keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
@@ -780,21 +687,9 @@ export default function TaskDetailScreen() {
             }
           />
         </View>
-        {/* Body is absolute-positioned between the measured header (top)
-            and footer (bottom) so it has a guaranteed bounded height —
-            inner flex chains (subtasks panel → BottomSheetScrollView)
-            then have a real container to fit and scroll against. */}
+        {/* Body absolute-positioned between header + footer for bounded height. */}
         <View style={[styles.body, { top: headerHeight, bottom: footerHeight }]}>
-          {/* Avatar hero — pinned at the top of the body so the interactive
-              content below (title, actions, subtasks, footer) sits inside the
-              one-handed thumb zone. Recurring tasks use the existing
-              CounterPanel (DetailPager: Stage = avatar + stepper, Stats =
-              heatmap, swipe-left to switch). Non-recurring tasks render a
-              static ChibiAvatar of equivalent height so the layout stays
-              consistent across task types. The DetailPager's horizontal pan
-              doesn't fight BottomSheet's pan-down-to-close (failOffsetX is
-              the default) — keep that in mind before adding ancestor gestures
-              here. */}
+          {/* Avatar hero pinned at top so interactive content sits in thumb zone. */}
           {task.isRecurring && task.recurrenceRule ? (
             <CounterPanel
               task={task}
@@ -856,11 +751,6 @@ export default function TaskDetailScreen() {
                 </ThemedText>
               ) : null}
 
-              {/* Locked-state cue intentionally omitted — the due-date chip
-                  in the metadata row above already communicates when the
-                  next check-in unlocks, so a second "Locked · MM/DD" pill
-                  here was redundant. */}
-
               {(task.status === "pending" && !task.isRecurring)
               || task.status === "in_progress"
               || (canUndo && !task.isRecurring) ? (
@@ -901,24 +791,16 @@ export default function TaskDetailScreen() {
               ) : null}
             </View>
 
-          {/* Subtasks panel — claims remaining body height (flex:1) and
-              scrolls internally. minHeight:0 is required so a flex child
-              can shrink below its intrinsic content size — without it the
-              panel grows to fit all subtask rows and pushes the footer
-              off-screen, which is exactly what we're fixing. */}
+          {/* Subtasks panel — flex:1 + minHeight:0 so it scrolls internally. */}
           <View style={styles.subtasksPanel}>
             <BottomSheetScrollView
               ref={scrollRef}
               style={styles.subtasksScroll}
               contentContainerStyle={styles.subtasksContent}
-              // "always" (not "handled") so a tap anywhere on the scroll
-              // doesn't dismiss the keyboard while the input is open —
-              // we rely on the explicit ✕ in SubtaskAddRow to close it.
+              // "always" so taps on scroll don't dismiss keyboard.
               keyboardShouldPersistTaps="always"
             >
-              {/* SwipeRowProvider scopes the "auto-close other rows" behaviour
-                  to the subtask list — swiping one open closes any other open
-                  one. Same pattern as the task-list rows. */}
+              {/* SwipeRowProvider scopes auto-close to subtask list. */}
               <SwipeRowProvider>
                 {(task.subtasks ?? []).map((sub, idx, arr) => (
                   <SwipeableRow
@@ -926,11 +808,7 @@ export default function TaskDetailScreen() {
                     rowId={sub.subtaskId}
                     prevId={arr[idx - 1]?.subtaskId}
                     nextId={arr[idx + 1]?.subtaskId}
-                    // Match the sheet's bg so the row reads as part of
-                    // the details panel; the SwipeableRow's wrapper
-                    // (which shows when swiping) keeps the darker
-                    // surfaceDeep so the delete chip stands out against
-                    // it.
+                    // Row bg matches sheet; wrapper keeps surfaceDeep on swipe.
                     backgroundColor={c.bg}
                     actions={[
                       {
@@ -940,11 +818,7 @@ export default function TaskDetailScreen() {
                         onPress: () => deleteSubtask(sub),
                       },
                     ]}
-                    // Full-swipe to delete: drag the row past ~half its
-                    // width and release. The row slides off-screen,
-                    // wrapper bg flashes to c.danger past the
-                    // threshold as a "release to commit" cue, and
-                    // deleteSubtask fires.
+                    // Full-swipe past half row → slides off + deletes.
                     fullSwipeAction={() => deleteSubtask(sub)}
                     fullSwipeThreshold={0.5}
                     fullSwipeColor={c.danger}
@@ -986,10 +860,7 @@ export default function TaskDetailScreen() {
                 ))}
               </SwipeRowProvider>
 
-              {/* Tap-target opens the floating SubtaskAddBar (rendered as a
-                  sibling of the BottomSheet, see end of return). The input
-                  itself lives there — not inline — so it can lift above
-                  the soft keyboard with a translateY transform. */}
+              {/* Opens floating SubtaskAddBar (sibling of BottomSheet). */}
               {!addingSubtaskOpen ? (
                 <Pressable
                   onPress={() => setAddingSubtaskOpen(true)}
@@ -1007,11 +878,7 @@ export default function TaskDetailScreen() {
           </View>
         </View>
 
-        {/* Footer is anchored to the sheet bottom via absolute positioning
-            so it stays visible no matter how tall the body grows. onLayout
-            feeds back the measured height to footerHeight state, which the
-            body reads as paddingBottom (see above) to keep the subtasks
-            scroll panel from being hidden behind it. */}
+        {/* Footer absolute-positioned at sheet bottom; height feeds body padding. */}
         <View
           style={styles.footerAnchor}
           onLayout={(e) => {
@@ -1022,9 +889,7 @@ export default function TaskDetailScreen() {
           {pageFooter}
         </View>
 
-        {/* Overflow popover — Archive only (one-off tasks). Edit + Delete
-            live in the page footer below the slider. Positioned absolutely
-            within the sheet content. */}
+        {/* Overflow popover — Archive only; absolute within sheet content. */}
         {menuOpen && showArchive ? (
           <>
             <Pressable
@@ -1055,11 +920,7 @@ export default function TaskDetailScreen() {
     </BottomSheet>
     {addingSubtaskOpen ? (
       <>
-        {/* Full-screen tap-target behind the bar. Tapping anywhere
-            outside the input row closes the bar and dismisses the
-            keyboard. Rendered before the bar in tree order, and the
-            bar's wrapper has elevation/zIndex, so the bar sits on top
-            and taps on it stay with the bar. */}
+        {/* Full-screen tap-target behind bar — tap outside closes + dismisses keyboard. */}
         <Pressable
           style={styles.subtaskAddBarOverlay}
           onPress={() => {
@@ -1085,12 +946,7 @@ export default function TaskDetailScreen() {
   );
 }
 
-// Hero block used for non-recurring tasks. Matches CounterPanel's shape
-// (DetailPager: Stage = avatar, Stats = empty heatmap) so the
-// swipe-left-to-heatmap gesture is consistent across task types — even
-// when there's no check-in history to show. Subscribes to equippedCache
-// the same way CounterPanel does — both share the module-level cache, so
-// the second subscriber doesn't trigger an extra fetch.
+// Non-recurring hero: avatar + empty heatmap for gesture consistency.
 function AvatarOnlyHero() {
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
     () => equippedCache.read() ?? [],
@@ -1122,9 +978,7 @@ function AvatarOnlyHero() {
   );
 }
 
-// Heatmap + counter stepper share pendingLog so the heatmap's today cell
-// reflects buffered taps in real time. Lives in its own subcomponent because
-// useQuickLog requires a non-null TaskDto.
+// Heatmap + counter stepper share pendingLog for real-time today cell.
 function CounterPanel({
   task,
   onCycleAppend,
@@ -1159,13 +1013,7 @@ function CounterPanel({
     onFlushQuickLog: flushQuickLog,
   });
 
-  // Equipped avatar — module-level cache (lib/equipped-cache) keeps the
-  // last-known equipped set in memory so subsequent screen opens skip the
-  // /api/avatar/equipped round-trip and the chibi renders in the same
-  // frame the screen mounts. The cache also runs `applyHints` so per-item
-  // render hints are baked in before ChibiAvatar composes the layers. A
-  // background revalidate on mount picks up any changes from the avatar
-  // screen.
+  // Equipped avatar from module cache for instant chibi compose.
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
     () => equippedCache.read() ?? [],
   );
@@ -1175,13 +1023,13 @@ function CounterPanel({
     return unsubscribe;
   }, []);
 
-  // Always render the Stats tab so the swipe-left-to-heatmap gesture is
-  // available regardless of cadence. For weekly / biweekly / monthly the
-  // grid is mostly empty cells, but the user explicitly asked for the
-  // gesture to be consistent across all task types — predictability beats
-  // a sparser-looking heatmap.
+  // Always render Stats tab for consistent swipe gesture.
   const rule = task.recurrenceRule ?? "";
-  const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === new Date().toISOString().split("T")[0];
+  // Local-date key (UTC would misfire in evening tz-behind-UTC).
+  const todayKey = todayLocalKey();
+  const lastCheckInKey = (task.lastCheckInDate ?? "").split("T")[0];
+  const checkedInToday = lastCheckInKey === todayKey;
+  // Logging-eligible only when current cycle not yet checked-in today.
   const showStepper = task.hasCounter === true && task.status === "pending" && !checkedInToday;
 
   const stageCard = (
@@ -1226,14 +1074,7 @@ function CounterPanel({
 }
 
 
-// Floating add-subtask bar. Same pattern as app/new-task.tsx: an
-// absolutely-positioned bar pinned to the bottom of the route, lifted
-// above the soft keyboard by a reanimated translateY driven by live
-// Keyboard.addListener events. We render this OUTSIDE the BottomSheet
-// so it isn't constrained by the sheet's content area (which BottomSheet
-// doesn't shrink on keyboard open for full-screen snap points). Plain RN
-// TextInput is fine here — we're no longer in the sheet's gesture tree,
-// so the BottomSheetTextInput registration ceremony isn't needed.
+// Floating add-subtask bar pinned to route bottom, lifted by keyboard listener.
 function SubtaskAddBar({
   value,
   onChange,
@@ -1243,8 +1084,7 @@ function SubtaskAddBar({
 }: {
   value: string;
   onChange: (next: string) => void;
-  // Returns true if the submit succeeded so the bar knows to flash the
-  // "Added" toast and re-focus the input for the next entry.
+  // Returns true on success so bar can flash "Added" toast.
   onSubmit: () => Promise<boolean>;
   onCancel: () => void;
   disabled: boolean;
@@ -1253,24 +1093,18 @@ function SubtaskAddBar({
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const kbHeight = useSharedValue(0);
-  // "Added" toast — fades in and rises slightly, holds, then fades back.
+  // "Added" toast — fade in, rise, hold, fade back.
   const toastOpacity = useSharedValue(0);
   const toastTranslateY = useSharedValue(8);
   const toastHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Guard so the bar doesn't auto-close on a stray keyboardDidHide that
-  // fires before our own TextInput has ever raised the keyboard (e.g. a
-  // keyboard belonging to a different input was already retracting when
-  // we mounted). Flipped to true on the first show; the bar only
-  // auto-closes on hides that happen after that point.
+  // Guard against stray keyboardDidHide before our input ever raised one.
   const hasShownRef = useRef(false);
-  // Latest onCancel — captured in a ref so the keyboard listener doesn't
-  // need to re-subscribe whenever the parent passes a new callback identity.
+  // Captured onCancel so listener doesn't re-subscribe.
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
   useEffect(() => {
-    // Will* on iOS for a smoother ride-up; Did* on Android because Will*
-    // isn't reliably emitted there.
+    // iOS Will*, Android Did*.
     const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const show = Keyboard.addListener(showEvt, (e) => {
@@ -1279,11 +1113,7 @@ function SubtaskAddBar({
     });
     const hide = Keyboard.addListener(hideEvt, () => {
       kbHeight.value = withTiming(0, { duration: 200 });
-      // Bar exists to host the keyboard — once the keyboard is gone, so is
-      // its reason to be on screen. Dismiss as a sibling of the keyboard
-      // retraction (system back, tap-outside, Done key, hardware blur).
-      // Guarded on hasShownRef so a phantom hide event right after mount
-      // doesn't close us before we've ever opened.
+      // Dismiss bar when keyboard retracts (guarded by hasShownRef).
       if (hasShownRef.current) onCancelRef.current?.();
     });
     return () => {
@@ -1301,10 +1131,7 @@ function SubtaskAddBar({
     transform: [{ translateY: toastTranslateY.value }],
   }));
 
-  // Submit wrapper — on success flashes the "Added" pill. We deliberately
-  // do NOT call inputRef.focus() here: blurOnSubmit={false} keeps focus
-  // already, and a manual .focus() after the async submit was creating a
-  // dismiss → re-show flash (focus was briefly gone, then forced back).
+  // Submit wrapper — flashes "Added" pill; no manual .focus() (blurOnSubmit=false).
   async function handleSubmit() {
     const ok = await onSubmit();
     if (!ok) return;
@@ -1317,18 +1144,13 @@ function SubtaskAddBar({
     }, 900);
   }
 
-  // Stable button — single Pressable across both states. Swapping between
-  // a ↑-Pressable and a ✕-Pressable on every submit (when value flips
-  // empty) unmounts the element the user just tapped, which iOS would
-  // sometimes interpret as a focus-out on the adjacent TextInput.
+  // Single Pressable across both states (swapping causes iOS focus-out).
   const hasText = value.trim().length > 0;
   const onButtonPress = hasText ? handleSubmit : onCancel;
 
   return (
     <Animated.View style={[styles.subtaskAddBarWrapper, barStyle]}>
-      {/* "Added" pill — rendered ABOVE the bar in column flow (not as an
-          absolute child of the bar) so Android's elevation+shadow on the
-          bar can't clip it onto the input. */}
+      {/* "Added" pill — column sibling above bar to avoid Android elevation clip. */}
       <Animated.View
         pointerEvents="none"
         style={[styles.subtaskAddedToast, toastStyle]}
@@ -1371,13 +1193,7 @@ function SubtaskAddBar({
           placeholderTextColor={c.fgSubtle}
           onSubmitEditing={handleSubmit}
           returnKeyType="done"
-          // DELIBERATELY no `editable={!disabled}` — flipping editable to
-          // false while addSubtask is in flight calls
-          // setUserInteractionEnabled(false) on the native UITextField,
-          // which iOS treats as a focus loss and dismisses the keyboard.
-          // The await is fast enough that letting the user type more
-          // characters during it is fine; if they tap submit during the
-          // gap the parent's addSubtask no-ops on an empty title anyway.
+          // No `editable={!disabled}` — iOS treats it as focus loss.
           autoFocus
           blurOnSubmit={false}
           textAlignVertical="center"
@@ -1447,9 +1263,7 @@ function MetaChip({
   label: string;
   leading?: React.ReactNode;
 }) {
-  // Translucent tint based on the line color. `${color}1A` appends 10%
-  // alpha (1A == 26/255). Works for both #rgb hex and the rgb()
-  // palette values our theme uses for fg/active highlights.
+  // Translucent tint: ${color}1A appends 10% alpha for hex.
   const bg = color.startsWith("#") ? `${color}1A` : color;
   return (
     <View
@@ -1477,13 +1291,9 @@ function MetaChip({
 }
 
 const styles = StyleSheet.create({
-  // Page is the sheet's content root. position:relative is the default
-  // for RN Views but we make it explicit because we hang three absolute-
-  // positioned children off it (header anchor, body, footer anchor).
+  // Page = sheet content root; explicit relative for 3 absolute children.
   page: { flex: 1, position: "relative" },
-  // Generous swipe target above the header — same recipe the old SheetShell
-  // used (full-width, ~32 px tall) so it's an easy drag target without
-  // covering any tappable controls.
+  // Generous swipe target above header.
   dragZone: {
     paddingTop: 10,
     paddingBottom: 8,
@@ -1549,11 +1359,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     fontWeight: "500",
   },
-  // Body wrapper sits between the header and the footer. Absolute
-  // positioning with top/bottom (set inline from measured header/footer
-  // heights) gives the body an explicit bounded height — that's what
-  // lets the inner subtasks panel's flex:1 child actually compute a
-  // height to scroll within.
+  // Body between header + footer; absolute top/bottom gives bounded height.
   body: {
     position: "absolute",
     left: 0,
@@ -1562,39 +1368,27 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     gap: 14,
   },
-  // Header sits at the top of the sheet. onLayout reports its height
-  // back to the body so the body knows where to start.
+  // Header anchor — onLayout feeds height back to body's `top`.
   headerAnchor: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
   },
-  // Non-scrolling top section — title, chips, streak, description, the
-  // Locked pill or primary-action row, and the CounterPanel underneath.
-  // Whatever lives here is always visible; it's the subtasks panel that
-  // absorbs any vertical overflow.
+  // Non-scrolling top: title/chips/streak/description/actions/counter.
   topBlock: { gap: 14 },
-  // Self-scrolling subtasks panel. flex:1 + minHeight:0 are both required
-  // for the contained BottomSheetScrollView to respect the available
-  // height instead of expanding to fit every row.
+  // Subtasks panel — flex:1 + minHeight:0 so inner ScrollView respects bounds.
   subtasksPanel: { flex: 1, minHeight: 0 },
   subtasksScroll: { flex: 1 },
   subtasksContent: { paddingTop: 4, paddingBottom: 16 },
-  // Footer anchor: absolute-positioned at the sheet bottom so it stays
-  // on-screen no matter how the body lays out. The body reads this
-  // element's measured height (via onLayout) into a paddingBottom so the
-  // scrollable subtasks panel doesn't end behind the footer.
+  // Footer anchor — absolute at sheet bottom; height feeds body padding.
   footerAnchor: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
   },
-  // Invisible full-screen tap target rendered behind the SubtaskAddBar
-  // while it's open. Catches taps outside the input row and dismisses
-  // the bar + keyboard. zIndex sits between the BottomSheet chrome and
-  // the bar's wrapper so a tap on the bar still reaches the bar.
+  // Invisible full-screen tap target behind SubtaskAddBar; zIndex between sheet + bar.
   subtaskAddBarOverlay: {
     position: "absolute",
     top: 0,
@@ -1603,11 +1397,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 90,
   },
-  // Wrapper anchors the bar (and the toast sibling above it) to the
-  // bottom of the route. The reanimated translateY for keyboard lift is
-  // applied here so the toast rides up with the bar in a single
-  // transform. zIndex/elevation lift the whole wrapper above the
-  // BottomSheet's footer chrome.
+  // Wrapper anchors bar+toast at route bottom; translateY lift applied here.
   subtaskAddBarWrapper: {
     position: "absolute",
     left: 0,
@@ -1617,9 +1407,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     elevation: 18,
   },
-  // Floating add-subtask bar — child of the wrapper, sits at its bottom
-  // edge. No own absolute positioning so the toast sibling above it
-  // takes its natural place in column flow.
+  // Floating add-subtask bar — wrapper child, no own absolute positioning.
   subtaskAddBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -1642,9 +1430,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // "Added" toast — column sibling above the bar, centered horizontally.
-  // marginBottom adds breathing room between the pill and the input row.
-  // pointerEvents:none on the wrapper (in JSX) so it never steals taps.
+  // "Added" toast — column sibling above bar, centered horizontally.
   subtaskAddedToast: {
     alignItems: "center",
     marginBottom: 8,
@@ -1655,8 +1441,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  // Bottom-anchored footer column: SlideToCheckIn on top (when shown), Edit /
-  // Delete row below it. paddingBottom is composed inline with insets.bottom.
+  // Footer column: SlideToCheckIn + Edit/Delete row.
   footerStack: {
     gap: 10,
     paddingHorizontal: 16,
@@ -1682,7 +1467,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     fontWeight: "600",
   },
-  // Compact pill row: each chip is borderless-wide and sized to its label.
+  // Compact pill row sized to label.
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   chip: {
     flexDirection: "row",
@@ -1694,9 +1479,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  // Round icon button used by the primary-action row. Same diameter as the
-  // submit pill in the new-task quick-add bar so the visual vocabulary is
-  // consistent across the app.
+  // Round icon button — matches quick-add submit pill diameter.
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1716,10 +1499,7 @@ const styles = StyleSheet.create({
     height: 28,
     gap: 8,
   },
-  // Extra padding applied to subtask rows that live inside SwipeableRow.
-  // The row's bg is now c.bg (matching the sheet), so the text/checkbox
-  // need horizontal breathing room from the row's edges. Vertical padding
-  // bumps the touch target a bit too.
+  // Subtask row padding inside SwipeableRow for breathing room.
   subRowPadded: {
     paddingHorizontal: 12,
     paddingVertical: 4,

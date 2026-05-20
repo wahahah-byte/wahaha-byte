@@ -20,17 +20,13 @@ import { useColors } from "@/hooks/use-colors";
 interface Props {
   label?: string;
   disabled?: boolean;
-  /** Awarded points to display in the "+N pts" pop on commit. Omit/0 hides
-   *  the pop (mirrors web BankBurstEffect skipping +0). */
+  // Pts for "+N pts" pop on commit; 0 hides pop.
   pointValue?: number;
   onConfirm: () => void;
 }
 
 const COMMIT_FRACTION = 0.78;
-// Glide + landing + hold + fade-out are sequenced so the user clearly sees
-// the puck travel to the end, land with a pulse, hold for a beat, then
-// the whole slide fades out before onConfirm fires. The parent's unmount
-// then aligns with the slide already being invisible — no abrupt cut.
+// Sequenced beats: glide → landing pulse → hold → fade out, then unmount.
 const COMMIT_GLIDE_MS = 460;
 const LANDING_PULSE_MS = 220;
 const HOLD_MS = 140;
@@ -40,8 +36,7 @@ const COMMIT_FIRE_DELAY =
 const THUMB_SIZE = 48;
 const TRACK_HEIGHT = 52;
 const TRACK_PAD = 2;
-// Total play-out for the post-commit point popup + border pulse. Matches
-// the web app's `recurring-pts-popup` 1.1s + the outline pulse ~600ms tail.
+// Post-commit pts popup + border pulse total duration.
 const POPUP_TOTAL_MS = 1100;
 
 export function SlideToCheckIn({ label = "Slide to check in", disabled, pointValue = 0, onConfirm }: Props) {
@@ -52,19 +47,14 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
   const max = Math.max(0, trackWidth - THUMB_SIZE - TRACK_PAD * 2);
   const offset = useSharedValue(0);
   const dragStart = useSharedValue(0);
-  // Gates the commit so a single threshold-crossing fires fireConfirm + the
-  // arm haptic exactly once per drag, even if onUpdate fires more frames
-  // before the `committed` state propagates and disables the gesture.
+  // Gate so threshold-cross fires fireConfirm + arm haptic once per drag.
   const armed = useSharedValue(false);
-  // Post-commit celebration. Mirrors web's TaskRow recurring-pts-popup
-  // (rises + overshoots scale + fades) and checkin-outline (border draws
-  // around the row + fades). The same beats render here over the track.
+  // Post-commit celebration: pts popup rises + border pulses around track.
   const popupY = useSharedValue(0);
   const popupOpacity = useSharedValue(0);
   const popupScale = useSharedValue(0.55);
   const borderOpacity = useSharedValue(0);
-  // Whole-slide opacity for the graceful fade-out at the end of commit, and
-  // a transient scale-up on the thumb as it lands at the right edge.
+  // Whole-slide fade + thumb landing pulse.
   const slideOpacity = useSharedValue(1);
   const thumbScale = useSharedValue(1);
 
@@ -73,22 +63,20 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
   }
 
   function notifyArm() {
-    // Light "click" the moment you cross the commit threshold — pairs with
-    // the auto-glide so the action feels like it latched.
+    // Light click on threshold cross — pairs with auto-glide latch.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-      /* haptics are best-effort */
+      /* haptics best-effort */
     });
   }
   function notifyCommit() {
-    // Success "thunk" when the glide finishes and onConfirm fires.
+    // Success thunk when glide finishes.
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {
-      /* haptics are best-effort */
+      /* haptics best-effort */
     });
   }
 
   function playPopup() {
-    // "+N pts" rises, briefly overshoots scale, then keeps drifting while
-    // fading. Numbers mirror web's keyframes (0% → 14% → 28% → 70% → 100%).
+    // +N pts rises, overshoots scale, then drifts while fading.
     popupOpacity.value = 0;
     popupScale.value = 0.55;
     popupY.value = 2;
@@ -105,7 +93,7 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
       duration: POPUP_TOTAL_MS,
       easing: Easing.bezier(0.22, 0.7, 0.4, 1),
     });
-    // Border highlight pulses around the track for the same beat.
+    // Border highlight pulses around track for same beat.
     borderOpacity.value = withSequence(
       withTiming(1, { duration: 180, easing: Easing.bezier(0.22, 0.7, 0.4, 1) }),
       withDelay(500, withTiming(0, { duration: 600, easing: Easing.linear })),
@@ -116,8 +104,10 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
     setCommitted(true);
     playPopup();
 
-    // After the glide lands at the right edge: pulse the thumb (so the user
-    // sees a real "landing" beat) and fire the success haptic.
+    // Fire onConfirm immediately so list optimistic patch lands at threshold-cross.
+    onConfirm();
+
+    // After glide lands: pulse thumb + fire success haptic.
     setTimeout(() => {
       thumbScale.value = withSequence(
         withTiming(1.08, { duration: LANDING_PULSE_MS / 2, easing: Easing.bezier(0.22, 0.7, 0.4, 1) }),
@@ -126,21 +116,13 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
       notifyCommit();
     }, COMMIT_GLIDE_MS);
 
-    // After the landing pulse + a brief hold: fade the whole slide out.
-    // This is what fixes the "disappears suddenly" feel — the parent's
-    // unmount happens after we've already animated the slide to opacity 0.
+    // After landing+hold: fade the whole slide out before unmount.
     setTimeout(() => {
       slideOpacity.value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.linear });
     }, COMMIT_GLIDE_MS + LANDING_PULSE_MS + HOLD_MS);
 
-    // Once fade-out is complete: hand off to the parent. Reset internal
-    // state on a delay so we're clean if the parent re-uses this instance,
-    // but we deliberately leave slideOpacity at 0 — restoring it to 1 here
-    // briefly flashes the slide back on between the reset firing and the
-    // parent's next render unmounting us. Opacity gets reset on the next
-    // drag (see onStart) or via a fresh mount.
+    // Reset slider state at celebration end (purely visual).
     setTimeout(() => {
-      onConfirm();
       setTimeout(() => {
         offset.value = withSpring(0, { mass: 1, damping: 18, stiffness: 140 });
         thumbScale.value = 1;
@@ -160,27 +142,20 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
     .failOffsetY([-12, 12])
     .onStart(() => {
       "worklet";
-      // If the slide was faded out by a prior commit but the parent kept
-      // us mounted, snap back to visible so the new drag is actually seen.
-      // Normal first-mount case: opacity is already 1, this is a no-op.
+      // Snap back to visible if prior commit faded us out.
       if (slideOpacity.value !== 1) slideOpacity.value = 1;
       dragStart.value = offset.value;
     })
     .onUpdate((e) => {
       "worklet";
-      // Critical: once armed, bail out so the in-flight withTiming glide
-      // isn't clobbered every frame by `offset.value = next` while the
-      // finger is still down. Using armed.value (shared, immediate) instead
-      // of `committed` (React state, stale in worklet closure) is what
-      // makes the auto-glide actually run to the end.
+      // Bail once armed so in-flight glide isn't clobbered each frame.
       if (armed.value) return;
       const next = Math.max(0, Math.min(max, dragStart.value + e.translationX));
       offset.value = next;
       if (max > 0 && next / max >= COMMIT_FRACTION) {
         armed.value = true;
         runOnJS(notifyArm)();
-        // Out-cubic decelerates as the thumb approaches the end — feels like
-        // landing rather than snapping to the wall.
+        // Out-cubic so the end feels like landing, not snapping.
         offset.value = withTiming(max, {
           duration: COMMIT_GLIDE_MS,
           easing: Easing.out(Easing.cubic),
@@ -190,13 +165,9 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
     })
     .onEnd(() => {
       "worklet";
-      // Same rationale as above: armed.value (UI-thread truth) takes
-      // priority over the React `committed` flag here. Without this guard,
-      // lifting the finger after the threshold cross springs offset back
-      // to 0 and the thumb visibly snaps back instead of completing.
+      // armed.value (UI truth) takes priority over committed state.
       if (armed.value) return;
-      // Spring back instead of timing — partial drags now bounce home, which
-      // reads as "playful, not yet" instead of a flat slide.
+      // Spring back on partial drag — playful "not yet".
       offset.value = withSpring(0, { mass: 1, damping: 18, stiffness: 160 });
     });
 
@@ -209,11 +180,7 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
   const hostStyle = useAnimatedStyle(() => ({
     opacity: slideOpacity.value,
   }));
-  // Colored fill grows with the thumb so the user sees the strip filling up
-  // instead of an isolated puck moving across an inert track. Width ends at
-  // the thumb's center so the thumb's circular right half always covers the
-  // fill's straight right edge — otherwise the rectangle pokes out around
-  // the thumb's curve as a visible square shoulder.
+  // Fill grows with thumb; width ends at thumb center to hide square shoulder.
   const fillStyle = useAnimatedStyle(() => ({
     width: offset.value + THUMB_SIZE / 2,
   }));
@@ -231,9 +198,7 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
 
   return (
     <Animated.View style={[styles.host, hostStyle]}>
-      {/* +N pts popup — rises out of the track on commit. Mirrors web's
-          recurring-pts-popup keyframe set. Skipped when pointValue is 0
-          (e.g. counter-only tasks). */}
+      {/* +N pts popup — rises out of track on commit; skip when pts=0. */}
       {pointValue > 0 ? (
         <Animated.View pointerEvents="none" style={[styles.popup, popupStyle]}>
           <ThemedText
@@ -332,8 +297,7 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
         </Animated.View>
       </GestureDetector>
 
-      {/* Border highlight — pill outline pulses over the track on commit,
-          fading after the popup. Mirrors web's checkin-outline rect. */}
+      {/* Border highlight — pill outline pulses on commit, fades after. */}
       <Animated.View
         pointerEvents="none"
         style={[
@@ -348,9 +312,7 @@ export function SlideToCheckIn({ label = "Slide to check in", disabled, pointVal
 }
 
 const styles = StyleSheet.create({
-  // Host wraps the track + the popup so the popup can rise above the track
-  // without being clipped by the track's overflow:hidden (which the fill
-  // and thumb need to stay clipped to the pill shape).
+  // Host wraps track + popup so popup isn't clipped by track's overflow:hidden.
   host: {
     position: "relative",
     width: "100%",
@@ -373,14 +335,11 @@ const styles = StyleSheet.create({
   },
   fill: {
     position: "absolute",
-    // Inset by TRACK_PAD so the fill matches the thumb's vertical extent
-    // exactly — otherwise the 2 px strip above + below the thumb leaks the
-    // fill colour around the puck's rounded edges.
+    // Inset by TRACK_PAD to match thumb's vertical extent exactly.
     top: TRACK_PAD,
     bottom: TRACK_PAD,
     left: TRACK_PAD,
-    // Round the fill so its left cap matches the thumb's curve when the
-    // thumb is barely off the start position.
+    // Round so left cap matches thumb curve.
     borderRadius: (TRACK_HEIGHT - TRACK_PAD * 2) / 2,
   },
   borderHighlight: {
@@ -400,17 +359,14 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: "absolute",
-    // Exact pixel radius (THUMB_SIZE / 2, not 999) is what Android's
-    // elevation shadow uses to compute the round shadow shape — using 999
-    // is what makes elevation draw a square halo on some Android versions.
+    // THUMB_SIZE/2 (not 999) so Android elevation shadow is round.
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
     boxShadow: "0px 3px 8px rgba(0, 0, 0, 0.28)",
-    // Android Material depth — keeps the puck reading as a raised pill
-    // floating over the track instead of sitting flush with the fill.
+    // Android Material depth so puck reads as raised pill.
     elevation: 6,
   },
 });

@@ -102,10 +102,7 @@ export function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }
   function cellY(r: number) { return TOP_LABEL_ROW + CELL_GAP + r * (CELL_SIZE + CELL_GAP); }
 
   return (
-    // pointerEvents: "none" so the Svg cells + labels don't intercept
-    // horizontal pointer events meant for the DetailPager's swipe-to-
-    // switch-pages gesture. The heatmap is purely informational — nothing
-    // inside is interactive.
+    // pointerEvents: none so DetailPager swipe gesture isn't intercepted.
     <View style={{ gap: 8, pointerEvents: "none" }}>
       <View style={styles.headerRow}>
         <ThemedText style={[styles.captionUpper, { color: c.fgSubtle }]}>
@@ -117,11 +114,7 @@ export function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }
       </View>
 
       <View style={{ alignItems: "center" }}>
-        {/* Inner wrapper with width: gridWidth so the absolute-positioned
-            DOW/month labels share the same coordinate system as the Svg.
-            Without this, the labels are anchored to the centered parent's
-            left edge (0) while the Svg is offset by `(parentW - gridWidth)/2`,
-            causing the months and rows to drift apart on wider parents. */}
+        {/* Width-pinned wrapper so absolute labels share Svg coords. */}
         <View style={{ width: gridWidth, height: gridHeight, position: "relative" }}>
         <Svg width={gridWidth} height={gridHeight}>
           {/* Cells */}
@@ -174,9 +167,7 @@ export function HeatmapStrip({ rule, hasCounter, cycles, pendingTodayDelta = 0 }
           )}
         </Svg>
 
-        {/* DOW labels — Svg can't easily render flowing text alongside cells on
-            RN without measuring; overlay them as absolute-positioned views
-            using the same row geometry. */}
+        {/* DOW + month labels overlaid via absolute positioning. */}
         <View style={[StyleSheet.absoluteFillObject, { width: gridWidth, pointerEvents: "none" }]}>
           {[0, 1, 2, 3, 4, 5, 6].map((r) => {
             const label = r === 1 ? "Mon" : r === 3 ? "Wed" : r === 5 ? "Fri" : "";

@@ -28,8 +28,7 @@ export default function CategoryCapsTooltip({ variant, children }: Props) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
-  // Portal-mount the tooltip to escape any overflow:hidden ancestor (e.g. the
-  // desktop main column). Position it below + right-aligned to the trigger.
+  // Portal-mount to escape overflow:hidden ancestors.
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();

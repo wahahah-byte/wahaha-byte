@@ -54,13 +54,7 @@ interface Props {
   onPause?: () => void;
   onUndo?: () => void;
   onDelete?: () => void;
-  // Quick-log buffered delta flush. The +/- buttons under the avatar mutate a
-  // local buffer instead of calling on each tap; the flush fires after a short
-  // idle (debounce), when the modal closes or switches tasks, and on
-  // page/tab close. Pass `{ keepalive: true }` from unload handlers so the
-  // request survives the page being torn down. Signature takes taskId
-  // explicitly so cleanup paths route to the right task without a stale
-  // closure. Resolves to the appended cycle on success, null on failure.
+  // Quick-log buffered delta flush; debounced + keepalive on unload.
   onFlushQuickLog?: (taskId: string, delta: number, opts?: { keepalive?: boolean }) => Promise<CheckInCycleDto | null>;
   onSave?: (fields: EditableTaskFields) => Promise<string | null>;
   onSubtasksChange?: (subtasks: Subtask[]) => void;
@@ -68,8 +62,7 @@ interface Props {
   canUndo?: boolean;
   initialEditMode?: boolean;
   mustReschedule?: boolean;
-  // Render inline as a panel (no overlay, no portal, no mobile bottom-sheet).
-  // Used by the desktop 3-column shell as the right-hand detail column.
+  // Render inline as a panel (desktop 3-column right pane).
   inline?: boolean;
 }
 
@@ -147,17 +140,7 @@ export default function TaskDetailModal({
   const dot = PRIORITY_DOT[task.priority.toLowerCase()] ?? "var(--color-fg-muted)";
   const status = STATUS_LABEL[task.status] ?? { label: task.status, color: "var(--color-fg-muted)" };
 
-  // Pull the user's currently-equipped avatar items so the chibi inside
-  // this modal matches whatever's dressed up on the /avatar page. The
-  // hook caches across modal opens so each open doesn't pay another
-  // network trip.
-  //
-  // Mock fallback only fires for unauthed sessions (static demo) — for
-  // authed users we'd rather render the base chibi with no items for
-  // the ~100-300ms a first-time fetch is in flight than briefly show
-  // someone else's mock loadout (alien hat etc.) that then flips to
-  // their real equipped set. That brief flash was the "old avatar
-  // showing up" the user was seeing.
+  // User's equipped avatar items; mock fallback only for unauthed.
   const hasToken = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
   const userEquipped = useEquippedAvatar();
   const chibiEquipped = hasToken
@@ -178,9 +161,7 @@ export default function TaskDetailModal({
     return d;
   }
 
-  // Computed once per mount via the useState lazy initializer so we don't
-  // call the impure Date.now() in the render body. The lock window is 24h
-  // from creation, so it doesn't need to update mid-session anyway.
+  // Title locks 24h after creation; computed once on mount.
   const [titleLocked] = useState(() => (Date.now() - new Date(task.createdAt).getTime()) > 24 * 60 * 60 * 1000);
 
   const [isEditing, setIsEditing] = useState(initialEditMode ?? false);
@@ -258,25 +239,14 @@ export default function TaskDetailModal({
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
-  // While true the sheet's transform transition is re-enabled so the final
-  // slide-off (after a successful swipe-to-dismiss) animates instead of
-  // jumping. Cleared implicitly when the modal unmounts.
+  // Re-enables transform transition for the final slide-off after dismiss.
   const [dismissing, setDismissing] = useState(false);
   const sheetDragRef = useRef<{ startY: number } | null>(null);
 
-  // Extra check-in history for the heatmap. The embedded `task.recentCycles`
-  // slice is bounded (~14 entries) and only covers the last couple of weeks,
-  // so we lazily pull a wider window from /checkin-history when the modal
-  // opens for a daily/weekdays task. Mock mode (no auth token) skips the
-  // fetch and the heatmap falls back to the embedded slice.
+  // Wider check-in history window for the heatmap; lazily fetched.
   const [heatmapHistory, setHeatmapHistory] = useState<CheckInCycleDto[] | null>(null);
 
-  // Merge fetched history with the embedded slice so optimistic updates from
-  // a just-completed check-in (which mutate task.recentCycles via the parent
-  // store) stay visible without re-fetching. Local entries win on duplicate
-  // cycleIds — they reflect any in-flight edits the server hasn't acked yet.
-  // The avatar's cycleSumToday and the heatmap both read from this so they
-  // can never disagree about today's committed total.
+  // Merge fetched + embedded cycles; local entries win on duplicate cycleIds.
   const heatmapCycles = useMemo(() => {
     const fetched = heatmapHistory ?? [];
     const local = task.recentCycles ?? [];
@@ -292,9 +262,7 @@ export default function TaskDetailModal({
     return dateKey(d);
   }, []);
 
-  // +/- buffered counter for routines (debounced flush, in-flight bookkeeping,
-  // page-close keepalive). State lives at modal scope so the avatar and the
-  // heatmap on the sibling pager card stay in lockstep — see useQuickLog.
+  // +/- buffered counter for routines; debounced flush, see useQuickLog.
   const {
     pendingLog,
     cycleSumToday,
@@ -315,7 +283,7 @@ export default function TaskDetailModal({
     if (!localStorage.getItem("auth_token")) return;
     let cancelled = false;
     (async () => {
-      // 12 weeks ≈ 84 days; round up to leave headroom for any paging quirks.
+      // 12 weeks ≈ 84 days plus paging headroom.
       const result = await tasksApi.getCheckInHistory(task.taskId, 1, 100);
       if (cancelled || result.error) return;
       setHeatmapHistory(result.data!.data);
@@ -332,7 +300,7 @@ export default function TaskDetailModal({
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Lock background scroll while the sheet is open on mobile (matches DatePicker pattern).
+  // Lock background scroll while sheet is open on mobile.
   useEffect(() => {
     if (!isMobile || inline) return;
     const prev = document.body.style.overflow;
@@ -355,7 +323,7 @@ export default function TaskDetailModal({
     sheetDragRef.current = null;
     if (!d) return;
     if (sheetDragY > 110) {
-      // Past dismiss threshold — slide off-screen, then close.
+      // Past dismiss threshold — slide off and close.
       setDismissing(true);
       setSheetDragY(window.innerHeight);
       setTimeout(onClose, 260);
@@ -364,12 +332,7 @@ export default function TaskDetailModal({
     }
   }, [sheetDragY, onClose]);
 
-  // Same swipe-down-to-dismiss gesture from anywhere in the modal body. Only
-  // arms when the scroll container is already at the top so it doesn't hijack
-  // mid-page scrolling, and only commits on a clear downward swipe (not a
-  // horizontal one — subtask rows have their own left-swipe). The recurring
-  // "Slide to check in" zone sits outside this scroll container, so it isn't
-  // affected.
+  // Swipe-down-to-dismiss from anywhere in the modal body when scrolled to top.
   const contentDragRef = useRef<{ startY: number; startX: number; committed: boolean } | null>(null);
   const handleContentTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     if (e.currentTarget.scrollTop > 0) return;
@@ -436,9 +399,7 @@ export default function TaskDetailModal({
         padding: "0 16px calc(16px + env(safe-area-inset-bottom, 0px))",
         animation: sheetDragY === 0 && !dismissing ? "detail-sheet-in 0.24s cubic-bezier(0.2, 0, 0, 1)" : undefined,
         transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
-        // Snap-back (release before threshold) and slide-off (commit dismiss)
-        // both animate; only the active finger-drag runs without transition so
-        // the sheet tracks the touch 1:1.
+        // Snap-back + slide-off animate; active drag runs untransitioned.
         transition: sheetDragY === 0 || dismissing ? "transform 0.26s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
       }
     : {
@@ -458,9 +419,7 @@ export default function TaskDetailModal({
         background: "var(--color-modal-overlay)",
         zIndex: 60,
         animation: !dismissing ? "detail-overlay-in 0.18s ease-out" : undefined,
-        // Stay fully opaque during the drag — only fade out when the user has
-        // committed to dismiss, otherwise a partial-then-snap-back swipe would
-        // flicker the backdrop.
+        // Stay opaque during drag; fade only on committed dismiss.
         opacity: dismissing ? 0 : 1,
         transition: "opacity 0.26s ease-out",
       }
@@ -519,7 +478,7 @@ export default function TaskDetailModal({
           ✕
         </button>
 
-        {/* Title row: priority dot + title (or input) + status pill */}
+        {/* Title row */}
         <div className="flex items-center gap-2.5 min-w-0 pr-8 mb-2">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: priorityDot }} />
           {isEditing ? (
@@ -587,7 +546,7 @@ export default function TaskDetailModal({
               </div>
             )}
 
-            {/* Description (lazy) */}
+            {/* Description */}
             {showEditDescription ? (
               <textarea
                 value={editDescription}
@@ -622,7 +581,7 @@ export default function TaskDetailModal({
               </button>
             )}
 
-            {/* Inline metadata fields */}
+            {/* Metadata fields */}
             {(!task.isRecurring || mustReschedule) && (
               <Field label="Due">
                 <DatePicker value={editDueDate} onChange={setEditDueDate} />
@@ -764,7 +723,7 @@ export default function TaskDetailModal({
           </div>
         ) : (
           <div className="flex flex-col gap-3 mt-1">
-            {/* Metadata — items separated by whitespace, no middle-dots */}
+            {/* Metadata row */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--color-fg-muted)" }}>
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: dot }} />
@@ -811,9 +770,7 @@ export default function TaskDetailModal({
                       <div className="flex-1 flex flex-col items-center justify-center gap-2">
                         <ChibiAvatar equipped={chibiEquipped} height={192} />
                         {task.hasCounter && (() => {
-                          // hasCounter && pending status && not yet checked in today
-                          // is the gate for showing the +/- buttons; otherwise we
-                          // render a read-only sum.
+                          // Stepper shows when pending + not checked-in today; else read-only sum.
                           const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;
                           const showStepper = !!onFlushQuickLog && task.status === "pending" && !checkedInToday;
                           return (
@@ -1027,7 +984,7 @@ export default function TaskDetailModal({
           )}
         </div>
 
-        {/* Tiny footer (view mode only) */}
+        {/* Footer (view mode) */}
         {!isEditing && (
           <div className="flex items-center justify-between mt-3 pt-2 gap-3" style={{ borderTop: "1px solid var(--color-border-hairline)" }}>
             <span className="flex items-center gap-2" style={{ color: "var(--color-fg-subtle)", opacity: 0.6, fontSize: "9px", letterSpacing: "0.1em" }}>
@@ -1051,9 +1008,7 @@ export default function TaskDetailModal({
         )}
         </div>
 
-        {/* Pinned slider zone (mobile only) — sits outside the scroll container
-            so it stays at the user's thumb regardless of how much content is
-            above it. Only renders for recurring tasks where check-in is unlocked. */}
+        {/* Pinned slider zone (mobile recurring + unlocked) */}
         {isMobile && !inline && !isEditing && task.status === "pending" && task.isRecurring && onCheckIn && (
           <div
             style={{
@@ -1073,8 +1028,7 @@ export default function TaskDetailModal({
       </div>
   );
 
-  // Inline mode (desktop right-panel) skips the overlay + portal and renders
-  // just the sheet content sized to fill its container.
+  // Inline mode skips overlay + portal.
   if (inline) return sheet;
 
   const tree = (
@@ -1088,7 +1042,7 @@ export default function TaskDetailModal({
     </div>
   );
 
-  // Mobile sheet renders into <body> so it sits above page-level layout.
+  // Mobile sheet portals to body so it sits above page layout.
   return isMobile ? createPortal(tree, document.body) : tree;
 }
 

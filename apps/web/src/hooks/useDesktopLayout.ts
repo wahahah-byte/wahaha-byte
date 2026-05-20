@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-// Subscribes to the desktop breakpoint (>=880px) so pages can swap their
-// 3-column shell in for the mobile layout. Returns false on the server and
-// during the initial client render, then snaps to the real value after mount.
+// Desktop breakpoint subscription (>=880px); false on SSR/first paint.
 export function useDesktopLayout(): boolean {
   const [isDesktop, setIsDesktop] = useState(false);
 

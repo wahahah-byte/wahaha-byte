@@ -21,10 +21,9 @@ interface Props {
   options: FilterOption[];
   value: string;
   onChange: (next: string) => void;
-  /** Optional per-filter task count rendered after the label. */
+  // Optional per-filter task count rendered after the label.
   getCount?: (value: string) => number;
-  /** Optional small dot before the label — used by web's "Completed" tab to
-   *  indicate unsubmitted points. Return null/undefined for no dot. */
+  // Optional dot before the label (e.g. unsubmitted-pts indicator).
   badgeColor?: (value: string) => string | null;
 }
 
@@ -36,18 +35,7 @@ const CYCLE_HINT_DURATION_MS = 900;
 const SWIPE_CYCLE_THRESHOLD = 36;
 const HANDLE_HITBOX_HEIGHT = 26;
 
-/**
- * Bottom filter strip — mirrors web FilterTray (mobile only).
- *
- * Implementation note: cells are not Pressables. Both tap and pan flow
- * through gesture-handler so the Pressable pointer-capture behaviour on web
- * doesn't steal events from the surrounding pan.
- *
- * The handle pill above the strip has its own gesture detector that mirrors
- * web's `FilterTray.tsx`: tap toggles the strip open/collapsed, vertical
- * drag commits open/closed past 50% of the tray height, and horizontal
- * swipes cycle to the previous/next filter.
- */
+// Bottom filter strip — tap/pan via gesture-handler; pill toggles + cycles.
 export function FilterStrip({ options, value, onChange, getCount, badgeColor }: Props) {
   const c = useColors();
   const slotPx = useSharedValue(0);
@@ -56,16 +44,11 @@ export function FilterStrip({ options, value, onChange, getCount, badgeColor }: 
   const offset = useSharedValue(activeIdx);
   const dragStart = useSharedValue(0);
 
-  // Tray open/closed state — collapsing it slides the strip down by its
-  // total height (28px tray + 8px gap to match web). The handle pill stays
-  // floating in place so the user can swipe/tap it to reopen.
+  // Tray open/closed — collapse slides strip down; handle stays floating.
   const [open, setOpen] = useState(true);
   const trayY = useSharedValue(0);
 
-  // Floating "cycle hint" — a brief label that appears above the handle pill
-  // when the user swipes to change filters. Mirrors web's filter-cycle-hint
-  // animation: pops in, fades out after ~900 ms. Driven from the gesture
-  // handler via runOnJS.
+  // Floating cycle hint — brief label above pill on swipe-cycle.
   const [cycleHint, setCycleHint] = useState<string | null>(null);
   const cycleHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -94,7 +77,7 @@ export function FilterStrip({ options, value, onChange, getCount, badgeColor }: 
     flashCycleHint(options[next].label);
   }
 
-  // Sync the indicator when active changes externally.
+  // Sync indicator on external active change.
   useEffect(() => {
     offset.value = withTiming(activeIdx, { duration: 220, easing: Easing.bezier(0.2, 0, 0, 1) });
   }, [activeIdx, offset]);
@@ -104,7 +87,7 @@ export function FilterStrip({ options, value, onChange, getCount, badgeColor }: 
     slotPx.value = (w - HORIZONTAL_PAD * 2) / options.length;
   }
 
-  // Strip's own pan: drags the highlight (and selected filter) horizontally.
+  // Strip pan: drags highlight + selected filter horizontally.
   const pan = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .failOffsetY([-12, 12])
@@ -139,8 +122,7 @@ export function FilterStrip({ options, value, onChange, getCount, badgeColor }: 
 
   const composed = Gesture.Race(pan, tap);
 
-  // Handle pill's gestures — tap toggles the tray, vertical drag commits
-  // open/closed past half the tray height, horizontal swipe cycles filters.
+  // Handle pill: tap toggle, v-drag opens/closes, h-swipe cycles.
   const handleStartedOpen = useSharedValue(true);
   const handleAxis = useSharedValue<"v" | "h" | null>(null);
   const handleCycled = useSharedValue(false);
@@ -195,22 +177,14 @@ export function FilterStrip({ options, value, onChange, getCount, badgeColor }: 
     transform: [{ translateY: trayY.value }],
   }));
 
-  // The handle pill tracks the TOP of the tray — descending by up to
-  // TRAY_HEIGHT as the tray slides off, so the handle visually "sticks" to
-  // the top edge of the action bar once the tray is hidden. Clamped at
-  // TRAY_HEIGHT so the handle doesn't continue past the action bar (the
-  // tray's last 8 px of close-translation are the 8 px gap; the handle
-  // stops moving once it reaches the action-bar's top edge).
+  // Handle tracks tray top (clamped at TRAY_HEIGHT) so it sticks to action bar.
   const handleStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: Math.min(trayY.value, TRAY_HEIGHT) }],
   }));
 
   return (
     <View>
-      {/* Handle pill above the strip — tap toggles, vertical drag opens/closes,
-          horizontal swipe cycles filters. The pill follows the tray's top
-          (clamped at TRAY_HEIGHT) so it descends when the tray is collapsed
-          and rises when the tray is opened — feels physically connected. */}
+      {/* Handle pill — follows tray top so it feels physically connected. */}
       <GestureDetector gesture={handleGesture}>
         <Animated.View style={[styles.pillRow, handleStyle]}>
           {cycleHint ? (
@@ -350,7 +324,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   pillRow: {
-    // Larger hitbox than the visible pill so a tap reliably lands on it.
+    // Larger hitbox than visible pill for reliable tap.
     height: HANDLE_HITBOX_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
@@ -364,8 +338,7 @@ const styles = StyleSheet.create({
   cycleHint: {
     position: "absolute",
     bottom: PILL_AREA_HEIGHT + 16,
-    // Generous horizontal padding + minWidth so single-word labels (e.g.
-    // "All") don't look squished against the borders. Fully rounded pill.
+    // Generous padding/minWidth so short labels (e.g. "All") aren't squished.
     minWidth: 64,
     paddingHorizontal: 14,
     paddingVertical: 6,

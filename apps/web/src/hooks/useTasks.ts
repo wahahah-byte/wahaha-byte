@@ -39,9 +39,7 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
     [tasks]
   );
 
-  // Always fetch the unfiltered set so the mobile filter pager can render every
-  // filter view from the same `tasks` array. The status filter is now applied
-  // client-side via buildListItems(activeFilter).
+  // Fetch unfiltered; status filtering happens client-side via buildListItems.
   void initialFilterFromUrl;
   void isStatusFilterPassthrough;
 
@@ -54,7 +52,7 @@ export function useTasks({ initialFilterFromUrl }: UseTasksOptions): UseTasksRet
   });
 
   const setFilterStatus = (_value: string) => {
-    // No-op: status filtering is now client-side. Kept for API compatibility.
+    // No-op; status filtering is now client-side. Kept for API compatibility.
     void _value;
     void setFilters;
   };

@@ -23,10 +23,7 @@ export const subtasksApi = createSubtasksApi(apiClient);
 const sharedUsers = createUsersApi(apiClient);
 export const avatarApi = createAvatarApi(apiClient);
 
-// Extend the shared users API with mobile-only profile-picture upload.
-// expo-image-picker hands us a local file URI + a mime type; FormData on
-// RN takes a `{ uri, name, type }` object — RN's fetch implementation
-// wraps it correctly for multipart/form-data posts.
+// Extend shared users API with mobile profile-picture upload via FormData.
 export const usersApi = {
   ...sharedUsers,
   uploadProfilePicture: async (
@@ -37,8 +34,7 @@ export const usersApi = {
     const inferredName = fileUri.split("/").pop() || "profile.jpg";
     const inferredType = mimeType
       || (inferredName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
-    // The any cast is intentional — RN's FormData accepts a uri/name/type
-    // descriptor here that doesn't match the DOM File type signature.
+    // RN FormData accepts {uri,name,type} — cast bypasses DOM File typing.
     form.append("file", {
       uri: fileUri,
       name: inferredName,

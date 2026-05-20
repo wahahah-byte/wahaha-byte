@@ -1,7 +1,6 @@
 import Svg, { Line, Path, Polyline, Polygon, Rect } from "react-native-svg";
 
-// Action icons ported from apps/web/src/components/TaskRow.tsx — same paths,
-// stroke widths, and viewBox so they look identical on both apps.
+// Action icons ported from web TaskRow — identical paths/strokes.
 
 export function CheckIcon({ color }: { color: string }) {
   return (

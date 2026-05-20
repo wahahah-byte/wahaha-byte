@@ -1,16 +1,9 @@
 import type { AvatarItemDto, ItemSlot, UserInventoryDto } from "@/lib/api/avatar";
 import { applyHints } from "@wahaha/shared";
 
-// Pixel art is rendered onto a fixed 14×16 grid that PixelAvatar uses as its
-// SVG viewBox. The base MapleStory-style chibi occupies these regions:
-//   hair:  rows 0-2 (crown / hairline / sides at cols 2-3 and 10-11)
-//   face:  rows 3-7 (eyes at row 4-5, mouth at row 6, chin row 7)
-//   neck:  row 8
-//   body:  rows 9-11 (cols 4-9)
-//   arms:  cols 3 and 10, rows 10-11 (hands at row 12)
-//   legs:  rows 12-14 (cols 4-5 and 8-9)
-//   feet:  row 15 (cols 3-5 and 8-10)
-// Items layer on top of the base in slot z-order — see PixelAvatar.tsx.
+// Pixel art renders onto a fixed 14×16 grid that PixelAvatar uses as SVG viewBox.
+// Regions: hair rows 0-2, face 3-7, neck 8, body 9-11, arms cols 3+10 rows 10-11,
+// legs rows 12-14, feet row 15. Items layer in slot z-order — see PixelAvatar.tsx.
 
 export interface PixelRect {
   x: number;
@@ -26,8 +19,7 @@ export interface AvatarItemArt {
   rects: PixelRect[];
 }
 
-// Catalog of mock items. PNG-backed items use `previewAssetUrl` and have no
-// `art`; legacy SVG-rect items carry inline `art` and no asset URL.
+// Mock catalog; PNG-backed items use previewAssetUrl, legacy items carry inline `art`.
 export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
   {
     itemId: 1001,
@@ -196,9 +188,7 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/sweater_knit_white.png",
     isAvailable: true,
   },
-  // Slot uses the planned granular HAIR_FRONT (z=80, below HEAD/HAT) so
-  // hair renders behind a hat. Backend enum doesn't have HAIR yet — cast
-  // is intentional, mirrors the alien-helmet "HAT slot ships later" note.
+  // Uses planned granular HAIR_FRONT (z=80, below HEAD/HAT) so hair renders behind hats.
   {
     itemId: 2003,
     name: "Seraph Wave Brown",
@@ -211,11 +201,8 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     isAvailable: true,
     offsetX: 11,
   },
-  // WEAPON_FRONT (z=130) — planned granular slot, casts to ItemSlot like
-  // HAIR_FRONT above. Backend currently maps weapons onto the HAND enum
-  // (also z=130), so the same asset works once the catalog goes live.
-  // sourceWidth=384 (vs base 256) so the polearm can extend past the
-  // character bounds; ChibiAvatar centers the wider canvas over the base.
+  // WEAPON_FRONT (z=130) — planned granular slot; backend currently maps to HAND.
+  // sourceWidth=384 so polearm extends past character bounds; ChibiAvatar centers it.
   {
     itemId: 2004,
     name: "Cyber Polearm",
@@ -224,13 +211,9 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     rarity: "EPIC",
     cost: 500,
     description: "An alien cyber polearm crackling with energy.",
-    // Matches the backend's slug-based naming convention (introduced when
-    // the API switched away from GUID blob names). The old
-    // `weapon_polearm_alien_cyber.png` URL is now 404 since the asset was
-    // re-uploaded under the new scheme.
+    // Slug-based naming; the old GUID-style filename is now 404.
     previewAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_front_cyber_polearm.png",
-    // Back-layer shaft (the portion that passes behind the chibi body).
-    // ChibiAvatar composes both layers when an item provides a secondary.
+    // Back-layer shaft (portion behind chibi body); ChibiAvatar composes both layers.
     secondaryAssetUrl: "https://wahaha.blob.core.windows.net/avatar-items/weapon_front_cyber_polearm_back.png",
     isAvailable: true,
     sourceWidth: 384,
@@ -238,10 +221,7 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
     offsetX: 6,
     offsetY: -8,
     renderScale: 1.25,
-    // The backend persists gridCols/gridRows per item; the mock must mirror
-    // those values or the static-demo inventory falls back to getItemSize's
-    // slot heuristic, which doesn't recognise WEAPON_FRONT (a planned
-    // granular slot not in the base ItemSlot enum) and treats it as 1×1.
+    // Backend persists gridCols/Rows; mock must mirror or static-demo defaults to 1×1.
     gridCols: 2,
     gridRows: 1,
   },
@@ -261,9 +241,7 @@ export const MOCK_AVATAR_ITEMS: (AvatarItemDto & { art?: AvatarItemArt })[] = [
 const itemById = new Map(MOCK_AVATAR_ITEMS.map((i) => [i.itemId, i]));
 export function mockItem(id: number) { return itemById.get(id) ?? null; }
 
-// Default mock equipped set. PNG-backed items show on the ChibiAvatar; the
-// legacy pixel-rect items are kept in case anything still uses PixelAvatar
-// but won't render here (no previewAssetUrl).
+// Default mock equipped set; PNG-backed items show on ChibiAvatar.
 export const MOCK_EQUIPPED_IDS: number[] = [2002, 2003, 2004];
 
 export function buildMockEquipped(): UserInventoryDto[] {
@@ -280,9 +258,7 @@ export function buildMockEquipped(): UserInventoryDto[] {
         itemId: dto.itemId,
         acquiredAt: now,
         isEquipped: true,
-        // Apply hints here so callers that render the mock directly
-        // (e.g. TaskDetailModal in the static-demo build) get the same
-        // class-level offsets that authed/avatar-page paths get.
+        // Apply hints so callers rendering the mock directly get class-level offsets.
         avatarItem: applyHints(dto),
       };
       return inv;
@@ -290,10 +266,7 @@ export function buildMockEquipped(): UserInventoryDto[] {
     .filter((x): x is UserInventoryDto => x !== null);
 }
 
-// Demo-mode inventory: every PNG-backed mock item is "owned", with the same
-// four items pre-equipped as buildMockEquipped(). Powers the unauthenticated
-// avatar page so visitors can experiment with the drag-drop grid and the
-// equip/unequip flow without hitting the API.
+// Demo-mode inventory: every PNG-backed mock item is owned; same four pre-equipped.
 export function buildMockInventory(): UserInventoryDto[] {
   const now = new Date().toISOString();
   const equippedSet = new Set(MOCK_EQUIPPED_IDS);
@@ -309,8 +282,7 @@ export function buildMockInventory(): UserInventoryDto[] {
         acquiredAt: now,
         isEquipped: equippedSet.has(dto.itemId),
         avatarItem: dto,
-        // Positions left null so the avatar page's autoPlace assigns slots
-        // based on whichever grid shape (desktop 7×5 / mobile 5×7) is active.
+        // Positions null so autoPlace assigns slots based on active grid shape.
         positionX: null,
         positionY: null,
       };

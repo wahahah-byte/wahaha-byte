@@ -15,7 +15,7 @@ interface Props {
 }
 
 function CoinIcon({ size = 11, color }: { size?: number; color: string }) {
-  // Same pixel coin as web's SubmitBar.tsx.
+  // Pixel coin (mirrors web SubmitBar).
   return (
     <Svg width={(size * 9) / 11} height={size} viewBox="0 0 10 12" fill="none">
       <Path
@@ -28,11 +28,7 @@ function CoinIcon({ size = 11, color }: { size?: number; color: string }) {
   );
 }
 
-/**
- * Mobile submit bar — takes the action-bar slot when the user has selected
- * one or more completed tasks. Mirrors web SubmitBar's mobile branch:
- * compact pts summary + "File <willAward>p ▶" button.
- */
+// Mobile submit bar — pts summary + File button, replaces action bar when tasks selected.
 export function MobileSubmitBar({
   selectedCount, selectedPts, willAward, isSubmitting, limitReached, capped, onSubmit,
 }: Props) {

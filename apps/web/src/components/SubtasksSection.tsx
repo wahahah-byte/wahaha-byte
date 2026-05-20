@@ -14,9 +14,7 @@ interface Props {
 export default function SubtasksSection({ task, onChange }: Props) {
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
   const isFitness = task.category === "Fitness";
-  // Subtasks are frozen for the remainder of a closed cycle so a routine's
-  // per-cycle progress (which subtasks are checked, set counters) isn't
-  // mutated after the cycle's been finalised by a check-in.
+  // Frozen after a cycle is closed by a check-in.
   const subtasksReadOnly = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
 
   const [subtasks, setSubtasksState] = useState<Subtask[]>(task.subtasks ?? []);
@@ -101,8 +99,7 @@ export default function SubtasksSection({ task, onChange }: Props) {
   async function handleUpdateSubtask(s: Subtask, fields: { title?: string; setsTarget?: number | null; repsTarget?: number | null }) {
     if (Object.keys(fields).length === 0) return;
     const snapshot = subtasks;
-    // If the user shrinks setsTarget below their current setsCompleted, clamp
-    // setsCompleted so the displayed "done/target" stays sensible.
+    // Clamp setsCompleted if setsTarget shrinks below it.
     const next = snapshot.map((x) => {
       if (x.subtaskId !== s.subtaskId) return x;
       const merged = { ...x, ...fields };
@@ -145,7 +142,7 @@ export default function SubtasksSection({ task, onChange }: Props) {
 
   const subtaskDoneCount = subtasks.filter((s) => s.completed).length;
 
-  // Hidden entirely when completed and there's nothing to read.
+  // Hidden when completed with no subtasks.
   if (task.status === "completed" && subtasks.length === 0) return null;
 
   return (

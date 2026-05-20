@@ -14,9 +14,7 @@ interface Props {
   onDecrement: () => void;
 }
 
-// Mobile port of QuickLogStepper. Mirrors the web layout: an inline +/- chip
-// with the running total in the middle, plus an optional progress bar when a
-// counterGoal is set.
+// Mobile QuickLogStepper — inline +/- chip with running total, optional progress bar.
 export function QuickLogStepper({
   cycleSum,
   pendingLog,
@@ -105,8 +103,7 @@ export function QuickLogStepper({
 
   const pct = Math.min(100, Math.round((sum / goal) * 100));
   return (
-    // Matches web's `flex flex-col items-center gap-1.5` — the Today + stepper
-    // row sits centered above a full-width progress meter.
+    // Today + stepper centered above full-width progress meter.
     <View style={{ gap: 6, minWidth: 180, alignItems: "center" }}>
       <View style={styles.row}>
         <ThemedText style={[styles.label, { color: c.fg }]}>Today</ThemedText>

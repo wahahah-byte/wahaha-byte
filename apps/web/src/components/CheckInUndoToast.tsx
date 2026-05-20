@@ -10,10 +10,7 @@ interface Props {
   durationMs?: number;
 }
 
-// Dismissible 5-second toast shown after a successful check-in. Hosts the
-// "Undo" affordance until either the user clicks it, dismisses, or the timer
-// expires (the parent useTaskActions auto-clears its state after the same
-// window — this component only owns the visual countdown).
+// Dismissible 5-second undo toast shown after a check-in.
 export default function CheckInUndoToast({ taskTitle, onUndo, onDismiss, durationMs = 5000 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [progress, setProgress] = useState(1);

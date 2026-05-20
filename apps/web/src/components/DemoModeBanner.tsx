@@ -1,13 +1,11 @@
 import Link from "next/link";
 
 interface Props {
-  // Wrapper margin overrides — desktop pages use `mx-6 mt-4 mb-2`,
-  // mobile pages use `mt-3 mb-3` (parent already constrains width).
+  // Wrapper margin overrides.
   className?: string;
 }
 
-// Banner shown to unauthenticated users so they know their changes only
-// live in-memory until they sign in.
+// Banner shown to unauthed users; their changes live in-memory only.
 export default function DemoModeBanner({ className = "mt-3 mb-3" }: Props) {
   return (
     <div

@@ -13,10 +13,7 @@ interface Props {
   onConfirm: () => void;
 }
 
-/**
- * Daily-cap confirmation. Mirrors web's CapWarningModal — appears when the
- * user tries to submit more pts than their remaining regular daily cap allows.
- */
+// Daily-cap confirmation when submitting more pts than remaining daily cap.
 export function CapWarningModal({
   visible, selectedPts, willAward, remaining, onClose, onConfirm,
 }: Props) {

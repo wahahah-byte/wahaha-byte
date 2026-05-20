@@ -28,7 +28,7 @@ export default function FilterMenu({ filters, activeFilter, onChange, getCount, 
       }
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    // Defer registration so the same tap that opened doesn't immediately trigger close.
+    // Defer registration so the opening tap doesn't trigger close.
     const t = window.setTimeout(() => {
       document.addEventListener("pointerdown", onOutside);
     }, 0);

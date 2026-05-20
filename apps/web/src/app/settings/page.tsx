@@ -81,8 +81,7 @@ export default function SettingsPage() {
                 profilePictureUrl={user.profilePictureUrl}
                 onChange={(url) => {
                   setUser((u) => u ? { ...u, profilePictureUrl: url } : u);
-                  // Also push to PointsContext so AuthHeader's avatar updates
-                  // immediately without a /me round-trip.
+                  // Also push to PointsContext so AuthHeader's avatar updates immediately.
                   setProfilePictureUrl(url);
                 }}
                 size={96}

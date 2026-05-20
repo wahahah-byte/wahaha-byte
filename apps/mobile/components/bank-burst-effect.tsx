@@ -12,35 +12,27 @@ import Animated, {
 import { useColors } from "@/hooks/use-colors";
 
 interface Props {
-  /** Toggle the animation on. Each rising edge re-plays it. */
+  // Rising edge re-plays the animation.
   active: boolean;
-  /** Points awarded — drives the "+N" popup that floats up above the row. */
+  // Points awarded — drives the "+N" popup floating above the row.
   amount?: number;
 }
 
-// Mobile port of web's BankBurstEffect. Plays when a row is "banked" (its
-// points submitted). Two overlays inside the row's position-relative parent:
-//   1) A 1px success-coloured underline glides L→R across the row's bottom
-//      edge, then drifts up and fades — a quiet "ledger stamp" stroke.
-//   2) A "+N" pill floats up out of the row's bottom-right and tapers to 0.
-//
-// We don't try to portal a +N to a header balance chip the way web does —
-// mobile has no always-visible balance chip; the drawer is the only place
-// it lives. The inline +N stays near the row where the change happens.
+// Bank burst: success underline sweeps L→R, then +N pill floats up above row.
 const TOTAL_MS = 1900;
 
 export function BankBurstEffect({ active, amount = 0 }: Props) {
   const c = useColors();
 
-  // 0 = idle. Rising to 1 plays the underline + popup; falling to 0 resets.
+  // 0=idle; rising to 1 plays underline+popup, falling to 0 resets.
   const progress = useSharedValue(0);
-  // Captured at trigger so re-renders during play don't read a cleared value.
+  // Captured at trigger so re-renders don't read a cleared value.
   const snapshot = useSharedValue(0);
 
   useEffect(() => {
     if (!active) return;
     snapshot.value = amount;
-    // Restart cleanly even if the previous run hasn't fully tailed off.
+    // Restart cleanly even if previous run hasn't tailed off.
     progress.value = 0;
     progress.value = withSequence(
       withTiming(1, { duration: TOTAL_MS, easing: Easing.linear }),
@@ -48,10 +40,7 @@ export function BankBurstEffect({ active, amount = 0 }: Props) {
     );
   }, [active, amount, progress, snapshot]);
 
-  // Underline:
-  // 0   – 0.16: grows from 0% to 100% width (the L→R sweep).
-  // 0.16 – 0.7:  holds width, peak opacity 0.55.
-  // 0.7  – 1.0:  lifts up 18 px and fades to 0.
+  // Underline: 0–0.16 sweep, 0.16–0.7 hold @0.55, 0.7–1 lift + fade.
   const underlineStyle = useAnimatedStyle(() => {
     const p = progress.value;
     if (p <= 0 || p >= 1) return { opacity: 0 };
@@ -72,15 +61,14 @@ export function BankBurstEffect({ active, amount = 0 }: Props) {
     };
   });
 
-  // +N popup:
-  // delayed start (~0.18), rises 28 px, fades from 0 → 0.7 → 0 over ~1.45 s.
+  // +N popup: delayed start (~0.18), rises 28px, triangle fade.
   const popupStyle = useAnimatedStyle(() => {
     const p = progress.value;
     if (p <= 0 || p >= 1 || snapshot.value <= 0) return { opacity: 0 };
     const start = 0.18;
     if (p < start) return { opacity: 0, transform: [{ translateY: 0 }] };
     const f = Math.min(1, (p - start) / (1 - start));
-    // Triangle fade: 0 → 0.7 at the midpoint → 0 at the end.
+    // Triangle fade: 0 → 0.7 → 0.
     const opacity = f < 0.5 ? 0.7 * (f / 0.5) : 0.7 * (1 - (f - 0.5) / 0.5);
     const translateY = -28 * f;
     return { opacity, transform: [{ translateY }] };

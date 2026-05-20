@@ -35,32 +35,16 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 
-// Grid dimensions for the inventory. Desktop is landscape (7×5) for the
-// RE5/RE6 attaché-case feel; mobile flips to portrait (5×7) so the grid
-// fits the narrower viewport without horizontal scroll. Total cells stay
-// at 35 so identical inventories fit on both shapes — items that don't
-// fit the new shape are re-placed by autoPlace.
+// Desktop landscape 7×5 / mobile portrait 5×7; total 35 cells either way.
 const GRID_DESKTOP = { cols: 7, rows: 5 } as const;
 const GRID_MOBILE = { cols: 5, rows: 7 } as const;
-// Desktop cells stay at the comfortable 64px the layout was designed around.
-// Mobile cells are shrunk to 56px so the 5-wide grid (5×56 + gaps ≈ 286px)
-// fits inside a 320px viewport's content area without triggering a horizontal
-// scrollbar — 64px overflows on the narrowest common phone widths.
+// Mobile cells shrunk to 56px so 5-wide grid fits inside 320px viewport.
 const CELL_PX_DESKTOP = 64;
 const CELL_PX_MOBILE = 56;
 
-// CSS transform applied to the inventory-card image so the sprite is zoomed
-// in and roughly centered on the actual item content. Each item PNG covers
-// the full 256×384 chibi canvas, so the item sits in a slot-specific region
-// of that canvas — we scale up and translate to bring that region into the
-// card's center. translateY is a percentage of the image height.
-//
-// Typed as Record<string, string> (not Record<ItemSlot, string>) because
-// mock items can use planned granular slots that aren't in the current
-// ItemSlot enum — e.g. HAIR_FRONT, WEAPON_BACK, CAPE. Without entries for
-// those, the lookup returns undefined and the fallback "scale(1.4)" drops
-// the translateY, leaving items (notably the hair sprite) rendered at the
-// top of their card instead of centered.
+// CSS transform for inventory-card image; sprite zoomed and centered on item content.
+// Typed as Record<string,string> because mock items use planned granular slots
+// not in the current ItemSlot enum (HAIR_FRONT, WEAPON_BACK, CAPE).
 const SLOT_TRANSFORM: Record<string, string> = {
   // ---- Legacy aliases ----
   HEAD:  "scale(1.7) translateY(22%)",
@@ -72,58 +56,41 @@ const SLOT_TRANSFORM: Record<string, string> = {
   FEET:  "scale(1.7) translateY(-22%)",
 
   // ---- Granular slots (MapleStory-style) ----
-  // Hair slots map to the same upper canvas region as HAIR.
+  // Hair slots map to same upper canvas region as HAIR.
   HAIR_FRONT: "scale(1.7) translateY(20%)",
   HAIR_BACK:  "scale(1.7) translateY(20%)",
-  // Headwear sits on the upper third — same as HEAD.
+  // Headwear sits on upper third — same as HEAD.
   HAT:  "scale(1.7) translateY(22%)",
-  // Eye accessories (glasses) and ear pieces are slightly higher than mouth.
+  // Eye/ear accessories higher than mouth.
   EYE:  "scale(1.7) translateY(14%)",
   EAR:  "scale(1.7) translateY(12%)",
-  // Body sections — same band as legacy BODY since the asset region
-  // overlaps the chibi torso.
+  // Body sections overlap chibi torso — same band as BODY.
   TOP:     "scale(1.4) translateY(-4%)",
   BOTTOM:  "scale(1.4) translateY(8%)",
   OVERALL: "scale(1.3) translateY(2%)",
-  // Outerwear extras.
-  CAPE:   "scale(1.3) translateY(0%)",
+  // Capes are two-layer; auto-centre skipped — -10% lifts combined sprite to centre.
+  CAPE:   "scale(1.3) translateY(-10%)",
   GLOVES: "scale(1.4) translateY(-6%)",
   SHOES:  "scale(1.7) translateY(-22%)",
-  // Weapons render small inside their card by default — per-asset
-  // CARD_TRANSFORM_OVERRIDE entries override with bigger scales.
+  // Weapons render small by default; per-asset CARD_TRANSFORM_OVERRIDE bigger scales.
   WEAPON_FRONT: "scale(1.4)",
   WEAPON_BACK:  "scale(1.4)",
   WRIST:  "scale(1.4) translateY(-6%)",
 };
 
-// Per-asset overrides for the inventory-card transform, keyed by filename.
-// Used as a fallback when the item doesn't carry server-computed content
-// bounds (see boundsTransformFor below). For items with bounds the
-// auto-centre math wins; this dict survives for legacy assets and the
-// static-demo mock catalogue.
+// Per-asset card-transform overrides; fallback when item has no server bounds.
 const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
-  // Legacy filename, kept in case any row still points at the old URL.
+  // Legacy filename, kept in case any row still points at it.
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(3%, -10%)",
-  // Seraph hair is drawn ~11 source pixels left of canvas center (the same
-  // shift ChibiAvatar applies via offsetX: 11 to align it with the chibi's
-  // head). The slot default has no translateX, so without this override the
-  // hair sits slightly left of card center. 2.8% on the element width, with
-  // scale(1.7) magnification, lands canvas-x 117 on the cell's centre line.
+  // Seraph hair drawn ~11 source px left of canvas center; offset matches chibi alignment.
   "hair_seraph_wave_brown.png": "scale(1.7) translate(2.8%, 20%)",
-  // Two-layer magic staff — combined content spans source y 184→328 in a
-  // 384² canvas, so its vertical midpoint sits below source centre and
-  // the slot-default scale(1.4) renders it hugging the card bottom.
-  // -16% Y lifts the combined sprite up to card centre.
+  // Two-layer magic staff: -16% Y lifts combined sprite to card centre.
   "weapon_front_magic_staff.png": "scale(1.4) translate(0%, -16%)",
 };
 
-// Class-level card transforms — applied when an item's name/category
-// includes one of these tokens (case-insensitive). Lets new uploads of
-// the same weapon family pick up the card sizing without a per-filename
-// entry. Per-filename CARD_TRANSFORM_OVERRIDE still wins when present.
+// Class-level card transforms; applied when name/category contains token.
 const CARD_CLASS_TRANSFORM: Record<string, string> = {
-  // Polearm: 2× zoom centred horizontally, lifted 12% to bring the
-  // diagonal sprite's combined-bbox centre onto the card centre.
+  // Polearm: 2× zoom, lifted 12% to centre diagonal sprite's bbox.
   polearm: "scale(2.0) translate(0%, -12%)",
 };
 
@@ -135,67 +102,20 @@ function cardClassTransform(item: AvatarItemDto): string | null {
   return null;
 }
 
-// Compute a CSS transform that translates + scales the source image so its
-// content bbox lands centred inside the card, when the server gave us
-// bounds. Returns null when any bound is missing (caller falls back to
-// slot defaults).
-//
-// Math — accounts for the fact that the image element uses
-// objectFit:contain, so when source aspect ≠ card aspect the source is
-// letterboxed inside the card box rather than filling it. The naive
-// "translate by source-relative fraction" overshoots along the
-// letterboxed axis. Two correction factors:
-//
-//   dispFracX = how much of the card's *width* the displayed source
-//               occupies (1 when source is wide-relative-to-card,
-//               sourceW/sourceH × cardH/cardW otherwise)
-//   dispFracY = same for height
-//
-// Cells are square, so cardW/cardH = gridCols/gridRows. Both default to 1
-// for plain 1×1 items.
-//
-//   - Translate: we want the bbox centre to land at the card centre.
-//     The translate amount (in px) required equals (cardCentre - bboxPre).
-//     Expressed as a CSS percentage of the card box, that simplifies to
-//     -fx × 100 × dispFracX along X (and symmetric for Y), where fx/fy
-//     are the bbox-centre-offset-from-source-centre fractions in source
-//     pixels.
-//   - Scale: we want the bbox's *displayed* extent to fill ~fillFactor of
-//     the card's limiting axis. effSrcW/effSrcH are the "effective"
-//     source dimensions after letterboxing — equal to sourceW/sourceH
-//     when aspects match, larger along the letterboxed axis otherwise.
-//     Picking min(effSrcW/bboxW, effSrcH/bboxH) gives the scale that
-//     makes the bbox fit; multiplying by fillFactor leaves padding.
-// The auto-centring math (boundsTransformFor) and the in-browser bounds
-// hook (useClientBounds) live in @/lib/cardTransform — see that module
-// for the geometric derivation. Both are imported above; this comment is
-// just a signpost for the next reader who lands here looking for the
-// transform code.
+// Auto-centring math (boundsTransformFor + useClientBounds) lives in @/lib/cardTransform.
 
-// Per-asset overrides for the *rotated* card transform. Translate happens
-// before rotate in CSS transforms, so when the polearm card is flipped 90°
-// the unrotated translate(3%, -10%) maps to a different screen direction —
-// the off-center bias of the source sprite reappears in a new corner.
-// Calibrate these values by direct feedback rather than computing from the
-// unrotated transform.
+// Per-asset rotated-card-transform overrides; translate-before-rotate means
+// unrotated values can't be reused — calibrate by direct feedback.
 const CARD_TRANSFORM_ROTATED_OVERRIDE: Record<string, string> = {
   "weapon_polearm_alien_cyber.png": "scale(2.2) translate(10%, 3%) rotate(90deg)",
 };
 
-// Class-level rotated card transforms. Same matching rule as
-// CARD_CLASS_TRANSFORM (name/category token match). Consulted when the
-// per-filename rotated override is missing and the card is in a rotated
-// orientation. Lets a whole weapon family share rotated centring without
-// per-asset tuning. Per-filename CARD_TRANSFORM_ROTATED_OVERRIDE still wins.
+// Class-level rotated-card transforms; consulted when per-filename rotated override is missing.
 const CARD_CLASS_ROTATED_TRANSFORM: Record<string, string> = {
-  // Polearm rotated to 1×2 (vertical). Combined-bbox centre at source
-  // (172, 241). After CSS rotate(90deg) clockwise (which sends (x,y) to
-  // (-y,x) in screen coords), the bbox centre that was left+below source
-  // centre lands at top+left of card centre; scale(2.0) magnifies that
-  // offset to roughly (-16px, -7px) on a 64×128 card. Pull it back to
-  // centre with translate(+25%, +5%) — positive both, applied last (so
-  // operates in post-rotate screen space).
+  // Polearm rotated 1×2: translate(+25%, +5%) pulls bbox to card centre post-rotate.
   polearm: "translate(25%, 5%) scale(2.0) rotate(90deg)",
+  // Staff rotated 1×2: combined-bbox closer to source vertical centre; +28% X, +5% Y.
+  staff: "translate(28%, 5%) scale(1.4) rotate(90deg)",
 };
 
 function cardClassRotatedTransform(item: AvatarItemDto): string | null {
@@ -206,44 +126,29 @@ function cardClassRotatedTransform(item: AvatarItemDto): string | null {
   return null;
 }
 
-// True for any slot that belongs in the hair tab. The backend currently
-// only exposes the bare "HAIR" enum, but mock items can use the planned
-// granular variants ("HAIR_FRONT", "HAIR_BACK") — without recognising
-// those, the static demo files them under the equipment tab instead.
+// True for any slot in the hair tab; backend currently only exposes bare "HAIR".
 function isHairSlot(slot: string | undefined | null): boolean {
   return slot === "HAIR" || slot === "HAIR_FRONT" || slot === "HAIR_BACK";
 }
 
-// Weapons share a single "held by the chibi" equipment group across three
-// underlying slots: the legacy HAND enum, WEAPON_FRONT (sword in hand), and
-// WEAPON_BACK (sheath / quiver on the back). Equipping any of them should
-// unequip whatever was held before, even across slots — the chibi can only
-// brandish one weapon at a time.
+// True for weapon group (HAND/WEAPON_FRONT/WEAPON_BACK); chibi only holds one weapon at a time.
 function isWeaponSlot(slot: string | undefined | null): boolean {
   return slot === "HAND" || slot === "WEAPON_FRONT" || slot === "WEAPON_BACK";
 }
 
-// Resident-Evil-style inventory: items take up a different number of grid
-// cells depending on what they are. The backend now stores gridCols/gridRows
-// per item — when set we honour those directly. Older rows without a stored
-// size fall back to a slot-based heuristic so the page still renders.
+// RE-style inventory footprint; backend stores gridCols/gridRows; legacy rows fall back to slot heuristic.
 function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   const cat = (item.category ?? "").toLowerCase();
-  // Staffs are always 2×1 in the grid — long sprite needs the horizontal
-  // footprint. Takes precedence over the persisted gridCols/gridRows so
-  // legacy rows stored as 1×1 (e.g. item 10 Magic Staff) get corrected on
-  // load without a DB migration.
+  // Staffs always 2×1; precedence over persisted gridCols/Rows for legacy rows.
   if (cat.includes("staff")) return { cols: 2, rows: 1 };
-  // Hats (both the granular HAT slot and the legacy HEAD slot they get
-  // bucketed into) are always 1×1 — overrides any persisted gridCols/Rows
-  // so a hat row stored as 2×1 doesn't take an oversized footprint.
+  // Hats (HAT and legacy HEAD) always 1×1; overrides persisted size.
   if (item.slot === "HAT" || item.slot === "HEAD") return { cols: 1, rows: 1 };
   if (item.gridCols && item.gridRows) {
     return { cols: item.gridCols, rows: item.gridRows };
   }
   switch (item.slot) {
     // Legacy slots ------------------------------------------------------
-    // (HEAD handled above — always 1×1 regardless of stored grid size.)
+    // (HEAD handled above — always 1×1.)
     case "HAIR":
     case "FACE":
     case "FEET":
@@ -254,7 +159,7 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
     case "BACK":
       return { cols: 2, rows: 1 };
     // Granular slots ----------------------------------------------------
-    // (HAT handled above — always 1×1 regardless of stored grid size.)
+    // (HAT handled above — always 1×1.)
     case "HAIR_FRONT":
     case "HAIR_BACK":
     case "EYE":
@@ -270,9 +175,7 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
       // Dress / robe — tall in inventory like RE4 body armor.
       return { cols: 1, rows: 2 };
     case "CAPE":
-      // Cloak-category capes hang straight down rather than draping wide,
-      // so they fit a 1×1 cell like an outfit. Other CAPE items (wings,
-      // pennants) keep the 2-wide footprint.
+      // Cloak-category capes hang straight down (1×1); other capes keep 2-wide.
       return cat === "cloak" ? { cols: 1, rows: 1 } : { cols: 2, rows: 1 };
     case "WEAPON_BACK":
     case "WEAPON_FRONT":
@@ -282,16 +185,9 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   }
 }
 
-// Render hints (RENDER_HINTS, CLASS_HINTS) and applyHints() live in
-// @/lib/avatarHints so every surface that renders a chibi — this page,
-// the TaskDetailModal preview via useEquippedAvatar, future surfaces —
-// resolves the same offset/cover/source defaults. See that module for
-// the precedence rules.
+// Render hints (RENDER_HINTS, CLASS_HINTS) and applyHints() live in @/lib/avatarHints.
 
-// Whitelist of URL patterns that point to real (or potentially real) assets.
-// Anything else — notably the legacy seed paths like `/assets/hats/…` — is
-// treated as a placeholder so we never issue a 404 GET for it. Add new
-// patterns here whenever a real asset source comes online.
+// Whitelist of URL patterns pointing at real assets; everything else returns 404.
 function hasRealAsset(url: string | null | undefined): boolean {
   if (!url) return false;
   return url.startsWith("https://wahaha.blob.core.windows.net/")
@@ -299,22 +195,10 @@ function hasRealAsset(url: string | null | undefined): boolean {
       || url.startsWith("data:");
 }
 
-// Step between adjacent grid cells in screen pixels — equals the cell size
-// plus the 1px gap rendered by the grid container. Used by the snap-to-grid
-// drag modifier so the dragged item jumps exactly cell-to-cell. Cell size
-// differs between desktop and mobile, so the snap step is computed inside
-// the component (see snapToGrid below) rather than living here as a module
-// constant.
-// Hysteresis fraction for the snap modifier: the dragged card only flips
-// to the next cell once the cursor has moved past 70% of the cell step
-// from the last snapped position — eliminates the back-and-forth flicker
-// when the cursor hovers near a cell boundary.
+// Hysteresis fraction for snap modifier; only flips cells past 70% of cell step.
 const SNAP_HYSTERESIS_FRACTION = 0.7;
 
-// Custom dnd-kit collision detector that snaps to the cell closest to the
-// active item's TOP-LEFT corner (rather than the cell under the cursor).
-// This makes the drop indicator follow the dragged box itself, so the user
-// doesn't have to mentally offset the cursor when placing a multi-cell item.
+// Custom dnd-kit collision detector: snaps to cell closest to TOP-LEFT corner.
 const topLeftCellCollision: CollisionDetection = ({ collisionRect, droppableContainers, droppableRects }) => {
   if (!collisionRect) return [];
   const tx = collisionRect.left;
@@ -335,11 +219,7 @@ const topLeftCellCollision: CollisionDetection = ({ collisionRect, droppableCont
   return bestId != null ? [{ id: bestId }] : [];
 };
 
-// Returns true when the rectangle (x, y, cols, rows) fits entirely inside
-// the grid AND doesn't overlap any other item in `rows`. `skipId` excludes
-// the item being moved from the collision check (so it doesn't collide
-// with itself). `rotations` is the set of inventoryIds that are currently
-// rotated 90°, swapping their cols/rows for the overlap check.
+// True when (x,y,cols,rows) fits inside grid AND doesn't overlap other items.
 function rectFits(
   rows: UserInventoryDto[],
   skipId: number | null,
@@ -367,30 +247,20 @@ function rectFits(
   return true;
 }
 
-// Assigns a position to every inventory row that doesn't already have one,
-// scanning the grid row-by-row for the first cell where the item's footprint
-// fits without colliding with already-placed items. Items that can't fit
-// stay positionless and are skipped from the grid render.
-// Whether the user can rotate (Q/E) this item while dragging it. Square
-// (1×1) footprints have nothing to flip, so rotation is a no-op for them.
+// True when user can rotate (Q/E) this item; square footprints are no-op.
 function canRotate(item: AvatarItemDto): boolean {
   const { cols, rows } = getItemSize(item);
   return cols !== rows;
 }
 
-// Effective grid footprint of an item given its current rotation state.
-// All rotatable items swap cols/rows when flipped 90°.
+// Effective grid footprint given rotation state; rotatable items swap cols/rows.
 function sizeFor(item: AvatarItemDto, rotated: boolean): { cols: number; rows: number } {
   const base = getItemSize(item);
   if (!rotated) return base;
   return { cols: base.rows, rows: base.cols };
 }
 
-// True if the row's persisted position keeps its (rotation-aware) footprint
-// inside the grid. Catches the case where an item's gridCols/gridRows was
-// changed in the backend after the position was saved — the old position
-// may now extend past the grid edge. Honours the persisted `isRotated`
-// flag so a rotated 2×1 at the right edge stays valid.
+// True if row's persisted (rotation-aware) footprint stays inside the grid.
 function hasValidPlacement(row: UserInventoryDto, gridCols: number, gridRows: number): boolean {
   if (row.positionX == null || row.positionY == null) return false;
   if (!row.avatarItem) return false;
@@ -401,12 +271,7 @@ function hasValidPlacement(row: UserInventoryDto, gridCols: number, gridRows: nu
     && row.positionY + rows <= gridRows;
 }
 
-// Convert a list of AvatarItemDto rows from the live catalog into the shape
-// the avatar page expects (UserInventoryDto). Used in demo mode so the static
-// build can reflect the actual catalogue — including blobs that the backend
-// renamed on upload — instead of a hardcoded mock with drift-prone URLs.
-// One item from each showcase slot is pre-equipped so the chibi renders
-// dressed; the rest sit in the inventory grid for the user to try.
+// Convert live catalog into demo-page inventory shape; pre-equips one item per showcase slot.
 function buildInventoryFromCatalog(items: AvatarItemDto[]): UserInventoryDto[] {
   const now = new Date().toISOString();
   const showcaseSlots: ItemSlot[][] = [
@@ -432,12 +297,7 @@ function buildInventoryFromCatalog(items: AvatarItemDto[]): UserInventoryDto[] {
   }));
 }
 
-// Demo-mode inventory loader. Tries the live catalogue endpoint first so the
-// static-export demo picks up backend renames automatically; falls back to the
-// hardcoded mock on any failure (CORS, network, app stopped, empty response).
-// Static export can't use the `/backend` dev rewrite, so this fetches the API
-// directly via NEXT_PUBLIC_API_URL — make sure backend CORS allows the
-// GitHub Pages origin or the call will fail and we'll quietly fall back.
+// Demo-mode inventory loader; tries live catalogue first, falls back to mock on failure.
 async function loadDemoInventory(): Promise<UserInventoryDto[]> {
   const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
   if (apiUrl) {
@@ -445,16 +305,12 @@ async function loadDemoInventory(): Promise<UserInventoryDto[]> {
       const res = await fetch(`${apiUrl}/api/AvatarItems?pageSize=200`);
       if (res.ok) {
         const page: PagedResult<AvatarItemDto> = await res.json();
-        // Drop legacy seed rows whose previewAssetUrl is a relative path
-        // (e.g. "/assets/outfits/cloak_adventurer.png") — those files
-        // don't exist on the static export OR on the API host, so they'd
-        // render as PaperIcon. Showing only blob-hosted items keeps the
-        // demo grid consistent.
+        // Drop legacy seed rows with relative previewAssetUrl (files don't exist).
         const items = (page.data ?? []).filter((it) => hasRealAsset(it.previewAssetUrl));
         if (items.length > 0) return buildInventoryFromCatalog(items);
       }
     } catch {
-      // Swallow — fall through to the hardcoded mock.
+      // Swallow — fall through to hardcoded mock.
     }
   }
   return buildMockInventory().map((row) => ({
@@ -464,23 +320,18 @@ async function loadDemoInventory(): Promise<UserInventoryDto[]> {
 }
 
 function autoPlace(rows: UserInventoryDto[], gridCols: number, gridRows: number): UserInventoryDto[] {
-  // Build a rotations set from the persisted `isRotated` flags so the
-  // collision check inside rectFits uses each row's actual footprint
-  // (rotated rows have swapped cols/rows).
+  // Build rotations set from persisted isRotated so rectFits uses actual footprint.
   const persistedRotations = new Set<number>(
     rows.filter((r) => r.isRotated).map((r) => r.inventoryId),
   );
-  // Strip persisted positions that no longer fit inside the grid (e.g.
-  // an item's size grew after a backend migration). Those rows fall back
-  // into the "needs placement" queue and get a fresh slot.
+  // Strip persisted positions that no longer fit (e.g. backend size grew).
   const placed: UserInventoryDto[] = rows
     .filter((r) => hasValidPlacement(r, gridCols, gridRows))
     .slice();
   const result: UserInventoryDto[] = [...placed];
   for (const row of rows) {
     if (hasValidPlacement(row, gridCols, gridRows)) continue;
-    // Re-placement honours the item's persisted rotation so a rotated
-    // polearm gets a slot that fits its rotated footprint.
+    // Re-placement honours persisted rotation so a rotated polearm gets a fitting slot.
     const size = sizeFor(row.avatarItem!, !!row.isRotated);
     let assigned: { x: number; y: number } | null = null;
     outer: for (let y = 0; y < gridRows; y++) {
@@ -504,48 +355,31 @@ export default function AvatarPage() {
   const [hasToken, setHasToken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [inventory, setInventory] = useState<UserInventoryDto[]>([]);
-  // Role flags drive the admin manage-items panel below the inventory.
-  // Both flags are false until the JWT has been read on the client, so the
-  // panel is automatically hidden during SSR and the first paint.
+  // Role flags drive admin manage-items panel; false until JWT read on client.
   const userRoles = useUserRoles();
-  // Hair has its own grid so the main inventory isn't cluttered with wigs.
-  // Position is stored per inventory row; collision checks are scoped to
-  // the active tab so hair and equipment can share the same coordinates.
+  // Hair has its own grid; position scoped per inventory row, collision per tab.
   const [activeTab, setActiveTab] = useState<"equipment" | "hair">("equipment");
-  // Inventory IDs currently rotated 90° (cols/rows swapped). Ephemeral —
-  // not persisted, so refresh resets every item to its native orientation.
-  // Toggled by Q/E while an item is being dragged.
+  // Inventory IDs currently rotated 90° (cols/rows swapped); ephemeral, not persisted.
   const [rotations, setRotations] = useState<Set<number>>(new Set());
-  // The inventoryId of the item currently being dragged, or null if no drag
-  // is active. Used to scope the Q/E keydown handler.
+  // inventoryId of dragged item, or null; scopes the Q/E keydown handler.
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
-  // Inventory IDs currently being mutated — used to disable the card mid-request.
+  // Inventory IDs currently being mutated — disables card mid-request.
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
-  // Item IDs whose preview PNG returned a non-OK response — those cards
-  // render a pixelated paper placeholder instead of the broken image.
+  // Item IDs whose preview PNG 404'd — render PaperIcon placeholder instead.
   const [failedIds, setFailedIds] = useState<Set<number>>(new Set());
   const { setError } = useToast();
   const isDesktop = useDesktopLayout();
   const { cols: gridCols, rows: gridRows } = isDesktop ? GRID_DESKTOP : GRID_MOBILE;
-  // Active cell size and derived snap step. Mobile uses a smaller cell so
-  // the grid fits inside narrow phone viewports without horizontal scroll;
-  // the snap step must follow it so drag positioning lines up cell-to-cell
-  // at the rendered size.
+  // Active cell size and derived snap step; mobile uses smaller cell.
   const cellPx = isDesktop ? CELL_PX_DESKTOP : CELL_PX_MOBILE;
   const snapStep = cellPx + 1;
   const snapHysteresis = snapStep * SNAP_HYSTERESIS_FRACTION;
 
-  // Per-viewport position caches. Each shape (desktop 7×5, mobile 5×7) keeps
-  // its own canonical layout so flipping between them never destroys the
-  // arrangement the user built on either one. The desktop cache is seeded
-  // from backend positions on first load; the mobile cache is populated on
-  // its first activation by autoPlace on top of the desktop layout — items
-  // that fit keep their (x, y), items that don't get the top-most free slot.
+  // Per-viewport position caches; flipping shapes never destroys either layout.
   const desktopPositionsRef = useRef<Map<number, { x: number; y: number; rotated: boolean }>>(new Map());
   const mobilePositionsRef = useRef<Map<number, { x: number; y: number; rotated: boolean }>>(new Map());
   const lastModeRef = useRef<"desktop" | "mobile" | null>(null);
-  // Flipped once the initial inventory load resolves so the per-mode swap
-  // effect knows it's safe to run.
+  // Flips true once initial inventory load resolves; gates the per-mode swap effect.
   const [inventoryLoaded, setInventoryLoaded] = useState(false);
 
   useEffect(() => {
@@ -553,12 +387,8 @@ export default function AvatarPage() {
     const token = !!localStorage.getItem("auth_token");
     setHasToken(token);
     if (!token) {
-      // Demo mode — try the live catalogue first so blob renames on upload
-      // surface automatically; fall back to the hardcoded mock if the API
-      // is unreachable. Positions stay null; the per-mode swap effect runs
-      // autoPlace for the active viewport and caches the result. Equip /
-      // unequip and setPosition calls below are guarded so nothing hits
-      // the backend in this mode.
+      // Demo mode — try live catalogue, fall back to hardcoded mock.
+      // Equip/unequip and setPosition guarded so nothing hits backend.
       loadDemoInventory().then((rows) => {
         setInventory(rows);
         setInventoryLoaded(true);
@@ -571,10 +401,7 @@ export default function AvatarPage() {
       const rows = (data?.data ?? [])
         .filter((row) => row.avatarItem?.previewAssetUrl)
         .map((row) => ({ ...row, avatarItem: applyHints(row.avatarItem!) }));
-      // Seed BOTH caches from the persisted backend positions so the swap
-      // effect can treat the caches as the source of truth uniformly. The
-      // backend stores desktop and mobile placements in separate columns
-      // because the grid shapes (7×5 vs 5×7) can't share one position pair.
+      // Seed BOTH caches from persisted backend positions; desktop/mobile stored separately.
       for (const row of rows) {
         if (row.positionX != null && row.positionY != null) {
           desktopPositionsRef.current.set(row.inventoryId, {
@@ -594,26 +421,20 @@ export default function AvatarPage() {
     });
   }, [setError]);
 
-  // Per-mode swap. Fires when the viewport flips (or on first inventory
-  // load). Snapshots the outgoing layout into its cache, then restores the
-  // incoming layout from its cache and runs autoPlace for anything missing.
-  // Newly-assigned desktop positions are persisted to the backend so the
-  // user's first-ever layout sticks across reloads; mobile is session-only.
+  // Per-mode swap on viewport flip; snapshots outgoing, restores incoming, autoPlace fills gaps.
+  // Newly-assigned desktop positions persist to backend; mobile is session-only.
   useEffect(() => {
     if (!inventoryLoaded) return;
     const mode: "desktop" | "mobile" = isDesktop ? "desktop" : "mobile";
     const previousMode = lastModeRef.current;
     if (previousMode === mode) return;
-    // Update the ref now so any concurrent reads (e.g. the sync-cache effect
-    // firing on the resulting setInventory) target the new mode's cache.
+    // Update ref now so concurrent reads target the new mode's cache.
     lastModeRef.current = mode;
 
     setInventory((prev) => {
       if (prev.length === 0) return prev;
 
-      // 1. Snapshot the rendered positions into the OUTGOING cache so the
-      //    user's edits on the previous viewport are preserved when they
-      //    flip back.
+      // 1. Snapshot rendered positions into OUTGOING cache.
       const outgoing = previousMode === "desktop"
         ? desktopPositionsRef.current
         : previousMode === "mobile"
@@ -629,8 +450,7 @@ export default function AvatarPage() {
         }
       }
 
-      // 2. Restore each row's position from the INCOMING cache; items with
-      //    no cached entry fall through to autoPlace below.
+      // 2. Restore each row's position from INCOMING cache; missing rows fall through to autoPlace.
       const incoming = mode === "desktop" ? desktopPositionsRef.current : mobilePositionsRef.current;
       const seeded = prev.map((r) => {
         const c = incoming.get(r.inventoryId);
@@ -648,10 +468,7 @@ export default function AvatarPage() {
         ...autoPlace(hairRows, targetCols, targetRows),
       ];
 
-      // 4. Write back to the incoming cache so future flips restore exactly
-      //    this layout, and record which items got brand-new positions —
-      //    those are persisted to the backend column matching the current
-      //    mode (desktop → positionX/Y, mobile → positionXMobile/YMobile).
+      // 4. Write back to incoming cache; persist newly-assigned positions to backend column for current mode.
       const newlyAssigned: Array<{ id: number; x: number; y: number; rotated: boolean }> = [];
       for (const r of placed) {
         if (r.positionX == null || r.positionY == null) continue;
@@ -668,17 +485,14 @@ export default function AvatarPage() {
         }
       }
 
-      // 5. Sync the rotation Set so the keyboard handler stays in lockstep
-      //    with the rendered orientation.
+      // 5. Sync rotations Set so keyboard handler stays in lockstep with rendered orientation.
       setRotations(new Set(placed.filter((r) => r.isRotated).map((r) => r.inventoryId)));
 
       return placed;
     });
   }, [isDesktop, inventoryLoaded, hasToken]);
 
-  // Keep the active mode's cache in sync on every inventory change (drag,
-  // rotate, equip won't touch position). Without this, edits made between
-  // viewport flips would be lost when the swap effect reads the cache.
+  // Keep active mode's cache in sync on every inventory change (drag/rotate; equip won't touch position).
   useEffect(() => {
     if (!inventoryLoaded || lastModeRef.current === null) return;
     const cache = lastModeRef.current === "desktop" ? desktopPositionsRef.current : mobilePositionsRef.current;
@@ -691,24 +505,19 @@ export default function AvatarPage() {
     }
   }, [inventory, inventoryLoaded]);
 
-  // The chibi only renders items that are flagged equipped.
+  // The chibi only renders items flagged equipped.
   const equipped = useMemo(
     () => inventory.filter((inv) => inv.isEquipped),
     [inventory],
   );
 
-  // Share equipped with the TaskDetailModal cache — the modal pulls
-  // through useEquippedAvatar(), which would otherwise fetch its own
-  // copy from /api/UserInventory/equipped on first open. Priming here
-  // means once the user has loaded /avatar, the modal opens with the
-  // chibi already populated, no fetch flicker.
+  // Share equipped with TaskDetailModal cache via primeEquippedAvatarCache.
   useEffect(() => {
     if (!hasToken) return;
     primeEquippedAvatarCache(equipped);
   }, [equipped, hasToken]);
 
-  // Items in the currently-visible tab. The grid render and the inventory
-  // count both key off this so hair is hidden until the user switches tabs.
+  // Items in currently-visible tab; hair hidden until user switches tabs.
   const visibleInventory = useMemo(
     () => inventory.filter((inv) =>
       activeTab === "hair"
@@ -718,18 +527,13 @@ export default function AvatarPage() {
     [inventory, activeTab],
   );
 
-  // dnd-kit sensors — small activation distance so a click doesn't get
-  // misread as a drag. Touch starts on a 150ms long-press so iOS doesn't
-  // hijack a tap into a drag.
+  // dnd-kit sensors — small activation distance so click isn't read as drag.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
   );
 
-  // Last snapped (x, y) the dragged card was rendered at, in drag-delta
-  // pixels. Carried across pointer moves to add hysteresis to the snap
-  // modifier so the card doesn't flicker between two cells when the
-  // cursor hovers near a boundary. Reset on every drag start.
+  // Last snapped (x,y) in drag-delta px; carries across moves for hysteresis.
   const lastSnapRef = useRef({ x: 0, y: 0 });
   const snapToGrid = useCallback<Modifier>(({ transform }) => {
     const last = lastSnapRef.current;
@@ -741,9 +545,7 @@ export default function AvatarPage() {
     if (Math.abs(transform.y - last.y) >= snapHysteresis) {
       y = Math.round(transform.y / snapStep) * snapStep;
     }
-    // Clamp the snap within the grid so the dragged box can't translate
-    // outside the inventory bounds. Uses the moving item's current position
-    // and (rotation-aware) size to compute the allowed delta range.
+    // Clamp snap inside grid so dragged box can't translate outside bounds.
     if (activeDragId != null) {
       const moving = inventory.find((r) => r.inventoryId === activeDragId);
       if (
@@ -780,7 +582,7 @@ export default function AvatarPage() {
     const invId = event.active.id;
     const overId = event.over?.id;
     if (typeof invId !== "number" || typeof overId !== "string") return;
-    // Drop targets are keyed as "cell-{x}-{y}".
+    // Drop targets keyed as "cell-{x}-{y}".
     const match = /^cell-(\d+)-(\d+)$/.exec(overId);
     if (!match) return;
     const x = Number(match[1]);
@@ -788,8 +590,7 @@ export default function AvatarPage() {
     const moving = inventory.find((r) => r.inventoryId === invId);
     if (!moving?.avatarItem) return;
     const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(invId));
-    // Only collide against items in the same tab — hair items share grid
-    // coordinates with equipment but live in a separate view.
+    // Only collide against same-tab items; hair shares coords with equipment.
     const movingIsHair = isHairSlot(moving.avatarItem.slot);
     const sameTab = inventory.filter((r) => isHairSlot(r.avatarItem?.slot) === movingIsHair);
     if (!rectFits(sameTab, invId, x, y, cols, rows, rotations, gridCols, gridRows)) return;
@@ -798,39 +599,25 @@ export default function AvatarPage() {
     setInventory((prev) => prev.map((row) =>
       row.inventoryId === invId ? { ...row, positionX: x, positionY: y, isRotated: rotated } : row));
     if (!hasToken) return;
-    // Persist to the column that matches the active grid shape. The backend
-    // keeps separate desktop / mobile placement columns so flipping viewports
-    // (or using the RN app) doesn't clobber the other surface's layout.
+    // Persist to column matching active grid shape; backend keeps desktop/mobile separate.
     avatarApi.setPosition(invId, x, y, rotated, isDesktop ? "desktop" : "mobile").then(({ error }) => {
       if (error) setError(error);
     });
   }, [inventory, rotations, setError, gridCols, gridRows, hasToken, isDesktop]);
 
-  // Q/E toggles rotation on the item currently being dragged. The handler is
-  // installed only while a drag is active so the keys behave normally when
-  // the user isn't interacting with the grid. Each toggle persists immediately
-  // so a cancelled drag still keeps the new orientation.
+  // Q/E toggles rotation on dragged item; handler installed only during active drag.
   useEffect(() => {
     if (activeDragId == null) return;
     const dragging = inventory.find((r) => r.inventoryId === activeDragId);
-    // Skip the listener entirely for items that can't rotate — 1×1
-    // footprints and BODY-slot (sweater/torso) items keep their shape.
+    // Skip listener for items that can't rotate (1×1 and BODY).
     if (!dragging?.avatarItem || !canRotate(dragging.avatarItem)) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "q" && e.key !== "Q" && e.key !== "e" && e.key !== "E") return;
-      // Browser fires keydown repeatedly while a key is held (~30Hz). Each
-      // repeat would toggle rotation again, so the box flickers between
-      // shapes and lands wherever the last fire happens to be. Only respond
-      // to the first event per physical press.
+      // Browser fires keydown repeatedly while held (~30Hz); respond only once per physical press.
       if (e.repeat) return;
       e.preventDefault();
       const newRotated = !rotations.has(activeDragId);
-      // Compute the rotated footprint and clamp positionX/Y so the box
-      // can't extend past the grid bounds. Without this, rotating e.g. a
-      // 1×2 item at the rightmost column into a 2×1 footprint leaves the
-      // card hanging off the right edge until the user drops it
-      // somewhere else. Clamping here keeps the box inside the grid as
-      // soon as the rotation key is hit.
+      // Compute rotated footprint and clamp positionX/Y inside grid bounds.
       const newSize = sizeFor(dragging.avatarItem!, newRotated);
       const curX = dragging.positionX ?? 0;
       const curY = dragging.positionY ?? 0;
@@ -847,10 +634,7 @@ export default function AvatarPage() {
           ? { ...r, isRotated: newRotated, positionX: clampedX, positionY: clampedY }
           : r));
       if (!hasToken) return;
-      // Fire-and-forget — keeps the rotation pinned (and the clamped
-      // position persisted) even if the user releases the mouse outside
-      // the grid (drag-cancel). Layout selects which placement column we
-      // write to so mobile / desktop don't overwrite each other.
+      // Fire-and-forget; keeps rotation pinned even on drag-cancel.
       avatarApi.setPosition(activeDragId, clampedX, clampedY, newRotated, isDesktop ? "desktop" : "mobile");
     };
     document.addEventListener("keydown", onKey);
@@ -870,11 +654,8 @@ export default function AvatarPage() {
           row.inventoryId === inv.inventoryId ? { ...row, isEquipped: false } : row));
       } else {
         const slot = inv.avatarItem?.slot;
-        // Cross-slot weapon group: equipping any HAND / WEAPON_FRONT /
-        // WEAPON_BACK item should unequip every other weapon, not just
-        // same-slot duplicates (which the backend's equip call already
-        // handles). Identify the rows to unequip first so we can fire the
-        // backend calls before the local optimistic update.
+        // Cross-slot weapon group: equipping any HAND/WEAPON_FRONT/WEAPON_BACK
+        // unequips every other weapon, not just same-slot duplicates.
         const crossWeaponRows = isWeaponSlot(slot)
           ? inventory.filter((row) =>
               row.isEquipped
@@ -883,8 +664,7 @@ export default function AvatarPage() {
               && row.avatarItem?.slot !== slot)
           : [];
         if (hasToken) {
-          // Unequip the other weapons sequentially so a 5xx on one doesn't
-          // leave the rest in a half-applied state.
+          // Sequential unequip so 5xx on one doesn't leave the rest half-applied.
           for (const row of crossWeaponRows) {
             const { error } = await avatarApi.unequip(row.inventoryId);
             if (error) { setError(error); return; }
@@ -892,9 +672,7 @@ export default function AvatarPage() {
           const { error } = await avatarApi.equip(inv.inventoryId);
           if (error) { setError(error); return; }
         }
-        // Mirror locally: flip this row on, and turn off any same-slot
-        // duplicate (backend rule) plus any cross-weapon-group row we
-        // just unequipped via the API.
+        // Mirror locally: flip this on; turn off same-slot dup and cross-weapon rows.
         const droppedIds = new Set(crossWeaponRows.map((r) => r.inventoryId));
         setInventory((prev) => prev.map((row) => {
           if (row.inventoryId === inv.inventoryId) return { ...row, isEquipped: true };
@@ -903,9 +681,7 @@ export default function AvatarPage() {
           return row;
         }));
       }
-      // Equip state changed — drop the equipped-items cache so the next
-      // TaskDetailModal open re-fetches and shows the same chibi the
-      // /avatar page is currently displaying.
+      // Equip changed — drop modal cache so next open re-fetches.
       clearEquippedAvatarCache();
     } finally {
       setBusyIds((prev) => {
@@ -943,21 +719,17 @@ export default function AvatarPage() {
 
         {!hasToken && <DemoModeBanner className="" />}
 
-        {/* Two-column split on desktop, stacked column on mobile. The flex
-            wrapper switches direction at the 880px breakpoint. */}
+        {/* Two-column split on desktop, stacked on mobile */}
         <div
           style={{
             display: "flex",
             flexDirection: isDesktop ? "row" : "column",
-            // 60px on desktop gives the chibi's right-side overhang
-            // (which can carry up to 96 displayed pixels of weapon tip
-            // past the layout width of the section) clear visual space
-            // before the inventory grid's bright hairline border begins.
+            // 60px gap on desktop gives chibi's right-side overhang clear space.
             gap: isDesktop ? 60 : 20,
             alignItems: isDesktop ? "flex-start" : "stretch",
           }}
         >
-        {/* Preview — chibi floats directly on the page background, no frame. */}
+        {/* Preview — chibi floats directly on page background, no frame */}
         <section
           className="flex flex-col items-center justify-center"
           style={{
@@ -974,10 +746,7 @@ export default function AvatarPage() {
           </p>
         </section>
 
-        {/* Inventory grid — only items the user owns. Click to equip/unequip.
-            On mobile the section's children (header, tab strip, grid wrapper)
-            are centred on the cross-axis so the tab buttons sit directly
-            above the centred grid instead of hugging the left edge. */}
+        {/* Inventory grid — only items the user owns; click to equip/unequip */}
         <section
           className="flex flex-col gap-3"
           style={{
@@ -1013,9 +782,7 @@ export default function AvatarPage() {
                       textTransform: "uppercase",
                       fontWeight: 600,
                       borderRadius: 0,
-                      // RE4-style flat tab: bright hairline border, very
-                      // dark transparent fill when active; muted text when
-                      // inactive.
+                      // RE4-style flat tab.
                       border: "1px solid rgba(220, 230, 235, 0.55)",
                       background: active ? "rgba(40, 44, 48, 0.85)" : "rgba(20, 22, 24, 0.55)",
                       color: active ? "rgba(235, 240, 245, 0.95)" : "rgba(170, 180, 185, 0.6)",
@@ -1044,27 +811,10 @@ export default function AvatarPage() {
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDragCancel={onDragCancel}
-              // dnd-kit's default auto-scroll engages whenever the dragged
-              // item's rect approaches the edge of any scrollable ancestor
-              // — on mobile the page itself is taller than the viewport,
-              // so dragging a card downward toward the thumb-rest area
-              // makes the whole page scroll uncontrollably. The grid fits
-              // entirely in view and never needs scrolling during a drag,
-              // so we opt out completely.
+              // Opt out of auto-scroll; grid fits viewport, prevents mobile page-scroll on drag.
               autoScroll={false}
             >
-              {/* Horizontally scrollable as a defense if a future shape
-                  exceeds the content area. With the current 7×5 / 5×7
-                  layouts no scroll is needed. data-edge-drawer-block opts
-                  the inventory grid out of MobileEdgeDrawer's right-swipe
-                  open gesture — without it, dragging an item rightward
-                  on mobile both moves the card AND pulls open the nav
-                  drawer. Desktop keeps the -8px negative margin so the
-                  grid's left edge can sit flush with the tab strip; mobile
-                  drops it and the horizontal padding so the wrapper's
-                  intrinsic width equals the grid's, which lets the parent
-                  section's align-items:center centre everything cleanly
-                  without producing an overflow scrollbar. */}
+              {/* data-edge-drawer-block opts grid out of MobileEdgeDrawer's right-swipe open */}
               <div
                 data-edge-drawer-block
                 style={{
@@ -1077,9 +827,7 @@ export default function AvatarPage() {
               <div
                 style={{
                   padding: 1,
-                  // RE4-style: very dark transparent grid background with a
-                  // bright hairline outer border — almost monochrome, no
-                  // blue tint.
+                  // RE4-style: dark transparent grid with bright hairline border.
                   background: "rgba(200, 210, 215, 0.18)",
                   border: "1px solid rgba(220, 230, 235, 0.6)",
                   borderRadius: 0,
@@ -1088,16 +836,11 @@ export default function AvatarPage() {
                   gridTemplateRows: `repeat(${gridRows}, ${cellPx}px)`,
                   gap: 1,
                   width: "fit-content",
-                  // Desktop: left-aligned so the grid's left edge lines up
-                  // with the tab strip's leftmost tab. Mobile: horizontally
-                  // centred in the page so the narrower 5×7 grid sits in
-                  // the middle of the screen rather than hugging the left.
+                  // Desktop left-aligned; mobile centred via margin auto.
                   margin: isDesktop ? 0 : "0 auto",
                 }}
               >
-                {/* Drop-target underlay — every cell is a droppable so the
-                    user can release an item anywhere on the grid. Items
-                    render on top via gridColumnStart/gridRowStart. */}
+                {/* Drop-target underlay — every cell droppable; items render on top via gridColumnStart */}
                 {Array.from({ length: gridCols * gridRows }).map((_, i) => {
                   const x = i % gridCols;
                   const y = Math.floor(i / gridCols);
@@ -1130,10 +873,7 @@ export default function AvatarPage() {
         </section>
         </div>
 
-        {/* Admin manage-items panel. Hidden entirely for users without the
-            Admin/Moderator role; the JWT has to have already been read on
-            the client (userRoles.ready) before we mount anything so the
-            first paint matches the SSR HTML. */}
+        {/* Admin manage-items panel; hidden until JWT read so SSR matches first paint */}
         {userRoles.ready && userRoles.canManageAvatarItems && (
           <AvatarAdminPanel
             isAdmin={userRoles.isAdmin}
@@ -1145,9 +885,7 @@ export default function AvatarPage() {
   );
 }
 
-// Single empty grid cell. dnd-kit treats it as a drop target keyed by
-// `cell-{x}-{y}`. The cell visually fills the grid slot at (x, y) with the
-// recessed-pocket look from the original RE-style design.
+// Single empty grid cell; dnd-kit drop target keyed `cell-{x}-{y}`.
 function DropCell({ x, y }: { x: number; y: number }) {
   const { setNodeRef } = useDroppable({ id: `cell-${x}-${y}` });
   return (
@@ -1156,8 +894,7 @@ function DropCell({ x, y }: { x: number; y: number }) {
       style={{
         gridColumnStart: x + 1,
         gridRowStart: y + 1,
-        // Desaturated dark fill with a soft inner vignette — matches the
-        // RE4-style attaché-case pocket look.
+        // Desaturated dark fill with inner vignette — RE4 attaché-case pocket look.
         background: "rgba(28, 30, 32, 0.65)",
         boxShadow: "inset 0 0 18px rgba(0, 0, 0, 0.55)",
       }}
@@ -1175,22 +912,16 @@ interface DraggableItemProps {
   onImageError: (itemId: number) => void;
 }
 
-// Single inventory card. Drag handles come from dnd-kit's useDraggable. The
-// card is rendered ON TOP of the drop-cell underlay using explicit
-// gridColumnStart / gridRowStart from inv.positionX / inv.positionY.
+// Single inventory card; renders ON TOP of drop-cell underlay via explicit grid placement.
 function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImageError }: DraggableItemProps) {
   const item = inv.avatarItem!;
-  // Effective footprint — accounts for rotation, except BODY items which
-  // keep their native shape so the box doesn't morph on Q/E.
+  // Effective footprint — rotation-aware, except BODY items keep native shape.
   const size = sizeFor(item, rotated);
   const isEquipped = inv.isEquipped;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inv.inventoryId,
   });
-  // Run the alpha-scan client-side so the card centres even when the row
-  // doesn't have server-stored bounds yet (legacy uploads, URL registers
-  // from an older build). The result is cached per URL, so a re-render
-  // doesn't re-scan. Null while loading or when the scan can't run.
+  // Run alpha-scan client-side so card centres even when row has no server bounds.
   const clientBounds = useClientBounds(
     item.previewAssetUrl ? assetPath(item.previewAssetUrl) : null,
   );
@@ -1202,9 +933,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
       onClick={() => { if (!isDragging) onCardClick(inv); }}
       disabled={busy}
       title={item.description ?? item.name}
-      // Drop the `re-cell` class while dragging so its `:hover` rule (which
-      // forces a blue background via !important) can never match. The
-      // `is-dragging` class pins the yellow look on its own.
+      // Drop `re-cell` while dragging so :hover can't override; `is-dragging` pins yellow look.
       className={isDragging ? "is-dragging" : "re-cell"}
       style={{
         gridColumnStart: (inv.positionX ?? 0) + 1,
@@ -1224,9 +953,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
         border: "none",
         padding: 0,
         cursor: busy ? "wait" : (isDragging ? "grabbing" : "grab"),
-        // Dim non-dragged cards while a drag is in progress so the yellow
-        // dragged item is unambiguous even when the cursor hovers over a
-        // different equipped (blue) card after the snap.
+        // Dim non-dragged cards while drag in progress so yellow dragged card is unambiguous.
         opacity: busy ? 0.5 : dimmed ? 0.35 : 1,
         overflow: "hidden",
         display: "flex",
@@ -1241,20 +968,12 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
       {...attributes}
     >
       {hasRealAsset(item.previewAssetUrl) && !failed ? (() => {
-        // Resolve the shared transform once — both layers (primary +
-        // optional secondary) are drawn on the same source canvas at the
-        // same anchor, so they share the bbox-derived translate/scale.
-        // Pass the un-rotated card footprint (getItemSize, not the
-        // rotation-aware `size`) so the math centres against the actual
-        // rendered box even when the frontend has overridden the item's
-        // persisted gridCols/gridRows (e.g. staffs forced to 2×1).
+        // Resolve shared transform once; both layers share bbox-derived translate/scale.
+        // Pass un-rotated card footprint (getItemSize, not rotation-aware `size`) so
+        // math centres against actual rendered box.
         const filename = item.previewAssetUrl?.split("/").pop() ?? "";
         const cardSize = getItemSize(item);
-        // For two-layer items, the primary's bbox doesn't represent the
-        // combined visual — auto-centring against it pushes the secondary
-        // off-frame and over-scales the primary. Fall through to the slot
-        // default (or per-asset override) so both layers stay coherent;
-        // hand-tune via CARD_TRANSFORM_OVERRIDE if a specific item needs it.
+        // Two-layer items: primary bbox doesn't represent combined visual; skip auto-centre.
         const isTwoLayer = !!item.secondaryAssetUrl && hasRealAsset(item.secondaryAssetUrl);
         const autoBounds = isTwoLayer
           ? null
@@ -1275,10 +994,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
           return `${scale} rotate(90deg)`;
         })();
         const hasSecondary = item.secondaryAssetUrl && hasRealAsset(item.secondaryAssetUrl);
-        // Secondary's z-order on the card mirrors ChibiAvatar:
-        //   CAPE         primary = back panel    → secondary in FRONT
-        //   HAIR_FRONT   primary = bangs         → secondary BEHIND
-        //   WEAPON_FRONT primary = front weapon  → secondary BEHIND
+        // Secondary z-order mirrors ChibiAvatar: CAPE primary=back→secondary front; HAIR/WEAPON_FRONT primary=front→secondary behind.
         const secondaryInFront = item.slot === "CAPE";
         const layerStyle = (z: number): React.CSSProperties => ({
           position: "absolute",
@@ -1344,8 +1060,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
             width: 6,
             height: 6,
             borderRadius: "50%",
-            // Small bright accent on equipped cards — RE4 uses subdued
-            // off-white markers on owned items.
+            // Small bright accent on equipped cards; RE4-style off-white marker.
             background: "rgba(235, 240, 245, 0.95)",
             boxShadow: "0 0 5px rgba(235, 240, 245, 0.7)",
           }}
@@ -1355,10 +1070,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
   );
 }
 
-// Pixel-art "document" silhouette used as a fallback when an item's preview
-// PNG fails to load. Sized to fit its parent — both width and height are
-// 60% so the icon sits centered with a little padding inside the card's
-// image area. Tinted via currentColor so it picks up the muted foreground.
+// Pixel-art "document" silhouette fallback when item's preview PNG fails to load.
 function PaperIcon() {
   return (
     <svg
@@ -1369,7 +1081,7 @@ function PaperIcon() {
       fill="var(--color-fg-muted)"
       style={{ imageRendering: "pixelated" }}
     >
-      {/* Top edge — stops short so the folded corner can fit */}
+      {/* Top edge — stops short so folded corner fits */}
       <rect x="1" y="1" width="6" height="1" />
       {/* Folded corner */}
       <rect x="7" y="1" width="1" height="2" />

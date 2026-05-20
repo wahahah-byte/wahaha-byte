@@ -1,13 +1,8 @@
 import { Image } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 
-// Mirrors apps/web/src/lib/categoryIcons.tsx — PNG icons preferred (bundled
-// from apps/web/public/icons/ via Metro's static-asset pipeline), pixel-grid
-// SVG fallback for categories without a PNG.
-//
-// PNG asset map. Filenames don't always match the category name verbatim
-// (e.g. Learning ↔ Learn.png), so this map is authoritative. require() statements
-// are inlined so Metro can statically resolve the bundle paths.
+// Mirrors web categoryIcons: PNG preferred, pixel-grid SVG fallback.
+// PNG asset map — filenames don't always match category name (e.g. Learning ↔ Learn.png).
 const ICON_PNG: Record<string, number> = {
   Career: require("../assets/icons/Careers.png"),
   Design: require("../assets/icons/Design.png"),

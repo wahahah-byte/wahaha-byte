@@ -12,39 +12,18 @@ interface Props {
   value: string;
   options: InlineChipOption[];
   onChange: (next: string) => void;
-  /** Whether the dropdown overlay is rendered. Parent owns this state so it
-   *  can coordinate which chip's dropdown is open at any time. */
+  // Parent-owned open state for cross-chip coordination.
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Optional override for the chip label (e.g. "Today" instead of "today"). */
+  // Optional chip-label override.
   triggerLabel?: string;
-  /** Called when the chip's layout (within the chip row) is measured. Lets
-   *  parents that lift the dropdown out of the bar position it precisely
-   *  above the chip — `y` is the chip's top within its parent flex row,
-   *  which matters once the row wraps (chips on lower rows have larger y).
-   *  See new-task.tsx for the consumer. */
+  // Layout callback for parents that lift dropdown out of the bar.
   onChipLayout?: (rect: { x: number; y: number; width: number; height: number }) => void;
-  /** When set, the inline dropdown is NOT rendered by this component. The
-   *  parent is responsible for rendering it at root level (Portal-style).
-   *  Why: on Android, a child rendered with `position: absolute` that
-   *  extends past its parent's bounds doesn't receive touches in the
-   *  outside-parent area, even though it's visually painted there. Nesting
-   *  the dropdown inside the bar made the upper rows of the option list
-   *  un-scrollable (the swipe-up gesture passed into territory outside the
-   *  bar's hit area and was dropped). Lifting it out of the bar gives the
-   *  dropdown its own hit-test bounds. */
+  // When set, parent renders dropdown at root (Android hit-test workaround).
   detachedDropdown?: boolean;
 }
 
-// Pill chip + inline dropdown overlay. Unlike CompactSelect/DatePicker the
-// dropdown is NOT a React Native <Modal> — it's an absolutely-positioned
-// View that opens upward from the trigger. Avoiding <Modal> is the entire
-// point: <Modal> blurs whatever TextInput currently has focus, dismissing
-// the keyboard. The inline overlay leaves focus alone, so the new-task
-// bar's keyboard stays up while the user fiddles with chips.
-//
-// "Tap outside to close" is handled by the caller via openChip state: tap
-// on another chip switches the open one; tap on the dim backdrop closes it.
+// Pill chip + inline upward-opening dropdown — avoids <Modal> so keyboard stays.
 export function InlineChipDropdown({
   value,
   options,
@@ -123,9 +102,7 @@ export function InlineChipDropdown({
   );
 }
 
-// The actual option list — shared between the inline-rendered version and
-// the portal-rendered version exposed below. Extracted so both surfaces
-// stay visually identical.
+// Option list shared between inline and portal renderers.
 export function InlineDropdownBody({
   options,
   value,
@@ -138,8 +115,7 @@ export function InlineDropdownBody({
   const c = useColors();
   return (
     <ScrollView
-      // keyboardShouldPersistTaps='always' so taps on options don't first
-      // dismiss the keyboard and only then trigger selection.
+      // persistTaps=always so option taps don't dismiss keyboard first.
       style={{ maxHeight: 220 }}
       keyboardShouldPersistTaps="always"
       nestedScrollEnabled
@@ -181,13 +157,7 @@ export const inlineChipDropdownStyles = StyleSheet.create({
     borderRadius: 4,
     overflow: "hidden",
     boxShadow: "0px 6px 18px rgba(0, 0, 0, 0.35)",
-    // Must be higher than the new-task bar's elevation (18). On Android,
-    // touch hit-testing prefers the View with the higher elevation, even
-    // when the lower-elevation View is rendered later in the tree. With
-    // dropdown < bar elevation, the bar intercepted any touch that landed
-    // in the bar's screen area (which the dropdown extends over), so
-    // dropdown scroll only worked above the bar's top edge. zIndex
-    // mirrors the same intent on iOS / web.
+    // Higher elevation than bar (18) so Android hit-test prefers dropdown.
     elevation: 32,
     zIndex: 32,
   },
@@ -204,8 +174,7 @@ const styles = StyleSheet.create({
   },
   dropdown: {
     position: "absolute",
-    // Opens upward — the new-task bar lives at the bottom of the screen,
-    // so the area above the chip is empty backdrop and a good drop zone.
+    // Opens upward — bar lives at bottom, so above is empty backdrop.
     bottom: "100%",
     left: 0,
     marginBottom: 6,

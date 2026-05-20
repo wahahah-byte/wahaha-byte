@@ -15,10 +15,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
 
-// Mobile sign-in screen. Mirrors the web /login page's layout: centered card
-// with email + password, error toast above the form, and a "Register" link.
-// Auth state lives in AsyncStorage; (tabs)/_layout redirects here whenever
-// `getToken()` returns null.
+// Mobile sign-in screen — mirrors web /login layout.
 export default function LoginScreen() {
   const c = useColors();
 

@@ -7,8 +7,7 @@ interface Props {
   longestStreakCount?: number;
 }
 
-// Segmented pixel bar showing progress to the next streak tier. Renders
-// nothing until the user is at least 3 days deep (the first tier threshold).
+// Segmented progress bar to next streak tier; hidden until streak >= 3.
 export default function StreakDisplay({ currentStreakCount, longestStreakCount }: Props) {
   const c = currentStreakCount ?? 0;
   if (c < 3) return null;

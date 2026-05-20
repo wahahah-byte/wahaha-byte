@@ -5,12 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
-// Shown to unauthenticated users so they know their changes only live in
-// memory until they sign in. Mirrors web's DemoModeBanner copy + visual: a
-// thin highlight-tinted strip with a Sign-in CTA on the right. We sit at the
-// very top of the screen, so the bar pushes itself below the status bar via
-// the safe-area inset (Android edge-to-edge mode means the screen extends
-// behind the status bar by default).
+// Demo banner for unauthenticated users — sits below status bar via safe inset.
 export function DemoModeBanner() {
   const c = useColors();
   const insets = useSafeAreaInsets();

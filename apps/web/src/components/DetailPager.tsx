@@ -10,17 +10,14 @@ interface Card {
 interface Props {
   cards: Card[];
   height?: number;
-  // Optional left-right card labels for accessibility (announced to screen readers).
+  // Optional card labels for a11y.
   labels?: string[];
 }
 
 const SWIPE_COMMIT_PX = 56;
 const AXIS_DEADZONE = 8;
 
-// Two-card horizontal swipe pager used inside the task detail modal.
-// Designed to feel native: lock-to-axis early so vertical scroll inside the
-// modal still works, soft-cap rubber-banding past the edges, and small dots
-// for the activity indicator (no chrome above the cards themselves).
+// Horizontal swipe pager for the detail modal.
 export default function DetailPager({ cards, height = 220, labels }: Props) {
   const [active, setActive] = useState(0);
   const [dragX, setDragX] = useState(0);
@@ -56,7 +53,7 @@ export default function DetailPager({ cards, height = 220, labels }: Props) {
     if (d.locked === "h") {
       const atStart = active === 0;
       const atEnd = active === cards.length - 1;
-      // Rubber-band past the boundary cards so the user feels the edge.
+      // Rubber-band past the boundary cards.
       const min = atEnd ? -d.w * 0.15 : -d.w;
       const max = atStart ? d.w * 0.15 : d.w;
       const clamped = Math.max(min, Math.min(max, dx));
@@ -114,9 +111,7 @@ export default function DetailPager({ cards, height = 220, labels }: Props) {
         </div>
       </div>
 
-      {/* Labeled tab strip — replaces the old dot indicator so the targets
-          are big enough to click on desktop while still giving mobile a
-          visible "where am I" cue alongside swipe. */}
+      {/* Labeled tab strip */}
       <div
         className="flex justify-center"
         role="tablist"

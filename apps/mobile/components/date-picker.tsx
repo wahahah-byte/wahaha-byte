@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -25,10 +26,7 @@ const MONTHS = [
 ];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Months rendered around the strip's reference: ±RANGE. 13 months total.
-// User can swipe ±RANGE months freely with no re-render of the day-grid
-// strip and therefore no flicker. The year picker is the path for jumps
-// larger than this — it re-anchors the strip in one explicit user action.
+// ±RANGE months around reference (13 total); year picker re-anchors for jumps.
 const RANGE = 6;
 
 const SHEET_OPEN_MS = 220;
@@ -39,15 +37,13 @@ const DISMISS_VELOCITY = 1400;
 interface Props {
   value: Date | null;
   onChange: (next: Date | null) => void;
-  /** Pill-shaped chip styling (used in the new-task quick-add bar). */
+  // Pill-shaped chip styling for new-task quick-add bar.
   compact?: boolean;
-  /** Override the trigger label (e.g. "Today", "Tmrw"). */
+  // Override trigger label.
   triggerLabel?: string;
-  /** Placeholder shown when no date is selected. */
+  // Placeholder when no date selected.
   placeholder?: string;
-  /** Fires whenever the picker modal opens or closes. Lets the host fade
-   *  its own UI so the keyboard-down / sheet-up sequence reads as a single
-   *  smooth handoff instead of two competing animations. */
+  // Fires on open/close so host can fade its UI for smooth handoff.
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -76,18 +72,16 @@ function buildMonth(month: number, year: number): MonthData {
   return { month, year, cells };
 }
 
+// Sheet padding; derives strip width from screenW for first-commit render.
+const SHEET_H_PADDING = 12;
+
 export function DatePicker({ value, onChange, compact, triggerLabel, placeholder, onOpenChange }: Props) {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { height: screenH } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   const [open, setOpen] = useState(false);
-  // Stable today snapshot — recomputed only when the picker (re)opens, not
-  // on every render. Previously `const today = new Date()` ran every render,
-  // producing a fresh reference each time; that cascaded into every
-  // MonthGrid re-rendering on every parent state change (swipe progress,
-  // layout, sheet drag), which is the bulk of the perceived stutter when
-  // the sheet slides in.
+  // Stable today snapshot — recomputed only on re-open, not every render.
   const { today, todayMidnight } = useMemo(() => {
     const t = new Date();
     return {
@@ -98,9 +92,7 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
   }, [open]);
   const [showYearSelect, setShowYearSelect] = useState(false);
 
-  // Reference month/year — anchors the strip. Doesn't change while
-  // swiping; only the year picker shifts it. centerOffset is the visible
-  // month relative to reference (-RANGE..+RANGE).
+  // Reference month/year anchors strip; only year picker shifts it.
   const [reference, setReference] = useState(() => ({
     month: value?.getMonth() ?? today.getMonth(),
     year: value?.getFullYear() ?? today.getFullYear(),
@@ -109,24 +101,24 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
 
   const [yearPage, setYearPage] = useState(today.getFullYear() - 1);
   const [pendingValue, setPendingValue] = useState<Date | null>(value);
-  const [containerW, setContainerW] = useState(0);
+  // ContainerW derived synchronously from screen so calendar paints first frame.
+  const [containerW, setContainerW] = useState(() => Math.max(0, screenW - SHEET_H_PADDING * 2));
+  // Defers off-screen grid mount until after slide-in to avoid mid-slide hang.
+  const [fullyMounted, setFullyMounted] = useState(false);
 
-  // Stable picker handler — passing an inline `(d) => setPendingValue(d)`
-  // to every MonthGrid would defeat React.memo (new ref each render). The
-  // setState updater is itself stable across renders, so we can hand it
-  // through directly.
+  // Stable picker handler keeps MonthGrid memo intact.
   const handlePick = useCallback((d: Date) => setPendingValue(d), []);
 
   const sheetY = useSharedValue(screenH);
   const dragStart = useSharedValue(0);
   const axisLock = useSharedValue<"h" | "v" | "">("");
-  const trioX = useSharedValue(0);
+  // Initialize translateX so first frame centres correctly.
+  const trioX = useSharedValue(-RANGE * containerW);
   const trioStart = useSharedValue(0);
-  const containerWShared = useSharedValue(0);
+  const containerWShared = useSharedValue(containerW);
   const snapIdx = useSharedValue(RANGE); // current centered idx in monthList
 
-  // Build the fixed strip of months around reference. Stable for the
-  // lifetime of `reference` — swiping never invalidates this list.
+  // Fixed strip of months around reference; swipes don't invalidate.
   const monthList = useMemo<MonthData[]>(() => {
     const arr: MonthData[] = [];
     for (let i = -RANGE; i <= RANGE; i++) {
@@ -158,8 +150,22 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Notify the host whenever the picker opens or closes. Stored in a ref so
-  // we don't refire when the callback identity changes between renders.
+  // Flip gate after slide-in so deferred grids mount; reset on close.
+  useEffect(() => {
+    if (!open) {
+      setFullyMounted(false);
+      return;
+    }
+    const t = setTimeout(() => setFullyMounted(true), SHEET_OPEN_MS + 40);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // Re-derive containerW on rotation/split-screen.
+  useEffect(() => {
+    setContainerW(Math.max(0, screenW - SHEET_H_PADDING * 2));
+  }, [screenW]);
+
+  // Notify host on open/close; ref-stored so identity change doesn't refire.
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
   useEffect(() => {
@@ -190,8 +196,7 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     [closeWithCommit, finishClose, screenH, sheetY],
   );
 
-  // Arrow-tap helpers — animate trioX and bump centerOffset on completion.
-  // monthList is unchanged so there's no re-render of the strip.
+  // Arrow-tap helpers — animate trioX, bump centerOffset on completion.
   const goTo = useCallback((newIdx: number) => {
     const w = containerWShared.value;
     if (w <= 0) return;
@@ -291,10 +296,33 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     : (placeholder ?? "Select a date");
   const labelText = triggerLabel ?? defaultLabel;
 
+  // Dismiss keyboard first, then open modal for clean slide-in.
+  const handleTriggerPress = useCallback(() => {
+    if (!Keyboard.isVisible()) {
+      setOpen(true);
+      return;
+    }
+    let fired = false;
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      if (fired) return;
+      fired = true;
+      sub.remove();
+      clearTimeout(fallback);
+      setOpen(true);
+    });
+    const fallback = setTimeout(() => {
+      if (fired) return;
+      fired = true;
+      sub.remove();
+      setOpen(true);
+    }, 400);
+    Keyboard.dismiss();
+  }, []);
+
   return (
     <View>
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={handleTriggerPress}
         style={[
           compact ? styles.triggerCompact : styles.trigger,
           {
@@ -393,12 +421,7 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
                   onLayout={(e) => {
                     const w = e.nativeEvent.layout.width;
                     if (w <= 0 || w === containerW) return;
-                    // Pre-position the month strip BEFORE the re-render
-                    // triggered by setContainerW. Otherwise the strip
-                    // renders for one frame at translateX 0 (the first of
-                    // its 13 months), then the centering effect snaps it
-                    // to the reference month — visible as a jump near the
-                    // end of the sheet's slide-in.
+                    // Pre-position strip before re-render to avoid first-frame jump.
                     const idx = RANGE + centerOffset;
                     trioX.value = -idx * w;
                     snapIdx.value = idx;
@@ -414,21 +437,28 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
                         stripStyle,
                       ]}
                     >
-                      {monthList.map((m) => (
-                        <View
-                          key={`${m.year}-${m.month}`}
-                          style={{ width: containerW }}
-                        >
-                          <MonthGrid
-                            data={m}
-                            pendingValue={pendingValue}
-                            todayMidnight={todayMidnight}
-                            today={today}
-                            onPick={handlePick}
-                            c={c}
-                          />
-                        </View>
-                      ))}
+                      {monthList.map((m, i) => {
+                        // Centre+neighbours first paint; rest mount after slide-in.
+                        const visible = fullyMounted
+                          || Math.abs(i - (RANGE + centerOffset)) <= 1;
+                        return (
+                          <View
+                            key={`${m.year}-${m.month}`}
+                            style={{ width: containerW }}
+                          >
+                            {visible ? (
+                              <MonthGrid
+                                data={m}
+                                pendingValue={pendingValue}
+                                todayMidnight={todayMidnight}
+                                today={today}
+                                onPick={handlePick}
+                                c={c}
+                              />
+                            ) : null}
+                          </View>
+                        );
+                      })}
                     </Animated.View>
                   ) : null}
                 </View>
@@ -474,10 +504,7 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
                           <Pressable
                             key={yr}
                             onPress={() => {
-                              // Re-anchor the strip on the picked year. This
-                              // *does* re-render the monthList, but it only
-                              // happens on explicit year selection, never
-                              // during a swipe.
+                              // Re-anchor strip on year pick; only fires on explicit selection.
                               setReference({ month: calMonth, year: yr });
                               setCenterOffset(0);
                               setShowYearSelect(false);
@@ -571,12 +598,7 @@ interface MonthGridProps {
   c: ReturnType<typeof useColors>;
 }
 
-// memo'd: parent re-renders constantly while the sheet animates and the user
-// swipes between months, but only the month containing `pendingValue` (and
-// any neighbour the user just swiped onto) actually needs to repaint. `c` is
-// referentially stable per theme; `data`, `todayMidnight`, `today`, `onPick`
-// are all stabilized by the parent. pendingValue is the only frequent
-// changer, and the default shallow comparison handles it correctly.
+// memo'd — only month with pendingValue repaints during sheet animation.
 const MonthGrid = memo(function MonthGrid({ data, pendingValue, todayMidnight, today, onPick, c }: MonthGridProps) {
   return (
     <View style={styles.grid}>
@@ -637,8 +659,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 3,
   },
-  // Pill-shaped chip used by the new-task quick-add bar — sized to match the
-  // priority chip alongside it.
+  // Pill chip for new-task quick-add bar (sized to match priority chip).
   triggerCompact: {
     paddingHorizontal: 10,
     paddingVertical: 5,

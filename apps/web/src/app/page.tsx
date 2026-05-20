@@ -46,10 +46,8 @@ function Home() {
     isMounted, isAuthenticated, penalizedTaskIds, submittedSeed, refetch,
   } = tasksHook;
 
-  // Per-page scroll: each filter view has its own overflow-y-auto container so
-  // a short list doesn't inherit scroll-height from a longer sibling page. The
-  // active page's element is captured via a callback ref into state, then wrapped
-  // as a synthetic RefObject for usePullToRefresh.
+  // Per-page scroll: each filter view has its own overflow-y-auto; active page's
+  // el is captured via callback ref into state, wrapped as synthetic RefObject.
   const [activeScrollEl, setActiveScrollEl] = useState<HTMLDivElement | null>(null);
   const scrollRefForPtr = useMemo(() => ({ current: activeScrollEl }), [activeScrollEl]);
   const pagerRef = useRef<HTMLDivElement>(null);
@@ -60,7 +58,7 @@ function Home() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
   const isDesktop = useDesktopLayout();
-  // Category quick-filter lives in the desktop sidebar. Null means "all".
+  // Category quick-filter in desktop sidebar; null = "all".
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const { beginRestart, clearRestart, isRestart } = useOverdueRestart();
   const [counterPromptTask, setCounterPromptTask] = useState<TaskDto | null>(null);
@@ -104,8 +102,7 @@ function Home() {
     setUnsubmittedPoints(total);
   }, [tasks, submittedTaskIds, setUnsubmittedPoints]);
 
-  // Stable callbacks so TaskRow's React.memo can skip re-renders when only
-  // activeFilter changes (e.g. swiping the filter strip).
+  // Stable callbacks so TaskRow's React.memo can skip re-renders on filter-strip swipe.
   const handleSubtasksChange = useCallback((taskId: string, subtasks: import("@/lib/api/tasks").Subtask[]) => {
     setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt));
   }, [setTasks]);
@@ -117,8 +114,7 @@ function Home() {
 
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
-      // Goal already met via prior +/- logs → skip the prompt; the user
-      // doesn't need to enter another value just to confirm the check-in.
+      // Skip prompt when goal already met via prior +/- logs.
       const goal = t.counterGoal ?? 0;
       if (goal > 0 && sumTodayCycleCounter(t.recentCycles) >= goal) {
         handleCheckIn(t);
@@ -152,9 +148,7 @@ function Home() {
     },
   });
 
-  // Tasks visible after applying the desktop sidebar's category filter.
-  // On mobile activeCategory stays null so this is a no-op. Declared above the
-  // !isMounted early-return so the hook order stays stable across renders.
+  // Tasks visible after sidebar category filter; declared above early-return so hook order is stable.
   const visibleTasks = useMemo(
     () => activeCategory ? tasks.filter((t) => t.category === activeCategory) : tasks,
     [tasks, activeCategory],
@@ -195,9 +189,7 @@ function Home() {
 
   const submitBarVisible = activeFilter === "completed" && selectedIds.size > 0;
 
-  // Renders one filter "page" inside the horizontal pager. Each page computes
-  // its own listItems / chunks for its own filter so all four views are
-  // pre-rendered and the swipe between filters has no "load" between pages.
+  // Renders one filter "page" inside the horizontal pager; pre-renders all four for instant swipe.
   function renderFilterPage(filterValue: string) {
     const items = buildListItems({ tasks: visibleTasks, activeFilter: filterValue, groupMode, sortMode, submittedTaskIds });
     const chunks = chunkListItems(items);
@@ -326,8 +318,7 @@ function Home() {
     );
   }
 
-  // Detail panel — rendered inline on desktop (inside DesktopShell.detail) and
-  // as a modal overlay on mobile. The `inline={isDesktop}` flag toggles which.
+  // Detail panel — inline on desktop, modal on mobile; `inline={isDesktop}` toggles.
   const taskDetailNode = (() => {
     if (!detailTask) return null;
     const dt = detailTask;
@@ -360,7 +351,7 @@ function Home() {
     );
   })();
 
-  // Top-level overlays/banners that render in both layouts.
+  // Top-level overlays/banners rendered in both layouts.
   const sharedOverlays = (
     <TaskPageOverlays
       showNewTask={showNewTask}
@@ -389,7 +380,7 @@ function Home() {
     </TaskPageOverlays>
   );
 
-  // Desktop-only 3-column shell. Mobile keeps the existing layout below.
+  // Desktop-only 3-column shell; mobile keeps existing layout below.
   if (isDesktop) {
     const sidebar = (
       <DesktopSidebar
@@ -642,10 +633,7 @@ function Home() {
                         style={{
                           flex: `0 0 ${100 / FILTERS.length}%`,
                           minWidth: 0,
-                          // Inset each page so adjacent pages have visible breathing
-                          // room when swiping between filters (iOS-homescreen feel).
-                          // Horizontal padding handled via Tailwind so it shrinks
-                          // on mobile (px-1 = 4px) and keeps the desktop feel (px-2.5 = 10px).
+                          // Inset for adjacent-page breathing room on swipe (iOS-homescreen feel).
                           boxSizing: "border-box",
                           height: "100%",
                           overflowY: "auto",
@@ -744,8 +732,7 @@ function Home() {
   );
 }
 
-// Sidebar nav icons — small mono SVGs that mirror the existing
-// MobileEdgeDrawer icon set so the desktop and mobile nav match visually.
+// Sidebar nav icons — small mono SVGs mirroring MobileEdgeDrawer's set.
 export default function Page() {
   return (
     <Suspense>

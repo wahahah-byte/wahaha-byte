@@ -1,5 +1,4 @@
-// Pixel-line nav icons used by DesktopSidebar entries on the Today,
-// Routines, and Archive pages.
+// Pixel-line nav icons used by DesktopSidebar.
 
 export function NavIconList() {
   return (

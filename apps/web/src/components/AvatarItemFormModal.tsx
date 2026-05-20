@@ -17,9 +17,7 @@ import { assetPath } from "@/lib/assetPath";
 
 const RARITIES: Rarity[] = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
 
-// Slot-aware category suggestions surfaced via <datalist> as the admin types.
-// The backend stores category as free-text (50-char limit) so these are
-// non-binding hints — new categories can still be invented on the fly.
+// Slot-aware category suggestions for the <datalist>; free-text on the backend.
 const CATEGORIES_BY_SLOT: Partial<Record<ItemSlot, readonly string[]>> = {
   HAT:        ["hat", "headband", "headgear", "helmet", "crown"],
   HAIR_FRONT: ["hair"],
@@ -36,7 +34,7 @@ const CATEGORIES_BY_SLOT: Partial<Record<ItemSlot, readonly string[]>> = {
   WEAPON_FRONT: ["sword", "staff", "bow", "polearm"],
   WEAPON_BACK:  ["quiver", "holster", "sheath"],
   WRIST:      ["bracelet", "watch"],
-  // Legacy slots fall back to a generic set so old rows can still be edited.
+  // Legacy slots; generic set for editing old rows.
   HEAD: ["headwear"],
   HAIR: ["hair"],
   BODY: ["outerwear"],
@@ -56,19 +54,13 @@ export type FormMode =
 interface Props {
   mode: FormMode;
   onClose: () => void;
-  // Fired with the saved DTO so the parent can splice it into the list
-  // without re-fetching the whole catalogue. Create returns a freshly
-  // assigned itemId; edit returns the same id with updated fields.
+  // Fired with the saved DTO for parent splice without re-fetch.
   onSaved: (item: AvatarItemDto) => void;
 }
 
 type CreateSubMode = "upload" | "url";
 
-// Modal for creating and editing avatar items. In create mode the top has a
-// radio toggle between Upload PNG (multipart file → blob upload) and Register
-// URL (JSON body, already-uploaded asset). In edit mode the toggle disappears
-// and the file input becomes optional — submitting without one keeps the
-// existing PreviewAssetUrl untouched.
+// Modal for creating and editing avatar items (upload PNG or register URL).
 export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   const isEdit = mode.kind === "edit";
   const seed = mode.kind === "edit" ? mode.item : null;
@@ -82,16 +74,10 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   const [description, setDescription] = useState(seed?.description ?? "");
   const [isAvailable, setIsAvailable] = useState(seed?.isAvailable ?? true);
   const [previewAssetUrl, setPreviewAssetUrl] = useState(seed?.previewAssetUrl ?? "");
-  // Convenience flag exposed only in URL-register create mode — the server
-  // also grants + equips the new item for the calling user, useful for a
-  // "register and immediately preview on my chibi" flow.
+  // URL-register only: server grants + equips on save.
   const [grantAndEquip, setGrantAndEquip] = useState(false);
   const [image, setImage] = useState<File | null>(null);
-  // Two-layer item support: HAIR_FRONT items can carry a second PNG that
-  // renders at HAIR_BACK z-order. In upload mode this is a File picked next
-  // to the primary; in register-by-url mode it's a second URL. The control
-  // is hidden for slots where a second layer wouldn't render (everything
-  // except HAIR_FRONT today). When edited, we seed from the existing row.
+  // Two-layer support for HAIR_FRONT/CAPE/WEAPON_FRONT slots.
   const [secondaryImage, setSecondaryImage] = useState<File | null>(null);
   const [secondaryAssetUrl, setSecondaryAssetUrl] = useState(seed?.secondaryAssetUrl ?? "");
   const [submitting, setSubmitting] = useState(false);
@@ -99,25 +85,13 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const secondaryFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Slots that get a secondary asset control. Kept tight on purpose — every
-  // other slot ignores SecondaryAssetUrl in ChibiAvatar so exposing the
-  // control would invite "uploaded a second PNG, didn't render" confusion.
-  //   HAIR_FRONT   → secondary = back-of-head strands  (HAIR_BACK z)
-  //   CAPE         → secondary = front drape           (CAPE_FRONT z)
-  //   WEAPON_FRONT → secondary = shaft behind chibi    (WEAPON_BACK z)
+  // Slots that support a secondary asset (mirrors ChibiAvatar z-resolution).
   const supportsSecondaryAsset =
     slot === "HAIR_FRONT" || slot === "CAPE" || slot === "WEAPON_FRONT";
-  // Semantic label for the secondary layer — what the artist drew. Hair's
-  // primary is the front bangs so its secondary is "Back"; cape's primary
-  // is the back panel so its secondary is "Front"; weapon's primary is
-  // the front weapon so its secondary is "Back". Mirrors the z-order
-  // resolution in ChibiAvatar.
+  // Semantic label for the secondary layer.
   const secondaryLayerLabel = slot === "CAPE" ? "Front" : "Back";
 
-  // Render hints — empty string in number inputs means "not set" (i.e. omit
-  // from the payload so the server keeps the existing value / falls back to
-  // slot defaults). Booleans flip directly. Initialised from the existing
-  // item in edit mode.
+  // Render hints; empty string means "use slot default".
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [coversHairFront, setCoversHairFront] = useState<boolean>(seed?.coversHairFront ?? false);
   const [coversHairBack, setCoversHairBack] = useState<boolean>(seed?.coversHairBack ?? false);
@@ -127,9 +101,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   const [sourceWidth, setSourceWidth] = useState<string>(seed?.sourceWidth != null ? String(seed.sourceWidth) : "");
   const [sourceHeight, setSourceHeight] = useState<string>(seed?.sourceHeight != null ? String(seed.sourceHeight) : "");
 
-  // Parse a number-string-from-input into a number (or null when empty).
-  // Returns the literal string "INVALID" sentinel for non-numeric input so
-  // handleSave can surface a validation error before hitting the API.
+  // Parse number-string input; returns "INVALID" sentinel for non-numeric.
   function parseOptionalNumber(s: string): number | null | "INVALID" {
     const trimmed = s.trim();
     if (trimmed === "") return null;
@@ -137,15 +109,13 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     return Number.isFinite(n) ? n : "INVALID";
   }
 
-  // Auto-focus the first field on open so the user can start typing without
-  // a click. Pure ergonomics — modals everywhere else in the app do this
-  // (see NewTaskModal).
+  // Auto-focus first field on open.
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     nameInputRef.current?.focus();
   }, []);
 
-  // Escape closes the modal (matches other modals' behaviour).
+  // Escape closes the modal.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -161,8 +131,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     return null;
   }, [image, isEdit, seed, createMode, previewAssetUrl]);
 
-  // Mirror of previewSrc for the secondary asset. Only computed when the
-  // current slot actually uses one; otherwise we never display the thumb.
+  // Mirror of previewSrc for the secondary asset when slot uses it.
   const secondaryPreviewSrc = useMemo(() => {
     if (!supportsSecondaryAsset) return null;
     if (secondaryImage) return URL.createObjectURL(secondaryImage);
@@ -171,9 +140,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     return null;
   }, [supportsSecondaryAsset, secondaryImage, isEdit, seed, createMode, secondaryAssetUrl]);
 
-  // File object URLs need to be revoked or they leak — browsers hold the
-  // backing blob alive as long as the URL is around. Re-revoke whenever a
-  // new file is picked or the modal closes.
+  // Revoke object URLs to avoid blob leaks.
   useEffect(() => {
     if (!image) return;
     const src = URL.createObjectURL(image);
@@ -193,7 +160,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     const costN = Number(cost);
     if (!Number.isFinite(costN) || costN < 0) { setError("Cost must be a non-negative number."); return; }
 
-    // Validate + collect render hint values once. Used by all three save paths.
+    // Validate + collect render hint values.
     const ox = parseOptionalNumber(offsetX);
     const oy = parseOptionalNumber(offsetY);
     const rs = parseOptionalNumber(renderScale);
@@ -216,9 +183,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     setSubmitting(true);
     setError(null);
 
-    // Secondary asset is only meaningful when the slot supports it. For all
-    // other slots we deliberately drop whatever was in state — guarantees a
-    // mid-flow slot change can't smuggle an unused file/URL through.
+    // Drop secondary state for non-supporting slots.
     const secondaryImagePayload = supportsSecondaryAsset ? (secondaryImage ?? null) : null;
     const secondaryUrlPayload = supportsSecondaryAsset && secondaryAssetUrl.trim()
       ? secondaryAssetUrl.trim()
@@ -240,9 +205,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
         };
         const { data, error: apiError } = await avatarApi.updateItem(seed!.itemId, payload);
         if (apiError) { setError(apiError); return; }
-        // Server returns the freshly updated DTO. If it doesn't (some 204
-        // backends), splice the input on top of the seed locally so the
-        // parent at least sees the optimistic version.
+        // Splice locally if server omits the DTO (204).
         const next: AvatarItemDto = data ?? {
           ...seed!,
           name: payload.name,
@@ -258,7 +221,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
         return;
       }
 
-      // create
+      // create path
       if (createMode === "url") {
         if (!previewAssetUrl.trim()) { setError("Preview URL is required."); return; }
         const payload: AvatarItemRegisterByUrlInput = {
@@ -278,9 +241,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
         if (apiError) { setError(apiError); return; }
         if (data) onSaved(data);
       } else {
-        // upload mode — image is optional per the backend DTO but we
-        // require it here, since "create without image" is just the URL
-        // path without a URL, which is rarely useful.
+        // upload mode — require image client-side.
         if (!image) { setError("Pick a PNG to upload."); return; }
         const payload: AvatarItemCreateInput = {
           name: name.trim(),
@@ -401,10 +362,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                 list="avatar-item-categories"
                 className="themed-form-input"
               />
-              {/* Datalist refreshes when slot changes — admins typing in the
-                  category field get suggestions appropriate to whatever slot
-                  is selected (e.g. HAT → "headband, helmet, crown"). The
-                  field stays free-text, suggestions are non-binding. */}
+              {/* Slot-aware category suggestions */}
               <datalist id="avatar-item-categories">
                 {categorySuggestionsFor(slot).map((c) => <option key={c} value={c} />)}
               </datalist>
@@ -431,7 +389,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             />
           </Field>
 
-          {/* Asset section — looks different per mode/sub-mode. */}
+          {/* Asset section */}
           {isEdit || createMode === "upload" ? (
             <Field label={isEdit ? "Replace image (optional)" : "Image (PNG) *"}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -481,10 +439,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             </>
           )}
 
-          {/* Secondary asset section — only when the selected slot uses it
-              (HAIR_FRONT = back strands, CAPE = front drape). Mirrors the
-              primary section's upload/url split. Always optional; omitting
-              keeps the row single-layer. */}
+          {/* Secondary asset (slot-conditional, optional) */}
           {supportsSecondaryAsset && (
             isEdit || createMode === "upload" ? (
               <Field label={isEdit
@@ -554,9 +509,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             Available in catalogue
           </label>
 
-          {/* Advanced render-hint controls. Collapsed by default since most
-              items don't need any tuning beyond the per-slot defaults.
-              Leave any field blank to fall through to the default. */}
+          {/* Advanced render-hint controls */}
           <div style={{ borderTop: "1px solid var(--color-border-hairline)", paddingTop: 8 }}>
             <button
               type="button"

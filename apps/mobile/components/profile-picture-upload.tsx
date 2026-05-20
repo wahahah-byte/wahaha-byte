@@ -8,24 +8,13 @@ import { useColors } from "@/hooks/use-colors";
 
 interface Props {
   profilePictureUrl?: string | null;
-  /** Fires after a successful upload or delete. Argument is the new URL
-   *  (or null on remove). Parent merges into its own user state. */
+  // Fires with new URL (null on remove) after successful upload/delete.
   onChange?: (newUrl: string | null) => void;
-  /** Rendered diameter in px. Defaults to 88. */
+  // Rendered diameter in px (default 88).
   size?: number;
 }
 
-/**
- * Mobile profile picture uploader. Tapping the avatar (or the change pill)
- * launches expo-image-picker; the picker handles permission prompts and
- * returns a local file URI. Upload happens via FormData to the same
- * endpoint web uses.
- *
- * Image resize/compression is delegated to the picker (`quality: 0.85`
- * and `aspect: [1, 1]` after a square crop) — web does a canvas resize
- * to 256×256 before upload; the picker's quality knob gets us close
- * enough without bringing in expo-image-manipulator.
- */
+// Mobile profile picture uploader via expo-image-picker → FormData upload.
 export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }: Props) {
   const c = useColors();
   const [busy, setBusy] = useState(false);
@@ -34,8 +23,7 @@ export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }:
   async function pickAndUpload() {
     if (busy) return;
     setError(null);
-    // Permission is implicit on Web; on iOS/Android the picker prompts the
-    // first time. requestMediaLibraryPermissionsAsync is a no-op on web.
+    // Picker prompts on native first time; no-op on web.
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       setError("Photo library access denied.");

@@ -11,10 +11,7 @@ interface Props {
   step?: number;
 }
 
-/**
- * Mobile equivalent of web's GoalStepper — inline [-] [input] [+] row.
- * Same logic as web/src/components/GoalStepper.tsx.
- */
+// Mobile GoalStepper — inline [-] [input] [+] row.
 export function GoalStepper({ value, onChange, min = 0, max = 99999, step = 1 }: Props) {
   const c = useColors();
   const numeric = value.trim() === "" ? null : Number(value);
@@ -52,10 +49,7 @@ export function GoalStepper({ value, onChange, min = 0, max = 99999, step = 1 }:
         keyboardType="number-pad"
         placeholder="—"
         placeholderTextColor={c.fgSubtle}
-        // Android <EditText> reserves vertical space for font ascenders/
-        // descenders and at this 30 px height it clips the digit glyphs.
-        // textAlignVertical (a prop, not a style) + includeFontPadding:false
-        // in the style restore the full glyph height.
+        // Android digit glyph clipping fix at 30px height.
         textAlignVertical="center"
         style={[
           styles.input,
@@ -107,9 +101,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 30,
     paddingHorizontal: 6,
-    // Drop the default vertical padding RN adds on Android — combined with
-    // includeFontPadding:false above, the digits sit centered in the 30 px
-    // input instead of being clipped.
+    // Drop default Android vertical padding so digits stay centered.
     paddingVertical: 0,
     fontSize: 13,
     fontWeight: "600",

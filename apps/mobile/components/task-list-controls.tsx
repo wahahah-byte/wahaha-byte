@@ -50,12 +50,7 @@ function GroupIcon({ color }: { color: string }) {
   );
 }
 
-/**
- * Sort + group controls — mirrors web TaskListControls. Lives in the
- * action-bar slot beside the quick-add input. Menus render in a Modal
- * anchored to the bottom of the screen so they don't get clipped by
- * the action bar's height-50 container.
- */
+// Sort + group controls — bottom-sheet menus to avoid action-bar clipping.
 export function TaskListControls({
   sortMode, groupMode, onSortChange, onGroupChange,
 }: Props) {
@@ -188,8 +183,7 @@ export function TaskListControls({
 const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 6 },
   pill: {
-    // Circular tap target — matches the routines category icon buttons
-    // (36×36) and the quick-add pill's vocabulary on the same bar.
+    // Circular tap target — matches routines category buttons (36×36).
     width: 36,
     height: 36,
     borderRadius: 999,

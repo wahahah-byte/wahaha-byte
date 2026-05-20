@@ -13,10 +13,7 @@ interface Props {
 export function StreakDisplay({ currentStreakCount, longestStreakCount }: Props) {
   const c = useColors();
   const count = currentStreakCount ?? 0;
-  // Hide only when there's no streak at all. For counts 1-2 (below the
-  // tier-1 threshold) the panel still renders with a "STREAK" label and
-  // a progress segment toward tier 1 — hiding it entirely read as "the
-  // streak vanished" when an undo dropped the count back under 3.
+  // Hide only when count=0; 1-2 shows progress toward tier 1.
   if (count < 1) return null;
 
   const multiplier = count >= 30 ? 2.0 : count >= 14 ? 1.8 : count >= 7 ? 1.5 : count >= 3 ? 1.2 : 1.0;

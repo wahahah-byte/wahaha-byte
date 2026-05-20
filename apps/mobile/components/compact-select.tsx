@@ -20,11 +20,11 @@ interface Props {
   value: string;
   onChange: (next: string) => void;
   options: CompactSelectOption[];
-  /** Tints the trigger text with active-highlight color — used for Points. */
+  // Tints trigger text with active-highlight (used for Points).
   highlight?: boolean;
-  /** Pill-shaped chip styling (used in the new-task quick-add bar). */
+  // Pill-shaped chip styling for new-task quick-add bar.
   compact?: boolean;
-  /** Override the trigger label (e.g. show "Date" rather than the raw value). */
+  // Override trigger label (e.g. "Date" vs raw value).
   triggerLabel?: string;
 }
 
@@ -37,18 +37,10 @@ interface Anchor {
 
 const PANEL_MAX_HEIGHT = 240;
 const SCREEN_PADDING = 12;
-// Floor for the dropdown panel width so narrow triggers (e.g. the Counter
-// unit pill) still get a readable option list.
+// Min panel width so narrow triggers still show readable options.
 const PANEL_MIN_WIDTH = 140;
 
-/**
- * Mobile equivalent of web's CompactSelect — a dropdown that opens directly
- * adjacent to the trigger, flipping above when there isn't enough room
- * below. The Modal omits `statusBarTranslucent` so its coordinate origin
- * matches the app window's origin, which is the same space
- * `measureInWindow` reports — that means anchor.y can be used as the
- * Modal-relative top without status-bar offset drift.
- */
+// Mobile CompactSelect — dropdown adjacent to trigger, flips above when needed.
 export function CompactSelect({
   value,
   onChange,
@@ -78,12 +70,7 @@ export function CompactSelect({
 
   const spaceBelow = anchor ? screenH - (anchor.y + anchor.height) - SCREEN_PADDING : 0;
   const spaceAbove = anchor ? anchor.y - SCREEN_PADDING : 0;
-  // Prefer flipping ABOVE the trigger. Inside the bottom sheet (and on mobile
-  // in general) the area below an input is the most likely to be covered —
-  // sheet edge, soft keyboard, action bar. Above the input there's almost
-  // always room within the sheet's scrollable form. Only fall back to opening
-  // downward when space below clearly exceeds space above, or when the
-  // trigger sits near the very top of the viewport.
+  // Prefer flipping above; below is usually covered by keyboard/sheet edge.
   const showBelow = spaceAbove < 100 && spaceBelow > spaceAbove;
   const maxHeight = Math.min(
     PANEL_MAX_HEIGHT,
@@ -95,9 +82,7 @@ export function CompactSelect({
     ? Math.max(SCREEN_PADDING, Math.min(anchor.x, screenW - panelWidth - SCREEN_PADDING))
     : 0;
 
-  // Position from real measured height so the panel's bottom edge sits
-  // EXACTLY at the trigger's top edge when flipped above. No PANEL_GAP —
-  // the borders share a pixel.
+  // Position from measured height so panel bottom meets trigger top exactly.
   const panelPosition = anchor
     ? showBelow
       ? { top: anchor.y + anchor.height, left: panelLeft, width: panelWidth }
@@ -208,8 +193,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 3,
   },
-  // Pill-shaped chip used by the new-task quick-add bar — sized to match the
-  // priority chip alongside it.
+  // Pill chip for new-task quick-add bar (sized to match priority chip).
   triggerCompact: {
     flexDirection: "row",
     alignItems: "center",

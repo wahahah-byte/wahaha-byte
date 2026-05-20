@@ -4,13 +4,12 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TierUpMessage } from "@wahaha/shared";
 
-// Re-export so existing `from "@/components/TierUpBanner"` imports keep working.
+// Re-export for legacy import paths.
 export { currentStreakTier, tierForStreak } from "@wahaha/shared";
 export type { TierUpMessage } from "@wahaha/shared";
 
 interface Props {
-  // Setting `key` of this prop to a unique value each time triggers a re-mount.
-  // Pass null to render nothing.
+  // Unique key re-mounts; pass null to render nothing.
   message: TierUpMessage | null;
   onDone?: () => void;
 }

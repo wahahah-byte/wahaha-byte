@@ -39,12 +39,12 @@ export interface TaskFormValues {
   pointValue: number;
   isRecurring: boolean;
   recurrenceRule: string;
-  /** YYYY-MM-DD local-tz string, or null. */
+  // YYYY-MM-DD local-tz, or null.
   dueDate: string | null;
-  /** Routine-only counter feature — mirrors web's NewTaskModal. */
+  // Routine-only counter feature.
   hasCounter: boolean;
   counterUnit: string;
-  /** Stored as string so the input can be empty; serialized to number on submit. */
+  // String so input can be empty; serialized to number on submit.
   counterGoal: string;
   capLogAtGoal: boolean;
 }
@@ -108,11 +108,7 @@ export function TaskForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Equipped avatar — same module-level cache pattern as the detail screen's
-  // CounterPanel. Renders the ChibiAvatar hero at the top of the form so all
-  // interactive fields below sit inside the one-handed thumb zone. When the
-  // keyboard opens the avatar scrolls away with the rest of the content,
-  // leaving the visible area to the fields.
+  // Equipped avatar hero at top so fields sit in thumb zone.
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
     () => equippedCache.read() ?? [],
   );
@@ -122,12 +118,12 @@ export function TaskForm({
     return unsubscribe;
   }, []);
 
-  // Counter only applies to recurring tasks — mirror web's auto-clear.
+  // Counter only applies to recurring tasks.
   useEffect(() => {
     if (!isRecurring && hasCounter) setHasCounter(false);
   }, [isRecurring, hasCounter]);
 
-  // Mirror web: when toggled to recurring, drop to 1pt; cap non-recurring points by category cap.
+  // Drop to 1pt on recurring; cap non-recurring by category.
   useEffect(() => {
     if (isRecurring) setPointValue((v) => (v > 5 ? 1 : v));
   }, [isRecurring]);
@@ -292,9 +288,7 @@ export function TaskForm({
               </View>
             </View>
 
-            {/* Counter — recurring-only, mirrors web NewTaskModal. Single
-                horizontal flex-wrap row: Counter pill + Unit dropdown +
-                "Goal" label + GoalStepper + unit suffix + Cap pill. */}
+            {/* Counter — recurring-only flex-wrap row. */}
             {isRecurring ? (
               <Field label="Counter" c={c}>
                 <View style={styles.counterRow}>
@@ -391,11 +385,7 @@ export function TaskForm({
     </ScrollView>
   );
 
-  // Footer pinned to the bottom of the modal — lives as a sibling of the
-  // ScrollView so it stays in the thumb zone regardless of how long the
-  // form's content gets. Mirrors the detail screen's bottomActionRow: wide
-  // pill buttons with borderHairline + uppercase labels color-coded by
-  // intent. Save = activeHighlight, Cancel = fgSubtle.
+  // Pinned bottom footer with Cancel/Save pill buttons.
   const footer = (
     <View style={[styles.pinnedFooter, { borderTopColor: c.borderHairline, backgroundColor: c.bg }]}>
       <View style={styles.bottomActionRow}>
@@ -442,8 +432,7 @@ export function TaskForm({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
-      {/* Match the detail screen's sheet background (c.bg) instead of the
-          lighter c.panel — keeps edit and detail feeling like one surface. */}
+      {/* Sheet bg=c.bg (matches detail screen). */}
       <ThemedView style={[styles.container, { backgroundColor: c.bg }]}>
         {scrollView}
         {footer}
@@ -507,8 +496,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  // Matches the detail screen's footer pill row so the two surfaces feel
-  // the same — same paddings, same hairline border, same uppercase labels.
+  // Matches detail-screen footer pill row.
   footerStack: {
     gap: 10,
     paddingTop: 14,

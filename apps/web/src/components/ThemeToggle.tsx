@@ -18,10 +18,7 @@ export default function ThemeToggle() {
         WebkitTapHighlightColor: "transparent",
       }}
     >
-      {/* Both icons render; CSS picks one via the [data-theme] attribute that
-          the inline themeInitScript sets on <html> before React hydrates. This
-          avoids the SSR/CSR mismatch that occurs when localStorage has "light"
-          but the server defaults to "dark". */}
+      {/* Both icons render; CSS picks one via [data-theme] to dodge SSR mismatch */}
       <svg
         className="theme-toggle-icon-sun"
         width="14" height="14" viewBox="0 0 24 24"

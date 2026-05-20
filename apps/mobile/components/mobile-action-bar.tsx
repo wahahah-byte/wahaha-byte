@@ -88,11 +88,7 @@ export function MobileActionBar({
           placeholderTextColor={c.fgSubtle}
           onSubmitEditing={commit}
           returnKeyType="done"
-          // Android's <EditText> reserves vertical space for font ascenders/
-          // descenders that often clips a 13 px placeholder. textAlignVertical
-          // belongs on TextInput as a prop; includeFontPadding=false moves to
-          // the style block. Together with paddingVertical: 0 they let the
-          // placeholder use its full glyph height without lineHeight.
+          // Android placeholder glyph clipping fix.
           textAlignVertical="center"
           style={[styles.input, { color: c.inputFg, includeFontPadding: false }]}
         />
@@ -157,8 +153,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 42,
     borderWidth: 1,
-    // Pill — half-height radius. Switched from the angular 2 px to match
-    // the rounder visual language of the chips and slide-to-checkin track.
+    // Pill — half-height radius.
     borderRadius: 999,
     paddingLeft: 6,
   },

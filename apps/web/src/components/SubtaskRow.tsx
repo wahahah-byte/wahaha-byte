@@ -11,14 +11,9 @@ export interface SubtaskUpdateFields {
 
 type Props = {
   subtask: Subtask;
-  // When true, the row renders as a read-only display: no toggle, delete,
-  // swipe, inline edit, or set increment. Used while the parent task's
-  // current cycle is locked (e.g. after a recurring check-in) so the
-  // per-cycle subtask state stays frozen until the next cycle.
+  // Frozen mid-cycle for routines.
   readOnly?: boolean;
-  // Gates the sets×reps editor inputs and the counter display. Only Fitness
-  // tasks expose sets/reps; for every other category we hide that UI even
-  // if legacy data has setsTarget populated.
+  // Gates sets/reps inputs; Fitness only.
   showSetsReps?: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -38,8 +33,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
   const [editSets, setEditSets] = useState(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
   const [editReps, setEditReps] = useState(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
   const titleInputRef = useRef<HTMLInputElement>(null);
-  // Skip the next blur-commit when the user pressed Enter or Escape (those
-  // already settled the field and stole focus from the input).
+  // Skip next blur-commit after Enter/Escape settle the field.
   const skipNextBlurRef = useRef(false);
 
   useEffect(() => {
@@ -94,7 +88,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
       s.locked = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
     }
     if (s.locked === "h") {
-      // Only allow left swipe (delete direction). Right swipe is ignored.
+      // Left-swipe only (delete direction).
       const leftAmount = Math.max(0, -dx);
       const damped = leftAmount <= COMMIT_THRESHOLD
         ? leftAmount
@@ -111,9 +105,8 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
       return;
     }
     if (dragX >= COMMIT_THRESHOLD) {
-      // Commit: parent will remove this row from the list. We don't snap back.
+      // Commit; parent removes the row. Rollback remounts fresh.
       onDelete();
-      // In the rare rollback case, the row remounts fresh with dragX = 0.
     } else {
       setDragX(0);
     }
@@ -123,7 +116,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
 
   return (
     <div className="relative overflow-hidden" style={{ borderRadius: 2 }}>
-      {/* Red delete action behind the row, revealed by the swipe */}
+      {/* Delete action revealed by swipe */}
       <div
         aria-hidden
         className="absolute inset-y-0 right-0 flex items-center justify-end"
@@ -148,7 +141,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
         )}
       </div>
 
-      {/* Foreground row content */}
+      {/* Foreground row */}
       <div
         className="flex items-center gap-2"
         style={{

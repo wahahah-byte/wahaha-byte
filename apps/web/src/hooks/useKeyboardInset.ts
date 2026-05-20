@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-// Returns the height of the soft keyboard (or any visual-viewport
-// occlusion at the bottom) in CSS pixels. Zero when nothing is occluding.
-//
-// Why: `position: fixed; bottom: env(safe-area-inset-bottom)` is unreliable
-// when a soft keyboard appears/dismisses — iOS Safari in particular leaves
-// the fixed bar floating above its intended bottom edge after dismissal,
-// producing a visible gap underneath. visualViewport reports the *actual*
-// visible area, so we can pin to the real visible bottom regardless.
+// Soft-keyboard / visualViewport bottom occlusion in CSS px; 0 when nothing occluding.
+// `env(safe-area-inset-bottom)` is unreliable on iOS keyboard dismiss; visualViewport is authoritative.
 export function useKeyboardInset(): number {
   const [inset, setInset] = useState(0);
 
@@ -26,12 +20,7 @@ export function useKeyboardInset(): number {
     }
 
     function update() {
-      // Decouple the bar's resting position from any stale visualViewport
-      // value: if nothing editable is focused, there's no keyboard, full stop.
-      // visualViewport.resize sometimes doesn't fire (or fires late) when the
-      // soft keyboard dismisses, leaving the bar floating above a phantom
-      // inset. Treating focus as the source of truth avoids that whole class
-      // of bug — keyboards only appear when an editable element is focused.
+      // Focus is source of truth — visualViewport.resize sometimes fires late on dismiss.
       if (!isEditableFocused()) {
         setInset(0);
         return;
@@ -44,8 +33,7 @@ export function useKeyboardInset(): number {
       setInset(Math.max(0, Math.round(fromBottom)));
     }
 
-    // Inset only changes meaningfully on focus/blur and visualViewport
-    // resize (keyboard show/hide while focused).
+    // Inset changes meaningfully on focus/blur and visualViewport resize.
     document.addEventListener("focusin", update);
     document.addEventListener("focusout", update);
     if (vv) {

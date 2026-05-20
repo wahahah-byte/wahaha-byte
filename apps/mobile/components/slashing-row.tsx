@@ -10,13 +10,7 @@ import Animated, {
 
 import { useColors } from "@/hooks/use-colors";
 
-/**
- * Total duration of the slash animation. Phases scale with this value:
- * underline draw at the front, row holds full height for 55%, then
- * collapses + fades over the remaining 45%. Trimmed from web's 1.6s to a
- * snappier 650ms — feels decisive on mobile without skipping the read of
- * the danger underline.
- */
+// Total slash animation duration; phases scale from this.
 export const SLASH_MS = 650;
 
 interface Props {
@@ -24,21 +18,7 @@ interface Props {
   children: ReactNode;
 }
 
-/**
- * Mobile port of web's `.task-row-deleting` + `.row-delete-underline` pair.
- * Wrap a task row in this; when `isSlashing` flips to true:
- *
- *   1. A red 1px underline draws left-to-right across the row's bottom edge
- *      over 0.9s (cubic-bezier 0.65, 0, 0.35, 1), then fades over the
- *      remaining time with a 3px upward drift — matches the BankBurstEffect
- *      submit underline's motion vocabulary.
- *   2. The row holds full height + opacity for 55% of the duration so the
- *      user can read the danger underline, then collapses height to 0 and
- *      opacity to 0 over the remaining 45%.
- *
- * The parent is expected to keep the row mounted for SLASH_MS before
- * pulling it from the list, so the collapse plays to completion.
- */
+// Slash-to-delete row animation: danger underline draw, hold, then collapse.
 export function SlashingRow({ isSlashing, children }: Props) {
   const c = useColors();
   const scaleY = useSharedValue(1);
@@ -51,29 +31,24 @@ export function SlashingRow({ isSlashing, children }: Props) {
   useEffect(() => {
     if (!isSlashing) return;
 
-    // Underline draws L→R for ~56% of the total slash duration — that
-    // ratio matches web's 0.9s-of-1.6s pacing so the draw still completes
-    // before the row begins collapsing at 55%.
+    // Underline draws L→R for ~56% of slash duration.
     underlineProgress.value = withTiming(1, {
       duration: Math.round(SLASH_MS * 0.56),
       easing: Easing.bezier(0.65, 0, 0.35, 1),
     });
-    // Opacity: 0→0.55 over 14%, hold to 28%, fade to 0 over the remainder
-    // (linear keeps the fade rate constant — matches web's bank-stamp tail).
+    // Opacity: 0→0.55 over 14%, hold to 28%, fade to 0.
     underlineOpacity.value = withSequence(
       withTiming(0.55, { duration: SLASH_MS * 0.14, easing: Easing.linear }),
       withTiming(0.55, { duration: SLASH_MS * (0.28 - 0.14), easing: Easing.linear }),
       withTiming(0, { duration: SLASH_MS * (1 - 0.28), easing: Easing.linear }),
     );
-    // 3px upward drift starts when the fade-out begins.
+    // 3px upward drift starts with fade-out.
     underlineY.value = withDelay(
       SLASH_MS * 0.28,
       withTiming(-3, { duration: SLASH_MS * (1 - 0.28), easing: Easing.linear }),
     );
 
-    // Row collapse: hold for 55%, then collapse over the remaining 45%.
-    // scaleY from origin top so the row crumples toward the row above
-    // rather than from the center.
+    // Row collapse: hold 55%, then collapse 45% from top origin.
     scaleY.value = withDelay(
       SLASH_MS * 0.55,
       withTiming(0, {
@@ -108,12 +83,7 @@ export function SlashingRow({ isSlashing, children }: Props) {
       onLayout={(e) => {
         containerWidth.value = e.nativeEvent.layout.width;
       }}
-      // Apply the animated style + transformOrigin ONLY when slashing.
-      // Leaving them on always (with scaleY=1 at rest) is technically a
-      // no-op but it forces a render layer on every row, which can throw
-      // off layout-sensitive children (e.g. the avatar pager that measures
-      // its parent) and creates a transform context on a row that's just
-      // sitting in the list.
+      // Apply animated style + transformOrigin only when slashing (avoids unnecessary render layer).
       style={isSlashing
         ? [wrapperStyle, { transformOrigin: "top" } as never]
         : undefined}

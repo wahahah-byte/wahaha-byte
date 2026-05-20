@@ -7,11 +7,7 @@ import { usePoints } from "@/context/PointsContext";
 import { dateKey, getNextDueDate, parseLocalDate, getPrevPeriodStart, isOverdue, willStreakResetOnCheckIn } from "@/lib/dateUtils";
 import { RECURRING_CAP } from "@/lib/constants";
 
-// Returns true when a streak increment crosses one of the bonus
-// boundaries (3, 7, 14, 30). Used to choose between a stronger and a
-// regular haptic pattern on check-in. Replaces the previous
-// `tierForStreak` import — the banner that used it is gone, but the
-// haptic distinction is still nice for milestone check-ins.
+// True when streak increment crosses a bonus boundary (3, 7, 14, 30); used for haptic pattern.
 function crossesTierBoundary(prev: number, next: number): boolean {
   for (const at of [3, 7, 14, 30]) {
     if (prev < at && next >= at) return true;
@@ -24,9 +20,7 @@ function vibrate(pattern: number | number[]) {
   try { navigator.vibrate(pattern); } catch { /* iOS Safari throws on some PWAs */ }
 }
 
-// useEvent-style helper: returns a stable callback that always invokes the
-// latest handler implementation. Lets us hand stable refs to memoized children
-// without having to enumerate every closure dep.
+// useEvent-style helper: stable callback that always invokes the latest handler.
 function useEvent<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
   const ref = useRef(handler);
   useLayoutEffect(() => {
@@ -46,9 +40,7 @@ interface UseTaskActionsOptions {
   submittedTaskIds: Set<string>;
   setError: (msg: string) => void;
   setSuccess?: (msg: string) => void;
-  // Optional: when a task is deleted, also dismiss the detail panel if it
-  // happens to be open on that task. Without this, deleting a task from the
-  // row (swipe / bulk action) leaves a stale detail modal showing.
+  // Optional: dismiss the detail panel when a task is deleted to avoid stale modal.
   setDetailTask?: React.Dispatch<React.SetStateAction<TaskDto | null>>;
 }
 
@@ -65,8 +57,7 @@ export function useTaskActions({
   const [pausing, setPausing] = useState<string | null>(null);
   const [slashingId, setSlashingId] = useState<string | null>(null);
 
-  // After a successful auth-mode check-in we surface a 5s window during which
-  // the user can hit "Undo" in the toast. Cleared on dismiss or expiry.
+  // 5s undo window after auth-mode check-in; cleared on dismiss/expiry.
   const [undoableCheckIn, setUndoableCheckIn] = useState<{ taskId: string; cycleId: number; taskTitle: string } | null>(null);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -84,10 +75,7 @@ export function useTaskActions({
     }, 5000);
   }, []);
   const [recurringPopups, setRecurringPopups] = useState<Map<string, number>>(new Map());
-  // Tier-up banner removed — streak milestones are conveyed in-place via
-  // the streak chip's pop animation (TaskRow) plus the multiplier shown
-  // on the StreakDisplay chip inside the detail modal. The dismiss /
-  // state plumbing for the banner is gone with it.
+  // Tier-up banner removed; streak milestones convey via in-row pop + StreakDisplay multiplier.
 
   const handleAdvance = useEvent(async function handleAdvance(task: TaskDto) {
     if (advancing === task.taskId) return;
@@ -162,13 +150,8 @@ export function useTaskActions({
           submitted: false,
         });
         setAdvancing(null);
-        // Completing a recurring task implicitly records a check-in for the
-        // current cycle. Mirror handleCheckIn's local state surgery so the
-        // routine row reflects the cycle (checkbox fills, row moves into the
-        // "checked in" group). Without these fields the row stayed pending-
-        // looking until the next refetch, even though the server had logged it.
-        // checkInDate uses the local-midnight-as-fake-UTC convention so
-        // wasCheckedInToday / heatmap / undo all key on the same date string.
+        // Completing recurring task records an implicit check-in; mirror handleCheckIn's local patch.
+        // checkInDate uses local-midnight-as-fake-UTC so heatmap/undo/wasCheckedInToday agree.
         const todayIso = dateKey(new Date());
         const synthCycle = {
           cycleId: -Date.now(),
@@ -235,16 +218,10 @@ export function useTaskActions({
       const newCount = prevCount + 1;
       setRecurringPopups((prev) => new Map(prev).set(task.taskId, task.pointValue));
       setTimeout(() => setRecurringPopups((prev) => { const n = new Map(prev); n.delete(task.taskId); return n; }), 1900);
-      // Tier transitions used to fire a banner; now only the haptic
-      // pattern differentiates a milestone check-in from a regular one.
+      // Tier transitions used to fire banner; now only haptic pattern differentiates.
       const isTierTransition = crossesTierBoundary(prevCount, newCount);
       vibrate(isTierTransition ? [15, 30, 60] : 20);
-      // checkInDate must match the server's convention (local-midnight written
-      // as fake-UTC) so consumers comparing `cycle.checkInDate.split("T")[0]`
-      // against `todayLocalKey()` see the same date. Using a real UTC
-      // toISOString() here drifts the cycle to "tomorrow" on west-of-UTC
-      // evenings, which makes wasCheckedInToday read false and leaks back
-      // into the Log gate, undo affordance, and heatmap aggregation.
+      // checkInDate must match server's local-midnight-as-fake-UTC convention.
       const checkInDateLocalAsFakeUtc = `${todayIso}T00:00:00Z`;
       const synthCycle = {
         cycleId: -Date.now(),
@@ -265,22 +242,8 @@ export function useTaskActions({
     const prevCount = task.currentStreakCount ?? 0;
     const prevDueDate = task.dueDate;
     const prevLastCheckIn = task.lastCheckInDate;
-    // Optimistic patch so the row reflects its new cycle state (streak,
-    // dueDate, lastCheckInDate) in the same frame as the user's commit
-    // gesture, rather than waiting ~300 ms for the server response.
-    //
-    // Predictions:
-    //   - Streak: mirrors the server's reset rule in CheckInTask.cs —
-    //     resets to 1 when daysSinceLast > maxGapDays (per recurrence
-    //     rule), prev+1 otherwise. Using the exact server rule (not the
-    //     isOverdue proxy) keeps weekdays tasks with a 1-2 day gap from
-    //     bouncing through a predicted-1 before snapping to N+1.
-    //   - dueDate: one period forward from today when the task is currently
-    //     overdue, one period from the existing dueDate otherwise. The
-    //     overdue branch matches the server's catch-up so an overdue daily
-    //     task lands on tomorrow rather than still-today.
-    //   - lastCheckInDate: today.
-    // The authoritative server values reconcile below; rollback on error.
+    // Optimistic patch so row reflects new cycle state immediately; server reconciles below.
+    // Streak mirrors server reset rule; dueDate forward by one period (catch-up if overdue).
     const willResetStreak = willStreakResetOnCheckIn(task.recurrenceRule, task.lastCheckInDate, task.dueDate);
     const predictedStreak = willResetStreak ? 1 : prevCount + 1;
     const dueBase = task.isRecurring && willResetStreak ? todayIso : task.dueDate;
@@ -293,8 +256,7 @@ export function useTaskActions({
     ));
     const { data, error } = await tasksApi.checkIn(task.taskId, counterValue);
     if (error) {
-      // Roll back the optimistic patch so the row doesn't sit on a state the
-      // server never agreed to.
+      // Roll back the optimistic patch on error.
       setTasks((prev) => prev.map((t) => t.taskId === task.taskId
         ? { ...t, currentStreakCount: prevCount, dueDate: prevDueDate, lastCheckInDate: prevLastCheckIn }
         : t
@@ -313,10 +275,7 @@ export function useTaskActions({
 
     const isTierTransition = crossesTierBoundary(prevCount, data!.streakCount);
     vibrate(isTierTransition ? [15, 30, 60] : 20);
-    // Note: previously fired a setSuccess toast here when the streak bonus
-    // multiplier kicked in. Removed in favour of the in-row streak pop
-    // animation (see TaskRow) and the existing multiplier badge on the
-    // StreakDisplay chip — the same info is now conveyed without a toast.
+    // Streak-bonus toast removed; conveyed by in-row pop + StreakDisplay multiplier.
 
     let nextDueDate = data!.nextDueDate || task.dueDate;
     if (nextDueDate && task.recurrenceRule) {
@@ -337,10 +296,7 @@ export function useTaskActions({
       }
     }
     setAdvancing(null);
-    // Append the new cycle to recentCycles so the in-row Undo button (and
-    // today-chip / heatmap) can find its cycleId without a refetch.
-    // Match the server's local-midnight-as-fake-UTC convention for
-    // checkInDate — see the synthCycle comment above for why this matters.
+    // Append new cycle so in-row Undo + today-chip + heatmap find cycleId without refetch.
     const checkInDateLocalAsFakeUtc = `${todayIso}T00:00:00Z`;
     const newCycle = {
       cycleId: data!.cycleId,
@@ -361,10 +317,7 @@ export function useTaskActions({
   });
 
   const handleUndoCheckIn = useEvent(async function handleUndoCheckIn(task: TaskDto, cycleId: number): Promise<UndoCheckInResponse | null> {
-    // Demo / unauthenticated: best-effort local rollback. We can't perfectly
-    // restore the streak's previous state without server-side history, so we
-    // just decrement, roll the dueDate back one period, and clear
-    // lastCheckInDate so canCheckInNow() unlocks the task.
+    // Demo / unauthenticated: best-effort local rollback without server history.
     if (!isAuthenticated) {
       setTasks((prev) => prev.map((t) => {
         if (t.taskId !== task.taskId) return t;
@@ -380,10 +333,7 @@ export function useTaskActions({
       }));
       return null;
     }
-    // Optimistic streak decrement so the in-row badge updates in the same
-    // frame as the row's section move instead of waiting for the server
-    // response. Symmetric with the demo-path rollback above; the server
-    // reconciles below with the authoritative value.
+    // Optimistic streak decrement; server reconciles below.
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId
       ? { ...t, currentStreakCount: Math.max(0, (t.currentStreakCount ?? 0) - 1) }
       : t));
@@ -397,14 +347,9 @@ export function useTaskActions({
     setTasks((prev) => prev.map((t) => {
       if (t.taskId !== task.taskId) return t;
       const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-      // Empty string from server means "no prior check-in" — clear the local
-      // lastCheckInDate so canCheckInNow() unlocks the task. Otherwise the
-      // slider/check-in button stays disabled.
+      // Empty string from server = "no prior check-in"; clear local lastCheckInDate.
       const restoredLastCheckIn = data!.previousLastCheckInDate || null;
-      // If the server has no PreviousDueDate snapshot (cycle created before
-      // the rollback fields were added), compute it by rolling t.dueDate back
-      // one period. Without this fallback the task would land in UPCOMING
-      // because dueDate would still point to the post-check-in cycle.
+      // No PreviousDueDate snapshot? Roll t.dueDate back one period as fallback.
       const restoredDueDate = data!.previousDueDate
         || (t.dueDate && t.recurrenceRule
           ? dateKey(getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule))
@@ -453,20 +398,14 @@ export function useTaskActions({
 
   const handleDelete = useEvent(async function handleDelete(id: string) {
     const snapshot = tasks.find((t) => t.taskId === id);
-    // Dismiss the detail panel up front if it's open on this task, so the
-    // user doesn't see a modal full of stale data while the slash animation
-    // plays. If the API call later fails we'll re-add the task, but the
-    // panel stays closed — the toast surfaces the error instead.
+    // Dismiss detail panel upfront so user doesn't see stale data during slash animation.
     setDetailTask?.((curr) => curr?.taskId === id ? null : curr);
     if (!isAuthenticated) {
       if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
       setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
       setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       setSlashingId(id);
-      // Outlast the row-delete animation (1.6s) so the danger underline glides
-    // + fades + the row collapses fully before the task is yanked from the
-    // list. The previous 550ms matched the old chunky stepped row-delete; the
-    // submit-style cream redesign needs a longer window.
+      // Outlast row-delete animation (1.6s) so glide + fade + collapse finish before yank.
     await new Promise((r) => setTimeout(r, 1600));
       setSlashingId(null);
       setTasks((prev) => prev.filter((t) => t.taskId !== id));
@@ -477,10 +416,7 @@ export function useTaskActions({
     if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
     setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    // Outlast the row-delete animation (1.6s) so the danger underline glides
-    // + fades + the row collapses fully before the task is yanked from the
-    // list. The previous 550ms matched the old chunky stepped row-delete; the
-    // submit-style cream redesign needs a longer window.
+    // Outlast row-delete animation (1.6s) before yanking the task.
     await new Promise((r) => setTimeout(r, 1600));
     setSlashingId(null);
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
@@ -533,7 +469,7 @@ export function useTaskActions({
     }
   });
 
-  // When undo is invoked from the toast, also clear the toast itself.
+  // Undo from toast: clear toast then run undo.
   const handleUndoCheckInFromToast = useEvent(async function handleUndoCheckInFromToast(task: TaskDto, cycleId: number) {
     dismissUndoableCheckIn();
     await handleUndoCheckIn(task, cycleId);

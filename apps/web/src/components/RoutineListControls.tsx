@@ -36,8 +36,7 @@ interface Props {
   groupMode: RoutineGroupMode;
   onSortChange: (m: RoutineSortMode) => void;
   onGroupChange: (m: RoutineGroupMode) => void;
-  // When true the button label is hidden below the sm breakpoint (used by
-  // the mobile filter strip where horizontal space is tight).
+  // Hide label below sm breakpoint when set.
   compactLabel?: boolean;
 }
 

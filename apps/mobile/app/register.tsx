@@ -16,10 +16,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
 
-// Mobile registration screen. Mirrors the web /register page's fields
-// (username, email, password, confirm password) and submits via the shared
-// authApi.register. On success it stores the token and lands the user on
-// the home tab.
+// Mobile registration screen — mirrors web /register, lands on home tab.
 export default function RegisterScreen() {
   const c = useColors();
 

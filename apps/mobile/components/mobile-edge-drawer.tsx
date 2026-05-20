@@ -25,22 +25,17 @@ import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
 const DRAWER_WIDTH = 220;
-// Lower commit fraction = less drag needed before the gesture snaps open.
-// At 0.25, a ~55 px horizontal swipe is enough to commit, vs the previous
-// ~110 px (0.5).
+// ~55px drag commits open (0.25 of width).
 const COMMIT_FRACTION = 0.25;
-// Above this end-velocity (px/s) the gesture commits regardless of position,
-// so a quick flick reliably opens or closes the drawer.
+// End-velocity threshold to commit on flick regardless of position.
 const COMMIT_VELOCITY = 600;
-// Bottom region that should NOT initiate a drawer-open swipe — matches the
-// FilterStrip (28) + MobileActionBar (56) + handle (~12) so a touch on the
-// filter strip or its handle never opens the drawer. The action bar / strip
-// own their own pan gestures and would compete poorly with the drawer's.
+// Bottom region excluded so filter-strip/action-bar gestures aren't hijacked.
 const BOTTOM_EXCLUSION_PX = 96;
 
-const ITEMS: { route: "/" | "/recurring" | "/archive" | "/settings"; label: string }[] = [
+const ITEMS: { route: "/" | "/recurring" | "/shop" | "/archive" | "/settings"; label: string }[] = [
   { route: "/", label: "To Do" },
   { route: "/recurring", label: "Routines" },
+  { route: "/shop", label: "Shop" },
   { route: "/archive", label: "Archive" },
   { route: "/settings", label: "Settings" },
 ];
@@ -61,7 +56,7 @@ export function MobileEdgeDrawer({ children }: Props) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [me, setMe] = useState<UserProfile | null>(null);
 
-  // Refresh user identity + balance when drawer opens or the user navigates.
+  // Refresh user identity + balance on drawer open / nav.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -83,30 +78,18 @@ export function MobileEdgeDrawer({ children }: Props) {
     if (!open) setAccountMenuOpen(false);
   }, [open]);
 
-  // dragX is the CONTENT layer's translateX — single source of truth for
-  // both the content slide and the backdrop opacity. The drawer panel sits
-  // stationary behind the content; opening drags the content to the right
-  // to reveal the panel. Range: 0 (closed) → DRAWER_WIDTH (open).
-  //
-  // We deliberately do NOT use a "null sentinel + fall back to React `open`"
-  // pattern — that races against React commits when the release-animation
-  // finishes, since the worklet may read the stale `open` for one frame.
+  // Content-layer translateX (0=closed → DRAWER_WIDTH=open); single source of truth.
   const dragX = useSharedValue(0);
-  // Captured at gesture start so we know whether to add or subtract from baseline.
+  // Baseline captured at gesture start.
   const startedOpen = useSharedValue(false);
-  // True if the touch began in the bottom exclusion band (filter strip / action
-  // bar). Set in onStart; respected by onUpdate so a touch that began there
-  // doesn't drag the drawer even if the finger moves up.
+  // True when touch began in bottom exclusion band.
   const blocked = useSharedValue(false);
 
   const commit = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
   }, []);
 
-  // Sync dragX whenever `open` changes from outside the drag (nav links,
-  // backdrop tap, mount, etc.). The drag handler also animates dragX
-  // directly so the explicit setOpen → effect chain only matters for
-  // non-gesture transitions.
+  // Sync dragX on external `open` changes (nav, backdrop, mount).
   useEffect(() => {
     dragX.value = withTiming(open ? DRAWER_WIDTH : 0, {
       duration: 220,
@@ -114,25 +97,19 @@ export function MobileEdgeDrawer({ children }: Props) {
     });
   }, [open, dragX]);
 
-  // Disable the drawer's edge-pan entirely when a transparent-modal route is
-  // open. The modal owns the whole screen visually; letting the drawer's pan
-  // compete eats taps on Pressables inside the sheet (only the title TextInput
-  // still worked, because native focus handling bypasses the JS responder).
+  // Disable edge-pan when a transparent modal route is open.
   const modalRouteOpen =
     pathname.startsWith("/task/") || pathname.startsWith("/new-task");
 
   const pan = Gesture.Pan()
     .enabled(!modalRouteOpen)
-    // Only activate after 10px of horizontal motion — keeps the gesture out
-    // of vertical-scroll territory and lets child pans (filter strip, row
-    // swipes) activate first since they trigger at 8px.
+    // 10px activation — lets child pans (8px) win first.
     .activeOffsetX([-10, 10])
     .failOffsetY([-12, 12])
     .onStart((e) => {
       "worklet";
       startedOpen.value = open;
-      // e.y is touch-Y relative to the gesture detector's frame. Since the
-      // detector wraps the full screen, this is effectively screen-Y.
+      // e.y is screen-Y (detector wraps full screen).
       blocked.value = (screenH - e.y) < BOTTOM_EXCLUSION_PX;
     })
     .onUpdate((e) => {
@@ -146,8 +123,7 @@ export function MobileEdgeDrawer({ children }: Props) {
       "worklet";
       if (blocked.value) {
         blocked.value = false;
-        // Snap back to wherever `open` says we should be — handles cases
-        // where the touch jittered enough to register a small drag.
+        // Snap back to startedOpen position for jitter cases.
         dragX.value = withTiming(startedOpen.value ? DRAWER_WIDTH : 0, {
           duration: 220,
           easing: Easing.bezier(0.2, 0, 0, 1),
@@ -155,9 +131,7 @@ export function MobileEdgeDrawer({ children }: Props) {
         return;
       }
       const current = dragX.value;
-      // Velocity-first commit: a quick flick should decide the outcome even
-      // if the user didn't drag past the position threshold. Position is the
-      // fallback when the release is slow.
+      // Velocity-first commit; position as fallback for slow releases.
       let nextOpen = startedOpen.value;
       if (e.velocityX > COMMIT_VELOCITY) nextOpen = true;
       else if (e.velocityX < -COMMIT_VELOCITY) nextOpen = false;
@@ -166,9 +140,7 @@ export function MobileEdgeDrawer({ children }: Props) {
       } else {
         if (current > DRAWER_WIDTH * COMMIT_FRACTION) nextOpen = true;
       }
-      // Always animate to the snapped position from dragX's current
-      // position. dragX stays the source of truth all the way through —
-      // no null sentinel, no last-frame fallback to React state.
+      // Animate from dragX's current position; dragX stays source of truth.
       dragX.value = withTiming(nextOpen ? DRAWER_WIDTH : 0, {
         duration: 220,
         easing: Easing.bezier(0.2, 0, 0, 1),
@@ -184,19 +156,12 @@ export function MobileEdgeDrawer({ children }: Props) {
     const fraction = dragX.value / DRAWER_WIDTH;
     return {
       opacity: 0.4 * fraction,
-      // Pointer-events: backdrop is interactive only when at least partially
-      // visible. When fully closed (fraction=0) the View is still rendered to
-      // avoid layout thrash; we just disable hit-testing.
     };
   });
 
   const goAndClose = useCallback((href: string) => {
     setAccountMenuOpen(false);
-    // Push first, close second — gives the new screen a frame to mount
-    // and paint its background before the drawer's close animation
-    // exposes it. The previous order (close → push) put the screen's
-    // first paint and the drawer's reveal on the same frame, which
-    // showed a brief flash of the underlying card colour on the side.
+    // Push first, close second so new screen paints before reveal.
     router.push(href as never);
     setOpen(false);
   }, []);
@@ -204,10 +169,7 @@ export function MobileEdgeDrawer({ children }: Props) {
   return (
     <GestureDetector gesture={pan}>
       <View style={{ flex: 1 }}>
-        {/* Drawer panel — stationary, full-height, anchored at the left.
-            Rendered FIRST so it sits behind the content layer; revealed
-            when the content slides right. No animated transform — the
-            slide effect comes from translating the content layer instead. */}
+        {/* Drawer panel — stationary at left, revealed when content slides right. */}
         <View
           style={[
             styles.panel,
@@ -221,7 +183,7 @@ export function MobileEdgeDrawer({ children }: Props) {
           ]}
         >
           <View style={{ marginTop: "auto" }}>
-            {/* Avatar link only when not signed in (matches web's pattern). */}
+            {/* Avatar link only when not signed in. */}
             {!hasToken ? (
               <NavRow
                 label="Avatar"
@@ -243,6 +205,7 @@ export function MobileEdgeDrawer({ children }: Props) {
                   icon={
                     item.label === "To Do" ? <TasksIcon color={active ? c.activeHighlight : c.fgMuted} />
                     : item.label === "Routines" ? <RecurringIcon color={active ? c.activeHighlight : c.fgMuted} />
+                    : item.label === "Shop" ? <ShopIcon color={active ? c.activeHighlight : c.fgMuted} />
                     : item.label === "Archive" ? <ArchiveIcon color={active ? c.activeHighlight : c.fgMuted} />
                     : <SettingsIcon color={active ? c.activeHighlight : c.fgMuted} />
                   }
@@ -328,11 +291,7 @@ export function MobileEdgeDrawer({ children }: Props) {
                 <SettingsIcon color={c.fgMuted} />
               </Pressable>
 
-              {/* Account menu popover — anchored inside the user row so its
-                  bottom:'100%' resolves to the row's top edge (i.e. directly
-                  above the avatar icon). When it was a sibling of userRow the
-                  bottom:'100%' resolved against the drawer panel instead and
-                  the popover floated above the nav buttons. */}
+              {/* Account menu popover — anchored inside userRow for correct bottom:100%. */}
               {accountMenuOpen ? (
                 <View
                   style={[
@@ -365,8 +324,7 @@ export function MobileEdgeDrawer({ children }: Props) {
                         setAccountMenuOpen(false);
                         setOpen(false);
                         await clearToken();
-                        // Mirror web: stay in-app after sign-out (the home
-                        // tab's DemoModeBanner is what prompts a re-login).
+                        // Stay in-app after sign-out; home tab prompts re-login.
                         router.replace("/");
                       }}
                     >
@@ -379,17 +337,12 @@ export function MobileEdgeDrawer({ children }: Props) {
           </View>
         </View>
 
-        {/* Content layer — fills the parent, slides RIGHT to reveal the
-            drawer panel beneath. Rendered AFTER the panel so it visually
-            sits on top when at translateX 0 (closed). */}
+        {/* Content layer — slides right to reveal panel beneath. */}
         <Animated.View
           style={[
             StyleSheet.absoluteFillObject,
             {
-              // Drop a soft shadow on the left edge of the content so the
-              // revealed drawer area has a sense of depth — the content
-              // looks like it's lifted above the panel rather than swapping
-              // layers. Negative X = shadow cast leftward.
+              // Soft left-edge shadow for depth when open.
               boxShadow: open ? "-2px 0px 14px rgba(0, 0, 0, 0.25)" : "none",
               elevation: open ? 12 : 0,
             },
@@ -398,9 +351,7 @@ export function MobileEdgeDrawer({ children }: Props) {
         >
           {children}
 
-          {/* Backdrop over the visible content. Inside the content wrapper
-              so it slides with the page — keeping the dim layer anchored to
-              the page rather than the screen. */}
+          {/* Backdrop inside content wrapper so it slides with the page. */}
           <Animated.View
             style={[
               StyleSheet.absoluteFillObject,
@@ -509,6 +460,14 @@ function RecurringIcon({ color }: { color: string }) {
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M21 12a9 9 0 1 1-3-6.7" />
       <Polyline points="21 4 21 10 15 10" />
+    </Svg>
+  );
+}
+function ShopIcon({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M5 8h14l-1 12H6L5 8Z" />
+      <Path d="M9 8V6a3 3 0 0 1 6 0v2" />
     </Svg>
   );
 }

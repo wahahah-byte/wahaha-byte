@@ -69,7 +69,7 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
       }}
     >
       <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      {/* Red delete action behind the row, revealed by the swipe */}
+      {/* Delete action revealed by swipe */}
       <div
         aria-hidden
         className="absolute inset-y-0 right-0 flex items-center justify-end"
@@ -94,7 +94,7 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
         )}
       </div>
 
-      {/* Foreground sliding row */}
+      {/* Foreground row */}
       <div
         className="flex items-center"
         style={{
@@ -182,11 +182,7 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
       </div>
       </div>
 
-      {/* Static thread connector — sits outside the swipe-clip wrapper so it
-          can extend above the row to bridge the parent's flex `gap`, keeping
-          the line continuous between consecutive subtasks. Sits in the gutter
-          (0..THREAD_GUTTER), which doesn't visually overlap the row content
-          (paddingLeft = THREAD_GUTTER). */}
+      {/* Thread connector in the gutter, bridging the flex gap */}
       {(() => {
         const topOffset = isFirst ? 0 : -GAP_ABOVE;
         const svgHeight = ROW_HEIGHT - topOffset;
@@ -201,10 +197,7 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
             viewBox={`0 0 ${THREAD_GUTTER} ${svgHeight}`}
             style={{ position: "absolute", left: 0, top: topOffset, color: "var(--color-border-faint)", pointerEvents: "none" }}
           >
-            {/* Vertical at x=16 lines up under the expanded chevron tip in the
-                CategoryIcon+chevron button: row pl (12/16) - btn ml (3) + icon (14)
-                + gap (2) + chevron half (2.5) = row_x 27.5/31.5; minus thread
-                paddingLeft (12/16) = 15.5 — rounded to 16. */}
+            {/* Vertical at x=16 aligns under the expanded chevron tip */}
             <line x1="16" y1={lineStart} x2="16" y2={lineEnd} stroke="currentColor" strokeWidth="1" />
             <line x1="16" y1={horizontalY} x2="22" y2={horizontalY} stroke="currentColor" strokeWidth="1" />
           </svg>

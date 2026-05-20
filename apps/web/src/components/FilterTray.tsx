@@ -11,22 +11,20 @@ type Props = {
   activeFilter: string;
   onChange: (value: string) => void;
   onClose: () => void;
-  /** Tap on the handle pill — toggle open/closed. */
+  // Tap on handle to toggle.
   onToggle?: () => void;
   getCount?: (value: string) => number;
   badgeColor?: (value: string) => string | null;
-  /** Distance from screen bottom to the tray. Default sits the tray right above the
-   *  bottom action bar (50px). Pass a different value if the action bar isn't there. */
+  // Distance from screen bottom to the tray.
   bottomOffsetPx?: number;
-  /** Optional ref to the page-content pager. Horizontal swipes on the tray drive
-   *  this element's transform 1:1 with the thumb (carousel-style page slide). */
+  // Page-content pager driven 1:1 by horizontal tray swipes.
   pagerRef?: React.RefObject<HTMLElement | null>;
-  /** Optional ref to the tray's own root element. */
+  // Tray root element ref.
   trayElementRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 const TRAY_HEIGHT = 28;
-const TRAY_HEIGHT_TOTAL = TRAY_HEIGHT + 8; // matches the closed translateY(calc(100% + 8px)) gap
+const TRAY_HEIGHT_TOTAL = TRAY_HEIGHT + 8; // matches closed translateY gap
 const DISMISS_DRAG_PX = 50;
 const AXIS_DEADZONE_PX = 8;
 const SWIPE_CYCLE_THRESHOLD = 36;
@@ -155,7 +153,7 @@ export default function FilterTray({
     }
   }
 
-  // Handle gestures: tap to toggle, vertical drag to open/close, horizontal swipe to cycle filter.
+  // Handle gestures: tap toggles, V-drag opens/closes, H-swipe cycles filter.
   function onHandleTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
     handleDragRef.current = {
@@ -221,7 +219,7 @@ export default function FilterTray({
   }
 
   function onHandleClick() {
-    // Suppress synthesized click after a drag — the touchend already settled the tray.
+    // Suppress synthesized click after a drag.
     if (handleDragRef.current?.moved) return;
     onToggle?.();
   }

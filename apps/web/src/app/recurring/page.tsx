@@ -44,10 +44,8 @@ const EMPTY_SET = new Set<string>();
 
 function tabMatches(task: TaskDto, tab: string): boolean {
   if (tab === "all") return true;
-  // Today  = actionable right now (not yet checked in for this cycle).
-  // Upcoming = not yet actionable — includes both "already checked in today"
-  //            and "not due yet". The undo affordance lives on those rows so
-  //            a fresh check-in is reversible from the same place it landed.
+  // Today = actionable now (not yet checked in this cycle).
+  // Upcoming = not actionable (checked-in-today OR not yet due); undo lives on those rows.
   if (tab === "today")
     return canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate) && !isOverdue(task.dueDate);
   if (tab === "missed") return isOverdue(task.dueDate);
@@ -81,7 +79,7 @@ function Recurring() {
     return [...seen].sort();
   }, [tasks]);
 
-  // Drop the active category if the user deletes the last task in it.
+  // Drop active category if user deletes the last task in it.
   useEffect(() => {
     if (activeCategory && !availableCategories.includes(activeCategory)) {
       setActiveCategory(null);
@@ -118,8 +116,7 @@ function Recurring() {
       setTasks(MOCK_RECURRING);
       setLoading(false);
     }
-    // searchParams is only read once on mount; URL changes are handled
-    // through applyFilter which both pushes to history and updates state.
+    // searchParams read once on mount; URL changes via applyFilter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -156,8 +153,7 @@ function Recurring() {
     router.replace(qs ? `/recurring?${qs}` : "/recurring", { scroll: false });
   }
 
-  // Stable callbacks so TaskRow's React.memo can skip re-renders when only
-  // activeFilter changes (e.g. swiping the filter strip).
+  // Stable callbacks so TaskRow's React.memo can skip re-renders on filter-strip swipe.
   const handleSubtasksChange = useCallback((taskId: string, subtasks: import("@/lib/api/tasks").Subtask[]) => {
     setTasks((prev) => prev.map((tt) => tt.taskId === taskId ? { ...tt, subtasks } : tt));
   }, []);
@@ -169,8 +165,7 @@ function Recurring() {
 
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
-      // Goal already met via prior +/- logs → skip the prompt; the user
-      // doesn't need to enter another value just to confirm the check-in.
+      // Skip prompt when goal already met via prior +/- logs.
       const goal = t.counterGoal ?? 0;
       if (goal > 0 && sumTodayCycleCounter(t.recentCycles) >= goal) {
         handleCheckIn(t);
@@ -230,13 +225,8 @@ function Recurring() {
     }
   };
 
-  // A task counts as "checked in this cycle" when the user has already done
-  // the current period and the next window hasn't opened yet — i.e. the
-  // canonical canCheckInNow check returns false. Using !canCheckInNow (with
-  // an !isOverdue guard so overdue rows stay in the missed bucket) handles
-  // the optimistic edge case where an overdue daily task's next dueDate
-  // lands on today: today < due is false there, so the previous proxy left
-  // the row stuck in Active until a refetch.
+  // True when user has done current period and next window hasn't opened.
+  // !canCheckInNow + !isOverdue guard handles optimistic edge where next dueDate lands on today.
   function isCheckedInThisCycle(t: TaskDto): boolean {
     if (!t.lastCheckInDate || !t.dueDate || !t.recurrenceRule) return false;
     if (isOverdue(t.dueDate)) return false;
@@ -400,13 +390,13 @@ function Recurring() {
   const todayCount = tasks.filter((t) => canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate) && !isOverdue(t.dueDate)).length;
   const missedCount = tasks.filter((t) => isOverdue(t.dueDate)).length;
 
-  // Per-status counts for the desktop sidebar (respects the active category).
+  // Per-status counts for desktop sidebar (respects active category).
   const filterCounts = RECURRING_FILTERS.reduce((acc, f) => {
     acc[f.value] = tasks.filter((t) => tabMatches(t, f.value) && passesCategory(t)).length;
     return acc;
   }, {} as Record<string, number>);
 
-  // Detail panel — rendered inline on desktop, as a modal on mobile.
+  // Detail panel — inline on desktop, modal on mobile.
   const taskDetailNode = (() => {
     if (!detailTask) return null;
     const dt = detailTask;

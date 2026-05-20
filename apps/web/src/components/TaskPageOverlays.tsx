@@ -35,13 +35,11 @@ interface Props {
   onUndoCheckInFromToast: (task: TaskDto, cycleId: number) => void;
   onDismissUndoableCheckIn: () => void;
 
-  // Extra overlays slot — used by the Today page for CapWarningModal.
+  // Extra overlays slot (page-specific extras like CapWarningModal).
   children?: ReactNode;
 }
 
-// Groups the global overlays both Today and Routines render alongside their
-// main content (modals, banners, toasts). Page-specific extras (e.g. the
-// Today page's CapWarningModal) ride in via `children`.
+// Global overlays for Today + Routines pages.
 export default function TaskPageOverlays({
   showNewTask, onCloseNewTask, onTaskCreated, newTaskInitialRecurring,
   counterPromptTask, onCloseCounterPrompt, onSubmitCounterCheckIn,

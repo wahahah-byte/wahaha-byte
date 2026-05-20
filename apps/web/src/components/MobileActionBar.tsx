@@ -29,10 +29,9 @@ interface Props {
   onNewTask: () => void;
   onQuickCreate?: (fields: QuickTaskFields) => Promise<void> | void;
   isAuthenticated: boolean;
-  /** When provided, the FilterTray will mirror its scroll position to this element's transform. */
+  // FilterTray mirrors its scroll position to this element's transform.
   pagerRef?: React.RefObject<HTMLElement | null>;
-  /** When true, hides the action-bar row (quick-add + controls) — used while the
-   *  mobile SubmitBar takes over that slot. FilterTray stays rendered. */
+  // Hides the action-bar row while SubmitBar takes over.
   submitMode?: boolean;
 }
 
@@ -43,9 +42,7 @@ export default function MobileActionBar({
 }: Props) {
   const [trayOpen, setTrayOpen] = useState(true);
   const trayElementRef = useRef<HTMLDivElement>(null);
-  // When a soft keyboard is up, pin the bar to the real visible bottom (top
-  // of the keyboard). When dismissed, fall back to the safe-area inset. Pure
-  // env() left a stale gap on iOS after the keyboard closed.
+  // Pin to visible bottom when soft keyboard is up; fall back to safe-area inset.
   const keyboardInset = useKeyboardInset();
   const bottomOffset = keyboardInset > 0
     ? `${keyboardInset}px`

@@ -11,6 +11,8 @@ import Animated, {
 
 import type { UserInventoryDto } from "@wahaha/shared";
 
+import { bustedAssetUrl } from "@/lib/avatar-asset";
+
 const SLOT_Z: Record<string, number> = {
   WEAPON_BACK: 0,
   CAPE: 10,
@@ -62,8 +64,7 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
   const baseW = Math.round(SOURCE_W * baseScale);
   const baseLeft = Math.round(OVERHANG_SRC * baseScale);
 
-  // Idle pose: subtle up/down breathing animation. Web uses a CSS keyframe;
-  // RN uses Reanimated. Two-step yoyo with easeInOut to feel calm.
+  // Idle pose: subtle breathing bob via Reanimated yoyo.
   const bob = useSharedValue(0);
   const lastPose = useRef(pose);
   useEffect(() => {
@@ -86,7 +87,7 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
     transform: [{ translateY: bob.value }],
   }));
 
-  // Apply the same hide rules as web.
+  // Match web hide rules.
   const hideHairFront = equipped.some((inv) => {
     const i = inv.avatarItem;
     return i?.coversHairFront === true || i?.coversHair === true;
@@ -119,12 +120,15 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
       ((hideHairFront || hideHairBack) && isLegacyHair);
 
     if (!primarySuppressed) {
-      layered.push({
-        key: `${inv.inventoryId}:primary`,
-        inv,
-        src: item.previewAssetUrl,
-        z: SLOT_Z[item.slot] ?? 100,
-      });
+      const primarySrc = bustedAssetUrl(item, item.previewAssetUrl);
+      if (primarySrc) {
+        layered.push({
+          key: `${inv.inventoryId}:primary`,
+          inv,
+          src: primarySrc,
+          z: SLOT_Z[item.slot] ?? 100,
+        });
+      }
     }
 
     if (item.secondaryAssetUrl) {
@@ -141,12 +145,15 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
         respectHairCover = true;
       }
       if (!(respectHairCover && hideHairBack)) {
-        layered.push({
-          key: `${inv.inventoryId}:secondary`,
-          inv,
-          src: item.secondaryAssetUrl,
-          z: secondaryZ,
-        });
+        const secondarySrc = bustedAssetUrl(item, item.secondaryAssetUrl);
+        if (secondarySrc) {
+          layered.push({
+            key: `${inv.inventoryId}:secondary`,
+            inv,
+            src: secondarySrc,
+            z: secondaryZ,
+          });
+        }
       }
     }
   }
@@ -156,14 +163,7 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
     <Animated.View
       style={[{ width, height, pointerEvents: "none" }, containerStyle]}
     >
-      {/* Base sprite as a direct sibling of the layered items, so all
-          zIndices share one stacking context. Previously the base lived
-          inside a non-scrolling ScrollView, which created its own stacking
-          context — that hid the base's `zIndex: 30` from the layered items
-          (HAIR_BACK at z=20, CAPE at z=10, etc.), so back-of-character
-          layers ended up rendering OVER the base's face instead of behind
-          the body. Symptom: equipped hair covered the face on mobile while
-          the same item worked on web. */}
+      {/* Base sprite sibling of layers so all zIndices share one stacking context. */}
       <Image
         source={BASE_PNG}
         style={{
@@ -174,9 +174,7 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
           height,
           zIndex: 30,
         }}
-        // expo-image: `contentFit="fill"` is the resizeMode="stretch" equivalent.
-        // The disk cache keeps the sprite sheets in memory across modal opens
-        // so the chibi composes on the same frame the modal mounts.
+        // contentFit=fill ≡ resizeMode=stretch; memory-disk cache for instant compose.
         contentFit="fill"
         cachePolicy="memory-disk"
       />
@@ -216,13 +214,9 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
                 : null,
             ]}
             contentFit="fill"
-            // memory-disk cache means previously-rendered preview URLs (the
-            // equipped sprite set is small and changes rarely) are read from
-            // local disk on subsequent modal opens — no network round-trip
-            // and no decode flicker.
+            // memory-disk cache — instant reads on subsequent modal opens.
             cachePolicy="memory-disk"
-            // Stable recycling key so expo-image reuses the same texture
-            // when the same item appears at the same z-slot across renders.
+            // Stable key so expo-image reuses textures across renders.
             recyclingKey={layer.key}
           />
         );
@@ -231,6 +225,5 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
   );
 }
 
-// Hint to consumers about the container's aspect ratio so they can reserve
-// width for a given height without re-deriving CONTAINER_SOURCE_W.
+// Container aspect ratio so consumers can reserve width for a given height.
 export const CHIBI_ASPECT = ASPECT;

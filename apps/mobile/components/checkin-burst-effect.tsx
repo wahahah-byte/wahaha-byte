@@ -26,17 +26,12 @@ interface Props {
   active: boolean;
 }
 
-/**
- * Small particle burst rendered over a TaskRow when a recurring check-in
- * lands. Mirrors web's CheckInBurstEffect — 12 particles spraying in an
- * upward cone, then fading after ~900 ms. Parent must be position:relative.
- */
+// Particle burst on recurring check-in — 12 particles spray upward, fade ~900ms.
 export function CheckInBurstEffect({ active }: Props) {
   const c = useColors();
   const [particles, setParticles] = useState<Particle[] | null>(null);
 
-  // Brand palette for the burst — alt highlight (purple-ish), success
-  // (green), warning (gold). Same three colours web cycles through.
+  // Burst palette — alt highlight, success, warning.
   const colors = useMemo(
     () => [c.activeHighlightAlt, c.success, c.warning],
     [c.activeHighlightAlt, c.success, c.warning],
@@ -49,8 +44,7 @@ export function CheckInBurstEffect({ active }: Props) {
     }
     setParticles(
       Array.from({ length: PARTICLE_COUNT }, (_, i) => {
-        // Spray upward in a wide cone — base angle is straight up
-        // (−π/2), spread ±0.475·π so particles fan out across the row.
+        // Upward cone — base −π/2, spread ±0.475·π.
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI * 0.95);
         const dist = 36 + Math.random() * 28;
         return {
@@ -95,9 +89,7 @@ function BurstParticle({ particle }: { particle: Particle }) {
 
   const style = useAnimatedStyle(() => {
     const t = progress.value;
-    // Translate from origin to (dx, dy*2) — web's keyframe overshoots
-    // vertically slightly so particles read as "lifting and falling".
-    // Scale shrinks toward 0.4; opacity drops to 0 across the second half.
+    // Translate to (dx, dy); scale → 0.4; opacity fades in second half.
     const tx = particle.dx * t;
     const ty = particle.dy * t;
     const scale = 1 - 0.6 * t;

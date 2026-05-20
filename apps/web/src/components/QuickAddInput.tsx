@@ -29,11 +29,7 @@ export default function QuickAddInput({ onSubmit, disabled }: Props) {
         category: parsed.category,
       });
       setValue("");
-      // Drop focus so the soft keyboard dismisses — otherwise the input
-      // stays focused after submit, the keyboard stays up, and the action
-      // bar floats above where the keyboard was, leaving a visual gap below
-      // it for users who expect the bar to return to the screen bottom
-      // after creating the task.
+      // Blur so the soft keyboard dismisses after submit.
       inputRef.current?.blur();
     } finally {
       setBusy(false);

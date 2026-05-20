@@ -4,18 +4,15 @@ import { useRef, useState } from "react";
 import { usersApi } from "@/lib/api/users";
 
 interface Props {
-  // Current profile picture URL; null/undefined renders a placeholder.
+  // Current PFP URL; null renders placeholder.
   profilePictureUrl?: string | null;
-  // Fires after a successful upload or delete. The argument is the new URL
-  // (or null on remove). Parent merges into its own user state.
+  // Fires after upload/delete with the new URL or null.
   onChange?: (newUrl: string | null) => void;
-  // Rendered diameter in px. Defaults to 96 — adjust to match your layout.
+  // Rendered diameter in px.
   size?: number;
 }
 
-// Drop-in profile picture uploader. Click the avatar (or the change button)
-// to pick a file; the file is resized client-side to ~256x256 JPEG before
-// upload to keep payloads small. Drag-and-drop works too.
+// Click-or-drop profile picture uploader.
 export default function ProfilePictureUpload({ profilePictureUrl, onChange, size = 96 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -144,7 +141,7 @@ export default function ProfilePictureUpload({ profilePictureUrl, onChange, size
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          // Reset so picking the same file twice still fires onChange.
+          // Reset to allow re-picking the same file.
           e.target.value = "";
           if (file) void handleFile(file);
         }}

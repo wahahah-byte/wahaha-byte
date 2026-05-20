@@ -20,7 +20,7 @@ export default function CounterPromptModal({ taskTitle, unit, mode = "checkin", 
 
   const isLog = mode === "log";
 
-  // Most-recent distinct numeric values, capped at 3 — quick-pick chips.
+  // Top 3 distinct recent values as quick-pick chips.
   const chips = (recentValues ?? [])
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0)
     .filter((v, i, arr) => arr.indexOf(v) === i)

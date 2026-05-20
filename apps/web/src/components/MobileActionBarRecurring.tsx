@@ -23,11 +23,11 @@ interface Props {
   onGroupChange: (mode: RecurringGroupMode) => void;
   onNewTask: () => void;
   isAuthenticated: boolean;
-  /** When provided, the FilterTray will mirror its scroll position to this element's transform. */
+  // FilterTray mirrors its scroll position to this element's transform.
   pagerRef?: React.RefObject<HTMLElement | null>;
-  /** Categories present among recurring tasks — only those render in the icon strip. */
+  // Categories present among recurring tasks.
   availableCategories?: string[];
-  /** Currently active category filter, or null when none selected. */
+  // Currently active category filter, or null when none selected.
   activeCategory?: string | null;
   onCategoryChange?: (category: string | null) => void;
 }
@@ -56,7 +56,7 @@ export default function MobileActionBarRecurring({
   const [showGroup, setShowGroup] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const trayElementRef = useRef<HTMLDivElement>(null);
-  // Same keyboard-aware bottom anchor as MobileActionBar — see useKeyboardInset.
+  // Keyboard-aware bottom anchor; see useKeyboardInset.
   const keyboardInset = useKeyboardInset();
   const bottomOffset = keyboardInset > 0
     ? `${keyboardInset}px`

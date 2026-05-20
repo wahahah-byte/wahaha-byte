@@ -8,23 +8,15 @@ interface Props {
   showStepper: boolean;
   counterUnit?: string | null;
   counterGoal?: number | null;
-  // When true, the + button disables once sum reaches goal. The cap is also
-  // enforced server-side; this prop only suppresses optimistic taps so we
-  // don't queue deltas the API will reject and toast about.
+  // Disables + once sum hits goal (also enforced server-side).
   capAtGoal?: boolean;
-  // Reserved for future external use; not read here. Keeps the parent's
-  // state-coordination clean — the parent owns pendingLog because the
-  // heatmap (a sibling) also reads it.
+  // Reserved for future use; pendingLog ownership stays at parent.
   cycles?: CheckInCycleDto[];
   onIncrement: () => void;
   onDecrement: () => void;
 }
 
-// Presentational +/- counter under the avatar. The pendingLog buffer, debounce
-// timer, and unload handlers all live in the parent (TaskDetailModal) so that
-// the heatmap on the sibling pager card can reflect pendingLog too — without
-// it the avatar and heatmap drift by `pendingLog` for the duration of an
-// in-flight flush.
+// Presentational +/- counter; parent owns buffer + debounce.
 export default function QuickLogStepper({
   cycleSum,
   pendingLog,
@@ -39,7 +31,7 @@ export default function QuickLogStepper({
   const goal = counterGoal ?? null;
   const capped = !!capAtGoal && goal != null && sum >= goal;
 
-  // Render nothing if there's nothing to display and no input affordance.
+  // Nothing to show and no input affordance.
   if (cycleSum === 0 && pendingLog === 0 && goal == null && !showStepper) return null;
 
   const unit = counterUnit ? ` ${counterUnit}` : "";

@@ -7,17 +7,11 @@ import { Colors } from "@/constants/theme";
 import { equippedCache } from "@/lib/equipped-cache";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-// Tabs intentionally aren't gated by an auth check — unauthenticated users
-// can browse the app in "demo mode" (matches the web home page's behaviour).
-// The DemoModeBanner on the home tab prompts them to sign in when they're
-// ready; API calls just fail/return empty until they do.
+// Tabs intentionally ungated — unauthed users browse in demo mode.
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
-  // Prefetch the user's equipped avatar at app start so the FIRST detail
-  // modal opens with the chibi already composed — instead of waiting for
-  // /api/avatar/equipped after the user taps a task. revalidate() silently
-  // no-ops if unauthenticated (demo mode); next mount will retry.
+  // Prefetch equipped avatar so first detail modal opens with chibi composed.
   useEffect(() => {
     equippedCache.revalidate();
   }, []);
@@ -28,8 +22,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-        // Nav is provided by the global MobileEdgeDrawer — hide the bottom
-        // tab bar entirely so the drawer is the only nav surface.
+        // Nav via MobileEdgeDrawer — bottom tab bar hidden.
         tabBarStyle: { display: "none" },
       }}>
       <Tabs.Screen

@@ -11,7 +11,7 @@ interface ToastContextValue {
   animKey: number;
   setError: (msg: string | null) => void;
   setSuccess: (msg: string | null) => void;
-  // Backwards-compat alias surfaced as `error` so existing readers keep working
+  // Back-compat alias surfaced as `error` for existing readers.
   error: string | null;
 }
 

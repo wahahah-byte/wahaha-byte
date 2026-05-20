@@ -26,18 +26,13 @@ interface Props {
 const SWIPE_COMMIT_PX = 56;
 const RUBBER_EDGE = 0.15;
 
-// Two-card horizontal swipe pager. Mobile port of web's DetailPager.
-// - Axis-lock via activeOffsetX([-8, 8]) so vertical scroll inside a card
-//   isn't hijacked by the pager (sheet swipe-down works fine).
-// - Rubber-band past the boundary cards so the user feels the edge.
-// - Tab strip below mirrors web; tapping a tab animates to that card.
+// Horizontal swipe pager with axis-lock, rubber-band edges, and tab strip.
 export function DetailPager({ cards, height = 220, labels }: Props) {
   const c = useColors();
   const [active, setActive] = useState(0);
   const [wrapWidth, setWrapWidth] = useState(0);
 
-  // `offset` is the page index (continuous during drag) so the animated style
-  // can read it directly. 0 = first card, 1 = second, etc.
+  // Continuous page index (0=first, 1=second…) for animated style reads.
   const offset = useSharedValue(0);
   const dragStart = useSharedValue(0);
 
@@ -50,10 +45,7 @@ export function DetailPager({ cards, height = 220, labels }: Props) {
     setWrapWidth(e.nativeEvent.layout.width);
   }
 
-  // Activate on >=8px horizontal motion so taps on inner controls (the
-  // QuickLogStepper +/- buttons under the avatar) reach Pressable.onPress
-  // instead of being eaten by the pan. failOffsetY caps vertical drift so
-  // the sheet's downward dismiss-pan still wins on clearly vertical drags.
+  // Activate after 8px horizontal so inner Pressables get taps; failOffsetY lets sheet dismiss win vertically.
   const pan = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .failOffsetY([-12, 12])
@@ -64,8 +56,7 @@ export function DetailPager({ cards, height = 220, labels }: Props) {
     .onUpdate((e) => {
       "worklet";
       if (wrapWidth === 0) return;
-      // Horizontal only — vertical translation is intentionally dropped so
-      // the modal can't be dismissed by swiping down on the pager.
+      // Horizontal only — modal can't be dismissed by swiping down on pager.
       const deltaIdx = -e.translationX / wrapWidth;
       let next = dragStart.value + deltaIdx;
       // Rubber-band past edges.
@@ -79,7 +70,7 @@ export function DetailPager({ cards, height = 220, labels }: Props) {
       if (wrapWidth === 0) return;
       const commitFraction = SWIPE_COMMIT_PX / wrapWidth;
       let target = Math.round(offset.value);
-      // Lower the snap-threshold so a small but decisive flick commits.
+      // Low snap-threshold so a decisive flick commits.
       if (offset.value - dragStart.value > commitFraction && target <= dragStart.value) {
         target = Math.min(cards.length - 1, Math.floor(dragStart.value) + 1);
       } else if (dragStart.value - offset.value > commitFraction && target >= dragStart.value) {

@@ -132,7 +132,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           ✕
         </button>
 
-        {/* Title — borderless, prominent */}
+        {/* Title */}
         <input
           autoFocus
           value={title}
@@ -150,7 +150,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           }}
         />
 
-        {/* Description (lazy-revealed) */}
+        {/* Description */}
         {showDescription || description ? (
           <textarea
             autoFocus={!description}
@@ -186,7 +186,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           </button>
         )}
 
-        {/* Priority pills — always visible */}
+        {/* Priority pills */}
         <div className="flex flex-wrap gap-1.5 mb-2">
           {PRIORITIES.map((p) => {
             const active = priority === p.value;
@@ -210,7 +210,7 @@ export default function NewTaskModal({ onClose, onCreated, initialRecurring = fa
           })}
         </div>
 
-        {/* More details disclosure (collapsed by default unless recurring) */}
+        {/* More details disclosure */}
         {!showDetails ? (
           <button
             onClick={() => setShowDetails(true)}

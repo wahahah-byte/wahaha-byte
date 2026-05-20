@@ -28,11 +28,7 @@ import {
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
-// TickTick-style quick-add. A compact bar anchored just above the keyboard:
-// title input + send button on top, chip row underneath for priority, due
-// date, category, and repeat. The bar's translateY is driven by the live
-// keyboard height (via Keyboard.addListener) so it rides up with the keyboard
-// the same way the OS animates it. No sheet, no scroll, no overlap math.
+// TickTick-style quick-add bar that rides above the soft keyboard.
 
 type Priority = "low" | "medium" | "high";
 
@@ -49,8 +45,7 @@ const REPEAT_OPTIONS: { value: string; label: string; rule: string | null }[] = 
   { value: "monthly", label: "Monthly", rule: "monthly" },
 ];
 
-// How far the bar drops offscreen for the mount/dismiss slide. Larger than
-// any realistic bar height so the bar is fully hidden during the transition.
+// How far the bar drops offscreen for mount/dismiss slide.
 const SLIDE_OFFSCREEN = 240;
 const ANIM_MS = 240;
 
@@ -87,38 +82,20 @@ export default function NewTaskScreen() {
   const [dueDate, setDueDate] = useState<Date | null>(initialRecurring ? new Date() : null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Which chip's inline dropdown is currently open. The Category, Repeat,
-  // Points, and Counter-unit chips use an inline overlay (not <Modal>) so
-  // the keyboard stays up while the user picks. Date uses the full
-  // DatePicker modal which DOES dismiss the keyboard — the calendar needs
-  // the screen, and the title re-focuses on close to bring the keyboard back.
+  // Currently open chip dropdown — inline overlay keeps keyboard up.
   const [openChip, setOpenChip] = useState<"category" | "repeat" | "points" | "unit" | null>(null);
-  // Points value: starts at the per-recurrence default and the user can
-  // override via the inline chip dropdown. Recurring tasks use the 1-5
-  // scale; one-shot tasks use 5/10/15/20/25 capped by the category's max.
+  // Points: 1-5 recurring, 5/10/15/20/25 one-shot (capped by category).
   const [pointValue, setPointValue] = useState<number>(initialRecurring ? 1 : 10);
 
-  // Counter is recurring-only — same constraint as web NewTaskModal and the
-  // edit-task form. Cleared automatically when the user picks "Once".
+  // Counter is recurring-only; cleared when user picks "Once".
   const [hasCounter, setHasCounter] = useState(false);
   const [counterUnit, setCounterUnit] = useState<string>("");
   const [counterGoal, setCounterGoal] = useState<string>("");
   const [capLogAtGoal, setCapLogAtGoal] = useState(false);
 
-  // Detached chip dropdowns: render the dropdown body at root level (sibling
-  // of the bar) instead of nesting it inside the chip. Why: on Android, a
-  // child rendered with position:absolute that extends past its parent's
-  // bounds doesn't receive touches in the outside-parent area, even though
-  // it's visually painted there. Nesting the dropdown inside the bar made
-  // the upper option rows un-scrollable — the swipe-up gesture passed into
-  // territory above the bar and was dropped. Lifting it out gives the
-  // dropdown its own hit-test bounds. barHeight + per-chip x are measured
-  // via onLayout so the overlay sits just above the bar, horizontally
-  // aligned with the open chip.
+  // Detached dropdowns rendered as bar siblings so Android hit-testing works.
   const [barHeight, setBarHeight] = useState(0);
-  // The chipRow's Y offset *within* the bar — measured separately because
-  // each chip's `y` is reported relative to the chipRow, not the bar. We
-  // sum them (rowY + chip.y) to get the chip's top within the bar.
+  // chipRow Y within bar; chips report y relative to row, not bar.
   const [chipRowY, setChipRowY] = useState(0);
   const [counterRowY, setCounterRowY] = useState(0);
   const [chipRects, setChipRects] = useState<
@@ -146,8 +123,7 @@ export default function NewTaskScreen() {
     if (!isRecurring && hasCounter) setHasCounter(false);
   }, [isRecurring, hasCounter]);
 
-  // Allowed point values: 1-5 for recurring, 5/10/15/20/25 for one-shot
-  // capped by the category limit. Mirrors web NewTaskModal + task-form.
+  // Allowed point values: 1-5 recurring, 5/10/15/20/25 one-shot.
   const pointOptions = useMemo(
     () => (isRecurring
       ? [1, 2, 3, 4, 5]
@@ -155,11 +131,7 @@ export default function NewTaskScreen() {
     [isRecurring, category],
   );
 
-  // Whenever the rule or category changes the point set can shift (e.g.
-  // jumping from one-shot to recurring leaves the user at 10 which isn't a
-  // valid recurring value, or switching to a category with a lower cap).
-  // Snap to the nearest allowed value so the chip never displays a stale
-  // out-of-range number.
+  // Snap to nearest allowed value when point set shifts.
   useEffect(() => {
     if (pointOptions.length === 0) return;
     if (!pointOptions.includes(pointValue)) {
@@ -169,19 +141,14 @@ export default function NewTaskScreen() {
 
   const titleRef = useRef<TextInput>(null);
 
-  // Shared values for the bar's transform and the backdrop's opacity.
-  // kbHeight = live soft keyboard height; slideOff = 1 (mounted/hidden) → 0 (open).
+  // Shared values: kbHeight, slideOff (1=hidden, 0=open), dim, barOpacity.
   const kbHeight = useSharedValue(0);
   const slideOff = useSharedValue(1);
   const dim = useSharedValue(0);
-  // barOpacity is faded to 0 while the DatePicker modal is open so the
-  // user doesn't see the bar dropping when the keyboard dismisses — the
-  // calendar handoff reads as a single coordinated animation.
+  // Faded to 0 while DatePicker open so bar-drop isn't visible.
   const barOpacity = useSharedValue(1);
 
-  // Track live keyboard height. We use addListener so the value is plain JS
-  // state-friendly (not a worklet-only sharedValue) — works fine for our
-  // 200 ms ease animation.
+  // Track live keyboard height.
   useEffect(() => {
     const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
@@ -194,8 +161,7 @@ export default function NewTaskScreen() {
     return () => { show.remove(); hide.remove(); };
   }, [kbHeight]);
 
-  // Mount: animate the bar up from offscreen, fade the dim in, then focus
-  // the title (which opens the keyboard, which slides the bar further up).
+  // Mount: animate bar up, fade dim, then focus title.
   useEffect(() => {
     slideOff.value = withTiming(0, { duration: ANIM_MS, easing: Easing.bezier(0.2, 0, 0, 1) });
     dim.value = withTiming(0.6, { duration: ANIM_MS });
@@ -218,13 +184,11 @@ export default function NewTaskScreen() {
     Keyboard.dismiss();
     slideOff.value = withTiming(1, { duration: ANIM_MS, easing: Easing.bezier(0.22, 1, 0.36, 1) });
     dim.value = withTiming(0, { duration: ANIM_MS });
-    // After the animation, pop the route.
+    // Pop route after animation.
     setTimeout(() => router.back(), ANIM_MS + 10);
   }
 
-  // The dim backdrop closes an open chip dropdown first; only a tap with
-  // no dropdown open dismisses the whole modal. That makes "tap outside"
-  // a normal close-the-dropdown action without nuking the user's input.
+  // Backdrop closes open dropdown first; only dismisses modal when no dropdown.
   function handleBackdropPress() {
     if (openChip) {
       setOpenChip(null);
@@ -282,16 +246,14 @@ export default function NewTaskScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Dim backdrop — opaque enough to hide any movement on the underlying
-          (tabs) screen caused by Android's adjustResize. Tap dismisses. */}
+      {/* Dim backdrop — hides Android adjustResize movement; tap dismisses. */}
       <Animated.View
         style={[StyleSheet.absoluteFillObject, { backgroundColor: "#000" }, dimStyle]}
       >
         <Pressable style={{ flex: 1 }} onPress={handleBackdropPress} />
       </Animated.View>
 
-      {/* Bar — position absolute at the very bottom of the screen, animated
-          up by the keyboard height via translateY. */}
+      {/* Bar — absolute bottom, translateY by keyboard height. */}
       <Animated.View
         style={[
           styles.bar,
@@ -315,9 +277,7 @@ export default function NewTaskScreen() {
             placeholder="New task"
             placeholderTextColor={c.fgSubtle}
             onSubmitEditing={handleSubmit}
-            // Tapping the title or description while a chip dropdown is open
-            // collapses the dropdown — the focus event still fires so the
-            // keyboard stays up; we're just dismissing the overlay.
+            // Focus collapses open dropdown; keyboard stays up.
             onFocus={() => setOpenChip(null)}
             returnKeyType="done"
             blurOnSubmit={false}
@@ -347,9 +307,7 @@ export default function NewTaskScreen() {
           </Pressable>
         </View>
 
-        {/* Optional notes/description — always shown, small font, no border.
-            Auto-grows up to ~4 lines. Empty value is fine, gets stripped on
-            submit. */}
+        {/* Notes/description — small, borderless, auto-grow ~4 lines. */}
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -381,11 +339,7 @@ export default function NewTaskScreen() {
             </ThemedText>
           </Pressable>
 
-          {/* Due date — full calendar via DatePicker's Modal. The Modal
-              dismisses the keyboard while the calendar is open; we fade
-              the bar out on open and back in on close so the keyboard-down
-              + calendar-up sequence reads as one smooth handoff, and
-              re-focus the title to bring the keyboard back. */}
+          {/* Due date — bar fades while DatePicker open for smooth handoff. */}
           <DatePicker
             value={dueDate}
             compact
@@ -396,9 +350,7 @@ export default function NewTaskScreen() {
             }}
             onOpenChange={(open) => {
               barOpacity.value = withTiming(open ? 0 : 1, {
-                // Faster fade-out so the bar is gone before the calendar
-                // arrives; slower fade-in so it reappears as the keyboard
-                // is sliding up after close.
+                // Fast fade-out, slow fade-in for keyboard rise.
                 duration: open ? 140 : 220,
               });
             }}
@@ -426,9 +378,7 @@ export default function NewTaskScreen() {
             onChipLayout={(r) => updateChipRect("repeat", r)}
           />
 
-          {/* Points — sits inline with Category + Repeat so it stays
-              visible above the keyboard (the form below the bar was
-              previously where points lived, hidden by the soft keyboard). */}
+          {/* Points — inline so it stays above keyboard. */}
           <InlineChipDropdown
             value={String(pointValue)}
             options={pointOptions.map((v) => ({ value: String(v), label: `${v} pt${v === 1 ? "" : "s"}` }))}
@@ -439,9 +389,7 @@ export default function NewTaskScreen() {
             onChipLayout={(r) => updateChipRect("points", r)}
           />
 
-          {/* Counter — recurring-only. Tapping the pill toggles the counter
-              section below. Hidden entirely for non-recurring tasks to match
-              the web new-task modal and the edit form. */}
+          {/* Counter — recurring-only; pill toggles counter section. */}
           {isRecurring ? (
             <Pressable
               onPress={() => { setOpenChip(null); setHasCounter((v) => !v); }}
@@ -539,21 +487,10 @@ export default function NewTaskScreen() {
         ) : null}
       </Animated.View>
 
-      {/* Detached chip-dropdown overlay — rendered as a sibling of the bar
-          (NOT a child) so its hit-test bounds are independent. The
-          Animated.View shares the bar's `barStyle` transform so the overlay
-          tracks the bar as the soft keyboard slides it up — without this,
-          the overlay stayed at the screen bottom and got covered by the
-          keyboard. Position is computed to sit *directly* above the open
-          chip: the chip's top inside the bar = (rowY within bar) +
-          (chip.y within row), and `bottom: barHeight - chipTopInBar + 6`
-          puts the dropdown's bottom edge 6 px above the chip's top edge.
-          The bar's horizontal padding (14) plus chip.x gives the left. */}
+      {/* Detached chip-dropdown overlay — sibling of bar, tracks via barStyle. */}
       {openChip && chipRects[openChip] ? (() => {
         const rect = chipRects[openChip];
-        // Only the unit chip lives in the counter row; everything else is
-        // in the main chip row. Pick the right row Y so the dropdown lands
-        // on whichever row the chip is actually on.
+        // Unit chip lives in counter row; everything else in main chip row.
         const rowY = openChip === "unit" ? counterRowY : chipRowY;
         const chipTopInBar = rowY + rect.y;
         return (

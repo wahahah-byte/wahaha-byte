@@ -20,23 +20,7 @@ interface Result {
   handleDeleteClick: () => void;
 }
 
-// Mobile port of useQuickLog. Mirrors the web hook's buffered-delta semantics:
-//
-//  - pendingLog buffers +/- taps; debounced auto-flush after 1500ms idle.
-//  - cycleSumToday is derived from heatmapCycles so the heatmap and stepper
-//    share one source of truth.
-//  - Display value = cycleSumToday + pendingLog. During an in-flight flush,
-//    pendingLog stays at full value until the parent's appendCycle bumps
-//    cycleSumToday; then we subtract the flushed delta from pendingLog in
-//    the same render. Both moves cancel out — no flicker.
-//
-// Differences from the web hook:
-//  - Uses RN AppState ('background') in place of pagehide / visibilitychange
-//    for last-chance flushes. There's no `keepalive` equivalent on RN; the
-//    flush is fire-and-forget when going to background.
-//  - No flushSync. RN batches setState within events; the stepper + heatmap
-//    are siblings in the same screen, so a single setState pair on flush
-//    success renders atomically.
+// Mobile useQuickLog — buffered +/- with debounced flush + AppState bg-flush.
 export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: Args): Result {
   const [pendingLog, setPendingLog] = useState(0);
   const pendingLogRef = useRef(0);
@@ -77,10 +61,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     setPendingLog((p) => (cycleSumToday + p - 1 < 0 ? p : p - 1));
   }, [cycleSumToday]);
 
-  // Once the cycle is closed (a check-in has landed for this period) we
-  // discard any un-flushed buffer so a debounced tap can't slip a log
-  // through after the check-in. Matches the server's LogCounter gate so
-  // a buffered tap doesn't fire a doomed request right after commit.
+  // After cycle close, discard buffer so debounced tap can't slip through.
   const cycleClosed = isCycleClosed(task.dueDate, task.lastCheckInDate);
   useEffect(() => {
     if (!cycleClosed) return;
@@ -90,10 +71,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     setPendingLog(0);
   }, [cycleClosed]);
 
-  // Flush any un-sent buffered delta on unmount or task change. Skipped
-  // when the cycle is closed — the user already checked in, so a trailing
-  // log would land after the check-in and the server would reject it (or
-  // create the cycle-411-then-412 mess that breaks undo).
+  // Flush buffered delta on unmount/task change; skip when cycle closed.
   useEffect(() => {
     const tid = task.taskId;
     return () => {
@@ -109,10 +87,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     };
   }, [task.taskId, cycleClosed]);
 
-  // Debounced auto-flush. The cycleClosed gate stops a buffered tap from
-  // firing after the user has checked in (e.g. they hit + then immediately
-  // slid to commit — without this the 1.5 s timer would fire post-commit
-  // and try to land a log on a closed cycle).
+  // Debounced auto-flush; cycleClosed gate blocks post-commit firings.
   useEffect(() => {
     if (!flushRef.current) return;
     if (cycleClosed) return;
@@ -138,9 +113,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     return () => clearTimeout(timer);
   }, [pendingLog, task.taskId, cycleClosed]);
 
-  // AppState safety net: when the app goes to background, flush whatever's
-  // un-sent so a backgrounded -> killed app doesn't lose taps. Same
-  // cycle-closed gate so we don't background-flush a doomed log.
+  // AppState bg flush so killed app doesn't lose buffered taps.
   useEffect(() => {
     const tid = task.taskId;
     const onChange = (state: AppStateStatus) => {
@@ -149,9 +122,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
       const remainder = pendingLogRef.current - inFlightSentRef.current;
       if (remainder === 0) return;
       inFlightSentRef.current += remainder;
-      // Fire-and-forget. If the app actually dies, the result is lost; on
-      // resume we re-fetch task state via useFocusEffect and the cycle either
-      // landed on the server (good) or didn't (user redoes it).
+      // Fire-and-forget; resume re-fetches task state via useFocusEffect.
       flushRef.current?.(tid, remainder);
     };
     const sub = AppState.addEventListener("change", onChange);

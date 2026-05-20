@@ -32,22 +32,17 @@ export default function TasksScreen() {
   const [loadedTasks, setLoadedTasks] = useState<TaskDto[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("due");
   const [groupMode, setGroupMode] = useState<GroupMode>("none");
-  // Auth state drives the DemoModeBanner — unauthenticated users see the
-  // tabs but with an inline "changes not saved" prompt at the top of /.
+  // Auth state — drives DemoModeBanner visibility.
   const [hasToken, setHasToken] = useState(false);
   useEffect(() => {
     getToken().then((t) => setHasToken(!!t));
   }, [refreshKey]);
 
-  // Submit/bank flow state — mirrors web's useTaskSubmission. Selection only
-  // applies on the Completed tab; SubmitBar replaces the action-bar slot when
-  // anything is selected.
+  // Submit/bank flow — selection only on Completed tab.
   const [me, setMe] = useState<UserProfile | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submittedTaskIds, setSubmittedTaskIds] = useState<Set<string>>(new Set());
-  // IDs that just got banked — these play the BankBurstEffect overlay for
-  // ~2 s before being cleared. Set right after a successful submit so the
-  // rows are still mounted (refetch hasn't dropped them yet).
+  // Just-banked IDs — play BankBurstEffect for ~2s before cleared.
   const [bankingIds, setBankingIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCapWarning, setShowCapWarning] = useState(false);
@@ -60,7 +55,7 @@ export default function TasksScreen() {
     });
   }, []);
 
-  // Daily cap math — same shape as web's useTaskSubmission.
+  // Daily cap math — matches web useTaskSubmission.
   const regularSubmitted = me
     ? me.pointsSubmittedToday - me.recurringPointsSubmittedToday
     : 0;
@@ -91,10 +86,7 @@ export default function TasksScreen() {
     return c;
   }, [loadedTasks]);
 
-  // Unsubmitted points indicator: any completed task that hasn't been
-  // submitted yet drives a warning dot on the Completed tab — matches
-  // web's badgeColor behaviour. `submitted === false && !pointsAwarded`
-  // mirrors web's `unsubmitted` check in page.tsx.
+  // Warning dot on Completed when any task is unsubmitted.
   const hasUnsubmitted = useMemo(
     () => loadedTasks.some(
       (t) => t.status === "completed" && t.submitted === false && !t.pointsAwarded,
@@ -111,8 +103,7 @@ export default function TasksScreen() {
     [hasUnsubmitted, c.warning],
   );
 
-  // Clear the selection whenever the user leaves the Completed tab — matches
-  // web's pattern where the SubmitBar is only relevant on that filter.
+  // Clear selection when leaving Completed tab.
   useEffect(() => {
     if (activeFilter !== "completed" && selectedIds.size > 0) {
       setSelectedIds(new Set());
@@ -132,10 +123,7 @@ export default function TasksScreen() {
     const succeededIds = ids.filter((id) => !failedIds.has(id));
     if (succeededIds.length === 0) return;
     setSubmittedTaskIds((prev) => new Set([...prev, ...succeededIds]));
-    // Trigger the bank-burst overlay for these rows. The refetch below
-    // would normally pull the rows out of the completed list immediately,
-    // so we defer it by ~1.9 s — same as the burst duration — to let the
-    // animation finish on a row that's still mounted.
+    // Trigger bank-burst overlay; defer refetch ~1.9s for animation.
     setBankingIds(new Set(succeededIds));
     setTimeout(() => {
       setBankingIds(new Set());
@@ -166,13 +154,7 @@ export default function TasksScreen() {
   const submitBarVisible =
     activeFilter === "completed" && selectedIds.size > 0;
 
-  // Manual keyboard tracking. KeyboardAvoidingView's internal layout recalc
-  // is unreliable on Android with edgeToEdgeEnabled: true (both `height` and
-  // `padding` behaviors left a ~30-40px stuck offset after dismiss — the
-  // restore under-corrected by the nav-bar height, lifting the action bar
-  // and the filter strip with it). Listening to Keyboard events ourselves
-  // and applying paddingBottom equal to the exact measured keyboard height
-  // (or zero when closed) avoids that whole class of drift.
+  // Manual keyboard tracking — KeyboardAvoidingView unreliable on Android edge-to-edge.
   const keyboardHeight = useKeyboardHeight();
   return (
     <ThemedView style={[styles.container, { paddingBottom: keyboardHeight }]}>
@@ -190,10 +172,7 @@ export default function TasksScreen() {
 
       <View style={styles.listWrap}>
         <TaskList
-          // Match web's useTasks hook: only one-off tasks on the To Do tab.
-          // Recurring routines live on /recurring and would otherwise leak
-          // into this list (they're returned by tasksApi.getAll when
-          // isRecurring is not filtered).
+          // Match web useTasks: only one-off tasks on To Do tab.
           filters={{ isRecurring: false, isArchived: false }}
           activeFilter={activeFilter}
           sortMode={sortMode}
@@ -250,8 +229,7 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 16, paddingTop: 64, paddingBottom: 10 },
-  // When the demo banner is shown above, the banner already handles the
-  // status-bar inset — drop the header's top padding accordingly.
+  // Demo banner handles status-bar inset, so drop header top padding.
   headerCompact: { paddingTop: 8 },
   listWrap: { flex: 1, paddingHorizontal: 16 },
 });

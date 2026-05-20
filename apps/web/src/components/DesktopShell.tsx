@@ -5,14 +5,11 @@ import { ReactNode } from "react";
 interface Props {
   sidebar: ReactNode;
   main: ReactNode;
-  // The right column is always reserved on desktop so opening a detail panel
-  // doesn't reflow the task list. Pass null/undefined when nothing is
-  // selected — the column just stays empty.
+  // Right column always reserved on desktop; pass null when nothing selected.
   detail?: ReactNode | null;
 }
 
-// Three-column shell that activates at >=1024px. Below that the children just
-// render the main column (the existing mobile layout untouched).
+// Three-column shell active >=1024px.
 export default function DesktopShell({ sidebar, main, detail }: Props) {
   return (
     <div className="desktop-shell">

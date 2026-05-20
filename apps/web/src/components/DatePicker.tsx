@@ -95,9 +95,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
       const damped = Math.sign(dx) * Math.min(Math.abs(dx), 140);
       setDragX(damped);
     } else if (s.locked === "v") {
-      // Only react to downward drag (commit-to-close gesture). Upward drag is
-      // a no-op so the sheet doesn't visibly lift and then snap back, which
-      // also dodges an entrance-animation replay on snap-to-rest.
+      // Only down-drag commits close.
       if (dy > 0) setSheetDragY(dy);
     }
   }

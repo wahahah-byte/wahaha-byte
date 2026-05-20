@@ -4,22 +4,21 @@ import { ReactNode } from "react";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
 
 interface Props {
-  // Drives both the tooltip content and the icon aria-label.
+  // Drives tooltip content + icon aria-label.
   capsVariant: "regular" | "recurring";
-  // Pre-resolved active-filter label (e.g. "All", "Today", "Pending").
+  // Pre-resolved active-filter label.
   filterLabel: string;
-  // Optional category breadcrumb shown after the filter label.
+  // Optional category breadcrumb.
   activeCategory: string | null;
-  // Controls slot — render a TaskListControls / RoutineListControls here.
+  // Controls slot.
   controls: ReactNode;
-  // "+" button copy (e.g. "New task", "New routine").
+  // "+" button copy.
   newTaskLabel: string;
   isAuthenticated: boolean;
   onNewTask: () => void;
 }
 
-// Desktop main-panel header strip. Left: cap tooltip + filter label + optional
-// active-category breadcrumb. Right: caller-provided controls + a "+" button.
+// Desktop main-panel header strip.
 export default function TaskPageHeader({
   capsVariant, filterLabel, activeCategory, controls, newTaskLabel,
   isAuthenticated, onNewTask,

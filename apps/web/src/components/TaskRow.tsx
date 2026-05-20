@@ -12,8 +12,7 @@ import CheckInBurstEffect from "@/components/CheckInBurstEffect";
 import { currentStreakTier } from "@/components/TierUpBanner";
 import { useTheme } from "@/context/ThemeContext";
 
-// iOS-style rubber-band damping: maps any |x| asymptotically to RUBBER_C.
-// Small excess feels nearly linear; large excess approaches RUBBER_C.
+// iOS-style rubber-band damping mapping |x| asymptotically to RUBBER_C.
 const RUBBER_C = 60;
 function rubberBand(x: number): number {
   const abs = Math.abs(x);
@@ -43,20 +42,13 @@ interface TaskRowProps {
   onArchive?: (task: TaskDto) => void;
   onUnarchive?: (task: TaskDto) => void;
   onSubtasksChange?: (taskId: string, subtasks: Subtask[]) => void;
-  // Reverses today's check-in cycle. Only invoked from rows that show the
-  // inline Undo pill (recurring task whose latest cycle is today + cycleType=checkin).
+  // Reverses today's check-in cycle for recurring rows.
   onUndoCheckIn?: (task: TaskDto, cycleId: number) => void | Promise<unknown>;
-  // For recurring counter tasks, the swipe-left action panel surfaces Log
-  // instead of Check-in (counter tasks check in via the modal's slider).
+  // Swipe-left Log action for counter tasks (modal slider does check-in).
   onLog?: (task: TaskDto) => void;
-  // True when this row's task is the one shown in the desktop detail panel.
-  // Adds a highlight so the user can see which list row corresponds to the
-  // panel on the right. Mobile uses the modal overlay so this flag is unused
-  // there. Set by the parent — the row doesn't compute it itself.
+  // True when this row's task is shown in the desktop detail panel.
   isOpenInDetail?: boolean;
-  // Routines surface only: swap the leading category icon for a priority-
-  // colored checkbox. Tapping it checks in (or undoes today's check-in) so
-  // the user can clear a routine without opening the modal or swiping.
+  // Routines surface: swap category icon for priority-colored checkbox.
   useCheckinCheckbox?: boolean;
 }
 
@@ -70,12 +62,7 @@ function TaskRowImpl({
   const [expanded, setExpanded] = useState(false);
   const isAuthenticated = typeof window !== "undefined" && !!localStorage.getItem("auth_token");
 
-  // Streak-chip pop animation. When task.currentStreakCount goes up (a
-  // check-in just landed) we tag the streak chip span with a class that
-  // plays a one-shot scale + glow keyframe. Replaces the louder
-  // setSuccess toast that used to fire from useTaskActions whenever the
-  // bonus multiplier kicked in. Only fires on *increments* — initial
-  // mount and resets (streak broken) play nothing.
+  // Streak-chip pop animation on streak increment only.
   const streakCountForPop = task.currentStreakCount ?? 0;
   const prevStreakRef = useRef(streakCountForPop);
   const [streakJustIncremented, setStreakJustIncremented] = useState(false);
@@ -123,9 +110,7 @@ function TaskRowImpl({
   const isSelectable = activeFilter === "completed" && isCompleted && !isSubmitted;
   const overdueRecurring = task.isRecurring && !isInProgress && !isCompleted && isOverdue(task.dueDate);
 
-  // The latest cycle is the head of recentCycles (server returns desc by date+id).
-  // We surface an inline Undo pill when it's today's "checkin" — and only when
-  // the parent wired up onUndoCheckIn (so this stays opt-in for callers).
+  // Surface inline Undo pill for today's "checkin" cycle when onUndoCheckIn is wired.
   const undoableCycle = (() => {
     if (!task.isRecurring || !onUndoCheckIn) return null;
     const latest = task.recentCycles?.[0];
@@ -133,10 +118,7 @@ function TaskRowImpl({
     return latest.checkInDate.split("T")[0] === todayLocalKey() ? latest : null;
   })();
   const wasCheckedInToday = !!undoableCycle;
-  // Cycle closure is a broader signal than "checked in today": it also covers
-  // weekly/biweekly/monthly tasks whose most recent check-in landed earlier
-  // in the cycle. Use this for affordances that should disappear for the
-  // remainder of the cycle (e.g. the Log button), not just for one day.
+  // Broader than checked-in-today: covers weekly/biweekly/monthly mid-cycle check-ins.
   const cycleClosed = task.isRecurring && isCycleClosed(task.dueDate, task.lastCheckInDate);
 
   const hasError = errorIds?.has(task.taskId) ?? false;
@@ -170,9 +152,7 @@ function TaskRowImpl({
     return () => ro.disconnect();
   }, []);
 
-  // Native non-passive touchmove listener: once the drag commits to horizontal,
-  // preventDefault tells the browser "JS owns this gesture" so it won't fire
-  // touchcancel and switch to vertical scroll mid-swipe.
+  // Non-passive touchmove: claim horizontal gesture so browser won't cancel mid-swipe.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -216,9 +196,7 @@ function TaskRowImpl({
     if (drag.axis === "none") {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       if (Math.abs(dx) > Math.abs(dy)) {
-        // Right-swipe on a closed row passes through to MobileEdgeDrawer's
-        // document handler (open the nav). Only left-swipes — and right-swipes
-        // that close an already-revealed row — own the gesture.
+        // Right-swipe on closed row passes through to MobileEdgeDrawer.
         if (dx > 0 && !revealed) {
           drag.axis = "vertical";
           dragRef.current = null;
@@ -245,8 +223,7 @@ function TaskRowImpl({
       const excess = raw + drag.panelWidth; // negative
       offset = -drag.panelWidth + rubberBand(excess);
     } else if (raw > 0) {
-      // Swiping right past the closed position should stop at closed, not
-      // rubber-band past it.
+      // Stop at closed; no rubber-band past it.
       offset = 0;
     } else {
       offset = raw;
@@ -364,9 +341,7 @@ function TaskRowImpl({
         className="task-actions"
         onClick={(e) => {
           e.stopPropagation();
-          // After any action button inside the revealed panel fires, close the
-          // panel — the button's own onClick already ran by the time this bubble
-          // handler fires, so the action goes through and the row settles back.
+          // Close the panel after an action button fires.
           if ((e.target as HTMLElement).closest("button")) {
             setRevealed(false);
           }
@@ -381,11 +356,7 @@ function TaskRowImpl({
         }}
       >
         {task.status === "pending" && task.isRecurring && !isInProgress && (() => {
-          // Counter tasks: replace the Check-in swipe action with Log. Counter
-          // tasks check in via the modal's slider; the swipe action is for
-          // quick log entries throughout the day. Once the cycle is closed
-          // (any cadence — daily/weekly/biweekly/monthly), hide Log so the
-          // user can't append to a finalised cycle.
+          // Counter tasks: Log replaces Check-in until cycle closes.
           if (task.hasCounter && onLog && !cycleClosed) {
             return (
               <button
@@ -585,10 +556,7 @@ function TaskRowImpl({
               )}
             </button>
           ) : useCheckinCheckbox && task.isRecurring && !isInProgress && !isCompleted ? (() => {
-            // Priority-coloured checkbox lead. Tapping it checks in (or undoes
-            // today's check-in) without opening the modal or swiping. Filled
-            // for the duration of the current cycle; undoable only on the day
-            // the cycle was committed (matches the right-side Undo pill).
+            // Priority-coloured checkbox lead — tap to check in / undo today's check-in.
             const filledThisCycle = wasCheckedInToday || cycleClosed;
             const isActionable = !filledThisCycle && eligibleCheckIn && !isAdvancing;
             const isInteractive = wasCheckedInToday || isActionable;
@@ -609,12 +577,7 @@ function TaskRowImpl({
               }
               if (isActionable) onCheckIn(task);
             };
-            // Mirror apps/mobile's checkinBox style: small (14×14), no fill
-            // when checked — the priority-coloured border + same-colour
-            // checkmark are enough signal, and the unfilled box reads as
-            // less heavy in dense lists. Locked state uses opacity so the
-            // whole box fades together (border + check) instead of a
-            // partially-transparent border that visually orphans the check.
+            // Mirrors apps/mobile checkinBox: 14x14, no fill, priority-coloured border + check.
             const box = (
               <button
                 onClick={isInteractive ? onBoxClick : (e) => e.stopPropagation()}
@@ -877,8 +840,7 @@ function TaskRowImpl({
                 </svg>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                // Overdue state is now signalled by the red date column —
-                // skip the recurring badge entirely so the row stays uncluttered.
+                // Overdue signalled by red date column — skip the recurring badge.
                 if (isOverdue(task.dueDate)) return null;
                 const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
                 const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
@@ -940,9 +902,7 @@ function TaskRowImpl({
               aria-label="Undo check-in"
               className="inline-flex items-center justify-center cursor-pointer"
               style={{
-                // Icon-only pill — tighter padding so the round shape stays
-                // visually balanced without the "UNDO" label that used to
-                // sit beside the glyph.
+                // Icon-only pill — tighter padding for round shape.
                 color: "var(--color-active-highlight-alt)",
                 background: "var(--color-active-highlight-alt-bg)",
                 border: "1px solid var(--color-active-highlight-alt-border, var(--color-border-hairline))",
@@ -978,13 +938,7 @@ function TaskRowImpl({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
           {isSubmitted ? (
-            // filed-badge-enter (a scale+opacity pop-in on the submitted-state
-            // coin-stack badge) used to fire ~900ms after the click, right as
-            // the row greys out — which read as the submit animation playing
-            // a second time on top of the BankBurstEffect underline that's
-            // still mid-fade. BankBurstEffect now owns the submit-feedback
-            // motion entirely; the badge just renders in place when the row
-            // transitions to submitted.
+            // Submitted-state coin-stack badge; BankBurstEffect owns submit motion.
             <div
               className="flex items-center gap-0.5"
               style={{
@@ -993,11 +947,11 @@ function TaskRowImpl({
                 padding: "1px 4px",
               }}
             >
-              {/* Coin Stack  */}
+              {/* Coin Stack */}
               <svg width="15" height="12" viewBox="0 0 12 10" fill="none">
                 <ellipse cx="6" cy="0.55" rx="2" ry="0.55" fill="var(--color-warning)" opacity="0.95" />
                 <path d="M 4,0.55 A 2,0.55 0 0 0 8,0.55" stroke="var(--color-warning)" strokeWidth="0.25" fill="none" opacity="1" />
-                {/* Tall stack — side rims (dark) and coin edges (bright) below the top */}
+                {/* Tall stack side rims and coin edges */}
                 <rect x="4" y="1.1" width="4" height="0.9" fill="var(--color-warning)" opacity="0.5" />
                 <rect x="4" y="2" width="4" height="1" fill="var(--color-warning)" opacity="0.95" />
                 <rect x="4" y="3" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
@@ -1006,20 +960,20 @@ function TaskRowImpl({
                 <rect x="4" y="6" width="4" height="1" fill="var(--color-warning)" opacity="0.95" />
                 <rect x="4" y="7" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
 
-                {/* Short stack — top face (3D oval) */}
+                {/* Short stack top face */}
                 <ellipse cx="10.5" cy="4.55" rx="1.5" ry="0.5" fill="var(--color-warning)" opacity="0.95" />
                 <path d="M 9,4.55 A 1.5,0.5 0 0 0 12,4.55" stroke="var(--color-warning)" strokeWidth="0.22" fill="none" opacity="1" />
-                {/* Short stack — side stripes */}
+                {/* Short stack side stripes */}
                 <rect x="9" y="5.1" width="3" height="0.9" fill="var(--color-warning)" opacity="0.5" />
                 <rect x="9" y="6" width="3" height="1" fill="var(--color-warning)" opacity="0.95" />
                 <rect x="9" y="7" width="3" height="1" fill="var(--color-warning)" opacity="0.5" />
 
-                {/* Loose coin A — front-left (oval-shaped base, viewed at angle) */}
+                {/* Loose coin A front-left */}
                 <ellipse cx="2.5" cy="8.4" rx="1.5" ry="0.4" fill="var(--color-warning)" opacity="0.95" />
                 <rect x="1" y="8.5" width="3" height="0.5" fill="var(--color-warning)" opacity="0.5" />
                 <rect x="0.5" y="9" width="4" height="1" fill="var(--color-warning)" opacity="0.5" />
 
-                {/* Loose coin B — front-right */}
+                {/* Loose coin B front-right */}
                 <ellipse cx="9.5" cy="8.4" rx="2" ry="0.45" fill="var(--color-warning)" opacity="0.95" />
                 <rect x="7.5" y="8.5" width="4" height="0.5" fill="var(--color-warning)" opacity="0.5" />
                 <rect x="7" y="9" width="5" height="1" fill="var(--color-warning)" opacity="0.5" />
@@ -1059,12 +1013,7 @@ function TaskRowImpl({
       </div>
 
       {slashingId === task.taskId && (
-        // Danger underline — same motion vocabulary as the BankBurstEffect
-        // submit underline but tinted with the danger colour. Draws L→R
-        // across the row's bottom edge, then fades while drifting up. The
-        // previous pixel-slash overlay (20 red rects fading in/out in
-        // stepped frames) was replaced to match the submit feedback's
-        // cream feel.
+        // Danger underline matching BankBurstEffect submit motion.
         <div
           aria-hidden
           className="row-delete-underline"
@@ -1122,9 +1071,7 @@ function TaskRowImpl({
 
       <div className="row-toolbar" onClick={stop}>
         {task.status === "pending" && task.isRecurring && !isInProgress && (
-          // Counter tasks: show Log on the desktop hover toolbar in place of
-          // Check-in (matches the swipe-left action on mobile). Hidden once
-          // the cycle is closed by a check-in, for any cadence.
+          // Counter tasks: desktop hover toolbar shows Log in place of Check-in.
           task.hasCounter && onLog && !cycleClosed ? (
             <button
               onClick={(e) => { e.stopPropagation(); onLog(task); }}

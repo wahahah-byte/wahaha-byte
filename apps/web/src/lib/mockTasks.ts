@@ -1,10 +1,8 @@
 import { TaskDto, CheckInCycleDto } from "@/lib/api/tasks";
 import { dateKey } from "@/lib/dateUtils";
 
-// Walk back from today and generate plausible cycle history so demo tasks
-// have a populated heatmap + counter history without a backend call.
-// Honours the recurrence rule (skips Sat/Sun for "weekdays") and caps at 14
-// cycles since the embedded slice is bounded that way in production.
+// Walk back from today to fabricate cycle history so demo tasks have a heatmap.
+// Honours recurrence rule; capped at 14 cycles (matches embedded slice in prod).
 function generateMockCycles(t: TaskDto): CheckInCycleDto[] {
   if (!t.isRecurring) return [];
   if (t.recurrenceRule !== "daily" && t.recurrenceRule !== "weekdays") return [];
@@ -22,8 +20,7 @@ function generateMockCycles(t: TaskDto): CheckInCycleDto[] {
     const skip = t.recurrenceRule === "weekdays" && (dow === 0 || dow === 6);
     if (!skip) {
       const key = dateKey(cursor);
-      // Deterministic-ish pseudo-counter so the demo heatmap shading varies
-      // realistically. Matches the unit (e.g. "words" → 22-44 per day).
+      // Deterministic pseudo-counter for varied heatmap shading.
       const counterValue = t.hasCounter ? 22 + ((cycles.length * 11) % 23) : null;
       cycles.push({
         cycleId: cycles.length + 1,

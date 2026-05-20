@@ -1,12 +1,8 @@
-// Pixelated placeholder icons per category. The user plans to replace these
-// with custom artwork later — these are rough recognizable silhouettes drawn
-// from string-based pixel grids so they render crisp and tint with currentColor.
+// Pixelated placeholder icons per category; PNG icons in /public/icons take precedence.
 
 import { assetPath } from "./assetPath";
 
-// All icons are drawn on a 10×10 grid so they render at the same visual
-// size. Strokes are 2 pixels wide (or solid silhouettes) — no 1-pixel-wide
-// diagonals that disappear at 12 px.
+// 10×10 grid; strokes are 2 pixels wide so nothing disappears at small sizes.
 const ICONS: Record<string, string[]> = {
   Career: [
     "..........",
@@ -166,10 +162,7 @@ const ICONS: Record<string, string[]> = {
   ],
 };
 
-// PNG assets live in /public/icons. Categories that don't have a PNG fall
-// back to the pixel-grid SVG below. Filenames don't always match the
-// category name verbatim (e.g. Learning ↔ Learn.png), so this map is
-// authoritative.
+// PNG assets in /public/icons; filenames don't always match category name verbatim.
 const ICON_PATHS: Record<string, string> = {
   Career: "/icons/Careers.png",
   Design: "/icons/Design.png",
@@ -188,8 +181,7 @@ const ICON_PATHS: Record<string, string> = {
 type Props = {
   category: string;
   size?: number;
-  // Only applies to the pixel-grid fallback. PNG icons render with their
-  // baked-in colors and a transparent background.
+  // Only applies to the pixel-grid fallback; PNG icons keep baked-in colors.
   color?: string;
 };
 
@@ -199,11 +191,7 @@ export function CategoryIcon({ category, size = 12, color = "currentColor" }: Pr
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        // Route through assetPath() so the prefix is applied on static builds.
-        // Without this, `/icons/Foo.png` 404s on GitHub Pages (and any other
-        // host that serves the app under a sub-path) because next.config.ts'
-        // basePath only rewrites bundle URLs and next/image — plain <img src>
-        // is left untouched and needs the prefix added manually.
+        // Route through assetPath() so static builds get correct prefix.
         src={assetPath(src)}
         alt=""
         width={size}
@@ -219,7 +207,7 @@ export function CategoryIcon({ category, size = 12, color = "currentColor" }: Pr
 
   const pixels = ICONS[category];
   if (!pixels) {
-    // Fallback: small dot
+    // Fallback: small dot.
     return (
       <svg width={size} height={size} viewBox="0 0 10 10" fill="none" shapeRendering="crispEdges">
         <rect x="4" y="4" width="2" height="2" fill={color} />
