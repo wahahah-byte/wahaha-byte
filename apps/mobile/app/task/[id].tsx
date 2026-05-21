@@ -946,7 +946,6 @@ export default function TaskDetailScreen() {
   );
 }
 
-// Non-recurring hero: avatar + empty heatmap for gesture consistency.
 function AvatarOnlyHero() {
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
     () => equippedCache.read() ?? [],
@@ -956,25 +955,10 @@ function AvatarOnlyHero() {
     equippedCache.revalidate();
     return unsubscribe;
   }, []);
-  const stageCard = (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+  return (
+    <View style={{ height: 232, alignItems: "center", justifyContent: "center" }}>
       <ChibiAvatar equipped={equipped} height={168} />
     </View>
-  );
-  const statsCard = (
-    <View style={{ flex: 1, paddingTop: 4 }}>
-      <HeatmapStrip rule="" hasCounter={false} cycles={[]} />
-    </View>
-  );
-  return (
-    <DetailPager
-      height={232}
-      labels={["Stage", "Stats"]}
-      cards={[
-        { key: "stage", content: stageCard },
-        { key: "stats", content: statsCard },
-      ]}
-    />
   );
 }
 
