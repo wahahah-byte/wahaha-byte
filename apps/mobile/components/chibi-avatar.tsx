@@ -17,10 +17,14 @@ const SLOT_Z: Record<string, number> = {
   WEAPON_BACK: 0,
   CAPE: 10,
   HAIR_BACK: 20,
+  // Off-hand sits on the back arm — behind body (base z=30) but in front of cape/back-hair.
+  OFFHAND: 25,
   BOTTOM: 40,
   TOP: 50,
   OVERALL: 50,
   CAPE_FRONT: 55,
+  // Off-hand strap wrap — drawn over body so the grip appears to loop around the arm.
+  OFFHAND_FRONT: 56,
   GLOVES: 60,
   SHOES: 70,
   HAIR_FRONT: 80,
@@ -120,7 +124,10 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
       ((hideHairFront || hideHairBack) && isLegacyHair);
 
     if (!primarySuppressed) {
-      const primarySrc = bustedAssetUrl(item, item.previewAssetUrl);
+      // Worn view (equippedAssetUrl) overrides catalog preview when set — used when the
+      // chibi-side appearance differs from the shop icon (shields → back/strap when worn).
+      const wornSrcUrl = item.equippedAssetUrl ?? item.previewAssetUrl;
+      const primarySrc = bustedAssetUrl(item, wornSrcUrl);
       if (primarySrc) {
         layered.push({
           key: `${inv.inventoryId}:primary`,
@@ -139,6 +146,10 @@ export function ChibiAvatar({ equipped, height = 192, pose = "idle" }: Props) {
         respectHairCover = false;
       } else if (item.slot === "WEAPON_FRONT") {
         secondaryZ = SLOT_Z.WEAPON_BACK;
+        respectHairCover = false;
+      } else if (item.slot === "OFFHAND") {
+        // Strap/grip overlay drawn over body so it appears to wrap the arm.
+        secondaryZ = SLOT_Z.OFFHAND_FRONT;
         respectHairCover = false;
       } else {
         secondaryZ = SLOT_Z.HAIR_BACK;

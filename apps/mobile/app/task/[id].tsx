@@ -49,13 +49,15 @@ import { SwipeRowProvider } from "@/components/swipe-row-context";
 import { ChibiAvatar } from "@/components/chibi-avatar";
 import { DetailPager } from "@/components/detail-pager";
 import { HeatmapStrip } from "@/components/heatmap-strip";
+import { CustomLogModal } from "@/components/custom-log-modal";
+import { LogCheckinButton } from "@/components/log-checkin-button";
 import { QuickLogStepper } from "@/components/quick-log-stepper";
-import { SlideToCheckIn } from "@/components/slide-to-checkin";
+import { TapSlideCheckIn } from "@/components/tap-slide-check-in";
 import { StreakDisplay } from "@/components/streak-display";
 import { TaskForm, type TaskFormValues, emptyTaskForm } from "@/components/task-form";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
-import { useQuickLog } from "@/hooks/use-quick-log";
+import { awaitPendingLogFlushes, useQuickLog } from "@/hooks/use-quick-log";
 
 function fmtShort(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -211,6 +213,8 @@ export default function TaskDetailScreen() {
   const [footerHeight, setFooterHeight] = useState(0);
   // Blocks sheet dismissal while check-in POST is in flight (~200ms).
   const [checkingIn, setCheckingIn] = useState(false);
+  // Custom-log modal (opened by tapping the counter widget).
+  const [customLogOpen, setCustomLogOpen] = useState(false);
 
   // BottomSheet ref + single full-screen snap.
   const sheetRef = useRef<BottomSheet>(null);
@@ -234,6 +238,8 @@ export default function TaskDetailScreen() {
 
   const load = useCallback(async () => {
     setError(null);
+    // Wait for any in-flight log flush from a prior dismiss so the GET sees the new cycle.
+    await awaitPendingLogFlushes(id);
     const res = await tasksApi.getById(id);
     if (!res.data) {
       setError(res.error ?? "Task not found.");
@@ -247,7 +253,7 @@ export default function TaskDetailScreen() {
       const merged: TaskDto = { ...prev };
       for (const k of Object.keys(fresh) as (keyof TaskDto)[]) {
         const v = fresh[k];
-        if (v !== undefined) (merged as Record<string, unknown>)[k as string] = v;
+        if (v !== undefined) (merged as unknown as Record<string, unknown>)[k as string] = v;
       }
       mergedForCache = merged;
       return merged;
@@ -269,6 +275,47 @@ export default function TaskDetailScreen() {
   useEffect(() => {
     return taskEvents.subscribeRefreshRequested(() => { load(); });
   }, [load]);
+
+  // Append a freshly-logged counter cycle so heatmap + button overshoot math see it.
+  const appendCycle = useCallback((cycle: CheckInCycleDto) => {
+    setTask((prev) => prev
+      ? { ...prev, recentCycles: [cycle, ...(prev.recentCycles ?? [])] }
+      : prev,
+    );
+  }, []);
+
+  const flushQuickLog = useCallback(
+    async (taskId: string, delta: number): Promise<CheckInCycleDto | null> => {
+      if (delta === 0) return null;
+      const res = await tasksApi.logCounter(taskId, delta);
+      if (res.error) {
+        if (res.status === 404) return null;
+        if (res.status === 400 && /already checked in/i.test(res.error)) return null;
+        const signed = `${delta > 0 ? "+" : ""}${delta}`;
+        setError(`Couldn't save log (${signed}): ${res.error}`);
+        return null;
+      }
+      if (!res.data) return null;
+      // Write the new cycle straight into the module cache so the next modal mount
+      // sees it even if our local setTask ran on an unmounted component (unmount-flush path).
+      const cached = taskCache.read(taskId);
+      if (cached) {
+        taskCache.set({
+          ...cached,
+          recentCycles: [res.data, ...(cached.recentCycles ?? [])],
+        });
+      }
+      appendCycle(res.data);
+      return res.data;
+    },
+    [appendCycle],
+  );
+
+  const quickLog = useQuickLog({
+    task,
+    heatmapCycles: task?.recentCycles ?? [],
+    onFlushQuickLog: flushQuickLog,
+  });
 
   async function toggleSubtask(sub: Subtask) {
     const next = !sub.completed;
@@ -321,7 +368,7 @@ export default function TaskDetailScreen() {
     }
   }
 
-  async function handleCheckIn() {
+  async function handleCheckIn(counterValue?: number) {
     if (!task) return;
     // Block dismissal until POST returns (~200ms) so list sees cycleId before user.
     setCheckingIn(true);
@@ -355,7 +402,7 @@ export default function TaskDetailScreen() {
       };
     });
     try {
-      const res = await tasksApi.checkIn(task.taskId);
+      const res = await tasksApi.checkIn(task.taskId, counterValue);
       if (res.error) { setError(res.error); return; }
       if (res.data) {
         // Hand authoritative cycle data to list so subsequent row tap routes to undo.
@@ -373,6 +420,30 @@ export default function TaskDetailScreen() {
       // Release dismissal lock; list is now fully consistent.
       setCheckingIn(false);
     }
+  }
+
+  // Counter-task check-in: drains pending buffered logs into the final cycle's counterValue.
+  async function handleCheckInWithCounter(touchValue: number) {
+    if (!task) return;
+    const buffered = quickLog.consumePending();
+    const total = touchValue + buffered;
+    await handleCheckIn(total > 0 ? total : undefined);
+  }
+
+  // Custom-log modal submit: edit semantics — `amount` is the new absolute total for today.
+  // If the new total meets the goal, auto-checkin with it; otherwise set pending to the signed delta.
+  function handleCustomLogSubmit(amount: number) {
+    if (!task || amount < 0) return;
+    setCustomLogOpen(false);
+    const wouldOvershoot =
+      task.counterGoal != null && amount >= task.counterGoal;
+    if (wouldOvershoot) {
+      // Drain any buffered pending; the entered amount is the new absolute total committed to the cycle.
+      quickLog.consumePending();
+      handleCheckInWithCounter(amount);
+      return;
+    }
+    quickLog.setPending(amount);
   }
 
   async function handleStart() {
@@ -609,7 +680,32 @@ export default function TaskDetailScreen() {
       ]}
     >
       {renderSlider ? (
-        <SlideToCheckIn pointValue={task.pointValue} onConfirm={handleCheckIn} />
+        task.hasCounter ? (
+          <View style={{ gap: 10 }}>
+            <QuickLogStepper
+              cycleSum={quickLog.cycleSumToday}
+              pendingLog={quickLog.pendingLog}
+              showStepper={false}
+              counterUnit={task.counterUnit ?? null}
+              counterGoal={task.counterGoal ?? null}
+              capAtGoal={task.capLogAtGoal ?? undefined}
+              onIncrement={quickLog.handleStepperIncrement}
+              onDecrement={quickLog.handleStepperDecrement}
+              onPress={() => setCustomLogOpen(true)}
+            />
+            <LogCheckinButton
+              cycleSum={quickLog.cycleSumToday}
+              pendingLog={quickLog.pendingLog}
+              counterGoal={task.counterGoal ?? null}
+              pointValue={task.pointValue}
+              disabled={checkingIn || !canCheckIn}
+              onLog={quickLog.handleStepperIncrement}
+              onCheckInWithCounter={handleCheckInWithCounter}
+            />
+          </View>
+        ) : (
+          <TapSlideCheckIn pointValue={task.pointValue} onCommit={() => handleCheckIn()} />
+        )
       ) : null}
       <View style={styles.bottomActionRow}>
         {showEdit ? (
@@ -693,13 +789,7 @@ export default function TaskDetailScreen() {
           {task.isRecurring && task.recurrenceRule ? (
             <CounterPanel
               task={task}
-              onCycleAppend={(cycle) =>
-                setTask((prev) => prev
-                  ? { ...prev, recentCycles: [cycle, ...(prev.recentCycles ?? [])] }
-                  : prev
-                )
-              }
-              onError={setError}
+              pendingLog={quickLog.pendingLog}
             />
           ) : (
             <AvatarOnlyHero />
@@ -736,13 +826,7 @@ export default function TaskDetailScreen() {
                 ) : null}
               </View>
 
-              {/* Streak (recurring + count >= 3) */}
-              {task.isRecurring ? (
-                <StreakDisplay
-                  currentStreakCount={task.currentStreakCount}
-                  longestStreakCount={task.longestStreakCount}
-                />
-              ) : null}
+              {/* Streak moved below the chibi in CounterPanel. */}
 
               {/* Description */}
               {task.description ? (
@@ -805,9 +889,9 @@ export default function TaskDetailScreen() {
                 {(task.subtasks ?? []).map((sub, idx, arr) => (
                   <SwipeableRow
                     key={sub.subtaskId}
-                    rowId={sub.subtaskId}
-                    prevId={arr[idx - 1]?.subtaskId}
-                    nextId={arr[idx + 1]?.subtaskId}
+                    rowId={String(sub.subtaskId)}
+                    prevId={arr[idx - 1]?.subtaskId != null ? String(arr[idx - 1].subtaskId) : undefined}
+                    nextId={arr[idx + 1]?.subtaskId != null ? String(arr[idx + 1].subtaskId) : undefined}
                     // Row bg matches sheet; wrapper keeps surfaceDeep on swipe.
                     backgroundColor={c.bg}
                     actions={[
@@ -918,6 +1002,17 @@ export default function TaskDetailScreen() {
         ) : null}
       </View>
     </BottomSheet>
+    {task.hasCounter ? (
+      <CustomLogModal
+        visible={customLogOpen}
+        cycleSum={quickLog.cycleSumToday}
+        pendingLog={quickLog.pendingLog}
+        counterGoal={task.counterGoal ?? null}
+        counterUnit={task.counterUnit ?? null}
+        onCancel={() => setCustomLogOpen(false)}
+        onSubmit={handleCustomLogSubmit}
+      />
+    ) : null}
     {addingSubtaskOpen ? (
       <>
         {/* Full-screen tap-target behind bar — tap outside closes + dismisses keyboard. */}
@@ -965,37 +1060,12 @@ function AvatarOnlyHero() {
 // Heatmap + counter stepper share pendingLog for real-time today cell.
 function CounterPanel({
   task,
-  onCycleAppend,
-  onError,
+  pendingLog,
 }: {
   task: TaskDto;
-  onCycleAppend: (cycle: CheckInCycleDto) => void;
-  onError: (msg: string) => void;
+  pendingLog: number;
 }) {
-  const flushQuickLog = useCallback(
-    async (taskId: string, delta: number): Promise<CheckInCycleDto | null> => {
-      if (delta === 0) return null;
-      const res = await tasksApi.logCounter(taskId, delta);
-      if (res.error) {
-        if (res.status === 404) return null;
-        if (res.status === 400 && /already checked in/i.test(res.error)) return null;
-        const signed = `${delta > 0 ? "+" : ""}${delta}`;
-        onError(`Couldn't save log (${signed}): ${res.error}`);
-        return null;
-      }
-      if (!res.data) return null;
-      onCycleAppend(res.data);
-      return res.data;
-    },
-    [onCycleAppend, onError],
-  );
-
   const cycles = task.recentCycles ?? [];
-  const { pendingLog, cycleSumToday, handleStepperIncrement, handleStepperDecrement } = useQuickLog({
-    task,
-    heatmapCycles: cycles,
-    onFlushQuickLog: flushQuickLog,
-  });
 
   // Equipped avatar from module cache for instant chibi compose.
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
@@ -1009,27 +1079,17 @@ function CounterPanel({
 
   // Always render Stats tab for consistent swipe gesture.
   const rule = task.recurrenceRule ?? "";
-  // Local-date key (UTC would misfire in evening tz-behind-UTC).
-  const todayKey = todayLocalKey();
-  const lastCheckInKey = (task.lastCheckInDate ?? "").split("T")[0];
-  const checkedInToday = lastCheckInKey === todayKey;
-  // Logging-eligible only when current cycle not yet checked-in today.
-  const showStepper = task.hasCounter === true && task.status === "pending" && !checkedInToday;
 
   const stageCard = (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
       <ChibiAvatar equipped={equipped} height={168} />
-      {task.hasCounter ? (
-        <QuickLogStepper
-          cycleSum={cycleSumToday}
-          pendingLog={pendingLog}
-          showStepper={showStepper}
-          counterUnit={task.counterUnit ?? null}
-          counterGoal={task.counterGoal ?? null}
-          capAtGoal={task.capLogAtGoal ?? undefined}
-          onIncrement={handleStepperIncrement}
-          onDecrement={handleStepperDecrement}
-        />
+      {task.isRecurring ? (
+        <View style={{ width: "78%", maxWidth: 320 }}>
+          <StreakDisplay
+            currentStreakCount={task.currentStreakCount}
+            longestStreakCount={task.longestStreakCount}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -1425,7 +1485,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  // Footer column: SlideToCheckIn + Edit/Delete row.
+  // Footer column: TapSlideCheckIn + Edit/Delete row.
   footerStack: {
     gap: 10,
     paddingHorizontal: 16,

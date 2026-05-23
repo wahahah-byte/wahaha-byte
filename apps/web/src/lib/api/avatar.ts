@@ -25,7 +25,9 @@ export type ItemSlot =
   | "SHOES"
   | "WEAPON_FRONT"
   | "WEAPON_BACK"
-  | "WRIST";
+  | "WRIST"
+  // Off-hand: shield, dagger, orb, tome — the secondary item held in the off-hand.
+  | "OFFHAND";
 
 // Slots offered in admin "New item" dropdown; order drives <option> order.
 export const GRANULAR_SLOTS: ItemSlot[] = [
@@ -34,7 +36,7 @@ export const GRANULAR_SLOTS: ItemSlot[] = [
   "TOP", "BOTTOM", "OVERALL",
   "GLOVES", "SHOES",
   "CAPE",
-  "WEAPON_FRONT", "WEAPON_BACK", "WRIST",
+  "WEAPON_FRONT", "WEAPON_BACK", "OFFHAND", "WRIST",
 ];
 
 // Listed separately so admin UI can group/hide them behind an "advanced" toggle.
@@ -55,6 +57,9 @@ export interface AvatarItemDto {
   previewAssetUrl?: string | null;
   // Optional second blob URL for HAIR_BACK render layer (two-layer items).
   secondaryAssetUrl?: string | null;
+  // Optional "worn" view; used by ChibiAvatar when distinct from the catalog preview
+  // (e.g. shields: shop = front face, chibi = back/strap). Null = fall back to previewAssetUrl.
+  equippedAssetUrl?: string | null;
   isAvailable: boolean;
   // Optional render-only nudge (source-canvas px, 256×384 grid); mock-only.
   offsetX?: number;
@@ -119,6 +124,8 @@ export interface AvatarItemCreateInput extends AvatarItemRenderHintsInput {
   image?: File | null;
   // Optional second PNG for two-layer items (HAIR_FRONT today).
   secondaryImage?: File | null;
+  // Optional "worn" PNG; used by ChibiAvatar when distinct from the catalog preview.
+  equippedImage?: File | null;
 }
 
 export interface AvatarItemUpdateInput extends AvatarItemRenderHintsInput {
@@ -132,6 +139,15 @@ export interface AvatarItemUpdateInput extends AvatarItemRenderHintsInput {
   image?: File | null;
   // Optional replacement second PNG; omitting preserves existing SecondaryAssetUrl.
   secondaryImage?: File | null;
+  // Optional replacement "worn" PNG; omitting preserves existing EquippedAssetUrl.
+  equippedImage?: File | null;
+}
+
+// Response from sell — refund amount + new wallet balance + inventoryId that was removed.
+export interface SellInventoryResponse {
+  inventoryId: number;
+  refundedPoints: number;
+  newBalance: number;
 }
 
 // JSON body for register-by-url endpoint — items whose PNG already lives in blob storage.
@@ -145,6 +161,8 @@ export interface AvatarItemRegisterByUrlInput extends AvatarItemRenderHintsInput
   previewAssetUrl: string;
   // Optional second already-uploaded blob URL.
   secondaryAssetUrl?: string | null;
+  // Optional already-uploaded "worn" URL.
+  equippedAssetUrl?: string | null;
   isAvailable?: boolean;
   // Convenience: also add item to current user's inventory and equip it.
   grantAndEquipForCurrentUser?: boolean;
@@ -193,6 +211,10 @@ export const avatarApi = {
       ...(layout === undefined ? {} : { layout }),
     }),
   release: (inventoryId: number) => authedDelete<void>(`/api/UserInventory/${inventoryId}`),
+  // PATCH /api/UserInventory/{id}/sell — removes the row and credits a partial refund.
+  // Server enforces ownership and atomically deletes + credits balance.
+  sellInventory: (inventoryId: number) =>
+    authedPatch<SellInventoryResponse>(`/api/UserInventory/${inventoryId}/sell`),
 
   // ---- Admin / Moderator endpoints ----------------------------------------
   // Mirror [Authorize(Roles="Admin,Moderator")] gates; backend enforces.
@@ -248,6 +270,7 @@ function buildAvatarItemForm(input: AvatarItemCreateInput | AvatarItemUpdateInpu
   if (input.isAvailable !== undefined) form.append("IsAvailable", String(input.isAvailable));
   if (input.image) form.append("Image", input.image, input.image.name);
   if (input.secondaryImage) form.append("SecondaryImage", input.secondaryImage, input.secondaryImage.name);
+  if (input.equippedImage) form.append("EquippedImage", input.equippedImage, input.equippedImage.name);
   // Render hints — only append when set so unset fields keep existing DB values.
   if (input.coversHairFront != null) form.append("CoversHairFront", String(input.coversHairFront));
   if (input.coversHairBack != null) form.append("CoversHairBack", String(input.coversHairBack));

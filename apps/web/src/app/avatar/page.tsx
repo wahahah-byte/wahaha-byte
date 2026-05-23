@@ -47,7 +47,7 @@ const CELL_PX_MOBILE = 56;
 // not in the current ItemSlot enum (HAIR_FRONT, WEAPON_BACK, CAPE).
 const SLOT_TRANSFORM: Record<string, string> = {
   // ---- Legacy aliases ----
-  HEAD:  "scale(1.7) translateY(22%)",
+  HEAD:  "scale(1.85) translateY(32%)",
   HAIR:  "scale(1.7) translateY(20%)",
   BODY:  "scale(1.4) translateY(-4%)",
   HAND:  "scale(1.4) translateY(-6%)",
@@ -60,7 +60,7 @@ const SLOT_TRANSFORM: Record<string, string> = {
   HAIR_FRONT: "scale(1.7) translateY(20%)",
   HAIR_BACK:  "scale(1.7) translateY(20%)",
   // Headwear sits on upper third — same as HEAD.
-  HAT:  "scale(1.7) translateY(22%)",
+  HAT:  "scale(1.85) translateY(32%)",
   // Eye/ear accessories higher than mouth.
   EYE:  "scale(1.7) translateY(14%)",
   EAR:  "scale(1.7) translateY(12%)",
@@ -75,6 +75,10 @@ const SLOT_TRANSFORM: Record<string, string> = {
   // Weapons render small by default; per-asset CARD_TRANSFORM_OVERRIDE bigger scales.
   WEAPON_FRONT: "scale(1.4)",
   WEAPON_BACK:  "scale(1.4)",
+  // Off-hand (shields, daggers, orbs) — sized large and shifted right to recentre items
+  // whose canvas places them on the chibi's back-arm side, plus a small upward lift.
+  // autoBounds is skipped for this slot so every off-hand item renders at this uniform transform.
+  OFFHAND: "scale(2.15) translate(8%, -4%)",
   WRIST:  "scale(1.4) translateY(-6%)",
 };
 
@@ -92,6 +96,11 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, string> = {
 const CARD_CLASS_TRANSFORM: Record<string, string> = {
   // Polearm: 2× zoom, lifted 12% to centre diagonal sprite's bbox.
   polearm: "scale(2.0) translate(0%, -12%)",
+  // Sword: forced 1×1 footprint; nudge right (sprite biased left of canvas centre) + lift to centre vertically.
+  sword: "scale(1.7) translate(8%, -12%)",
+  // Headwear: HAT-slot items in this category sit slightly higher on the canvas than hat-category items
+  // (helmets that wrap the head) — bump scale, ease the downward shift to keep them away from the top.
+  headwear: "scale(2.0) translateY(24%)",
 };
 
 function cardClassTransform(item: AvatarItemDto): string | null {
@@ -116,6 +125,16 @@ const CARD_CLASS_ROTATED_TRANSFORM: Record<string, string> = {
   polearm: "translate(25%, 5%) scale(2.0) rotate(90deg)",
   // Staff rotated 1×2: combined-bbox closer to source vertical centre; +28% X, +5% Y.
   staff: "translate(28%, 5%) scale(1.4) rotate(90deg)",
+  // Outfits (1×2 → 2×1 on rotation): scale 2.5 fills the wider-shorter cell at a visual
+  // size comparable to the non-rotated rendering. translate(+15%, 0%) compensates for the
+  // body content sitting in the lower-half of the source canvas — after 90° clockwise rotate
+  // the body ends up left-of-centre, so a positive X translate pulls it back. Covers OVERALL
+  // category options (dress/robe/jumpsuit/kimono) and the BODY-legacy "outfit" category.
+  outfit:   "translate(15%, 0%) scale(2.5) rotate(90deg)",
+  dress:    "translate(15%, 0%) scale(2.5) rotate(90deg)",
+  robe:     "translate(15%, 0%) scale(2.5) rotate(90deg)",
+  jumpsuit: "translate(15%, 0%) scale(2.5) rotate(90deg)",
+  kimono:   "translate(15%, 0%) scale(2.5) rotate(90deg)",
 };
 
 function cardClassRotatedTransform(item: AvatarItemDto): string | null {
@@ -133,7 +152,46 @@ function isHairSlot(slot: string | undefined | null): boolean {
 
 // True for weapon group (HAND/WEAPON_FRONT/WEAPON_BACK); chibi only holds one weapon at a time.
 function isWeaponSlot(slot: string | undefined | null): boolean {
-  return slot === "HAND" || slot === "WEAPON_FRONT" || slot === "WEAPON_BACK";
+  return slot === "HAND"
+    || slot === "WEAPON_FRONT"
+    || slot === "WEAPON_BACK"
+    || slot === "OFFHAND";
+}
+
+// Two-handed primary weapons block the off-hand slot (MapleStory rule).
+// Category-based so admin-defined "greatsword" etc. is detected even if not yet in the WEAPON_FRONT default list.
+function isTwoHanded(item: AvatarItemDto | undefined | null): boolean {
+  if (!item || item.slot !== "WEAPON_FRONT") return false;
+  const cat = (item.category ?? "").toLowerCase();
+  return cat.includes("staff")
+    || cat.includes("polearm")
+    || cat.includes("bow")
+    || cat.includes("greatsword")
+    || cat.includes("two-hand")
+    || cat.includes("twohand");
+}
+
+// Cross-slot equip conflicts (outfit/hair/hat). Returns true when equipping `newSlot`
+// should auto-unequip an item currently in `existingSlot`. Same-slot dups are handled
+// elsewhere (the existing "same-slot drop" line in onCardClick), so this only matches
+// DIFFERENT slots that visually conflict.
+//
+// Groups:
+//   - Outfit: OVERALL/BODY (full-body) conflict with TOP/BOTTOM (partial). Partial items
+//     coexist with each other but not with a full-body item.
+//   - Hair:   HAIR / HAIR_FRONT / HAIR_BACK — only one hair style at a time.
+//   - Hat:    HAT / HEAD (legacy) — only one head covering at a time.
+function shouldDropOnEquip(newSlot: string | undefined | null, existingSlot: string | undefined | null): boolean {
+  if (!newSlot || !existingSlot || newSlot === existingSlot) return false;
+  const isFull = (s: string) => s === "OVERALL" || s === "BODY";
+  const isPartial = (s: string) => s === "TOP" || s === "BOTTOM";
+  if (isFull(newSlot) && (isFull(existingSlot) || isPartial(existingSlot))) return true;
+  if (isPartial(newSlot) && isFull(existingSlot)) return true;
+  const HAIR = new Set(["HAIR", "HAIR_FRONT", "HAIR_BACK"]);
+  if (HAIR.has(newSlot) && HAIR.has(existingSlot)) return true;
+  const HAT = new Set(["HAT", "HEAD"]);
+  if (HAT.has(newSlot) && HAT.has(existingSlot)) return true;
+  return false;
 }
 
 // RE-style inventory footprint; backend stores gridCols/gridRows; legacy rows fall back to slot heuristic.
@@ -141,6 +199,11 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   const cat = (item.category ?? "").toLowerCase();
   // Staffs always 2×1; precedence over persisted gridCols/Rows for legacy rows.
   if (cat.includes("staff")) return { cols: 2, rows: 1 };
+  // Swords always 1×1; centered inventory icon even when slot would default to 2×1.
+  if (cat.includes("sword")) return { cols: 1, rows: 1 };
+  // Full-body outfits (Ninja Outfit, Space Suit, dresses/robes) always 1×2 — even when stored
+  // in the legacy BODY slot which would otherwise default them to 1×1.
+  if (cat === "outfit") return { cols: 1, rows: 2 };
   // Hats (HAT and legacy HEAD) always 1×1; overrides persisted size.
   if (item.slot === "HAT" || item.slot === "HEAD") return { cols: 1, rows: 1 };
   if (item.gridCols && item.gridRows) {
@@ -180,6 +243,9 @@ function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
     case "WEAPON_BACK":
     case "WEAPON_FRONT":
       return { cols: 2, rows: 1 };
+    case "OFFHAND":
+      // Shields/daggers/orbs fit in a single cell — small footprint by default.
+      return { cols: 1, rows: 1 };
     default:
       return { cols: 1, rows: 1 };
   }
@@ -363,11 +429,15 @@ export default function AvatarPage() {
   const [rotations, setRotations] = useState<Set<number>>(new Set());
   // inventoryId of dragged item, or null; scopes the Q/E keydown handler.
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
+  // Snapshot of the dragged item's rotation at drag start. Q/E during drag toggles
+  // rotations freely (no overlap check); on a rejected/cancelled drop we revert to this
+  // so the chibi doesn't keep a rotation the user couldn't actually commit.
+  const dragStartRotatedRef = useRef<boolean>(false);
   // Inventory IDs currently being mutated — disables card mid-request.
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   // Item IDs whose preview PNG 404'd — render PaperIcon placeholder instead.
   const [failedIds, setFailedIds] = useState<Set<number>>(new Set());
-  const { setError } = useToast();
+  const { setError, setSuccess } = useToast();
   const isDesktop = useDesktopLayout();
   const { cols: gridCols, rows: gridRows } = isDesktop ? GRID_DESKTOP : GRID_MOBILE;
   // Active cell size and derived snap step; mobile uses smaller cell.
@@ -570,31 +640,63 @@ export default function AvatarPage() {
   const onDragStart = useCallback((event: DragStartEvent) => {
     lastSnapRef.current = { x: 0, y: 0 };
     const id = event.active.id;
-    if (typeof id === "number") setActiveDragId(id);
-  }, []);
+    if (typeof id === "number") {
+      setActiveDragId(id);
+      // Capture rotation now so we can revert if the drop is rejected.
+      dragStartRotatedRef.current = rotations.has(id);
+    }
+  }, [rotations]);
+
+  // Revert any rotation toggled during the drag — Q/E during drag updates state freely,
+  // but a cancel means the user didn't commit any change, so the chibi's rotation reverts.
+  const revertDragRotation = useCallback(() => {
+    if (activeDragId == null) return;
+    const original = dragStartRotatedRef.current;
+    setRotations((prev) => {
+      const has = prev.has(activeDragId);
+      if (has === original) return prev;
+      const n = new Set(prev);
+      if (original) n.add(activeDragId);
+      else n.delete(activeDragId);
+      return n;
+    });
+  }, [activeDragId]);
 
   const onDragCancel = useCallback(() => {
+    revertDragRotation();
     setActiveDragId(null);
-  }, []);
+  }, [revertDragRotation]);
 
   const onDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveDragId(null);
     const invId = event.active.id;
     const overId = event.over?.id;
-    if (typeof invId !== "number" || typeof overId !== "string") return;
+    // Helper: commit the post-drag rotation if it differs from the persisted value,
+    // OR revert it to the drag-start snapshot when the drop is rejected. Server keeps
+    // rotation pinned to the inventory row so we always end up consistent.
+    const releaseAndRevert = () => {
+      revertDragRotation();
+      setActiveDragId(null);
+    };
+    // Dropped outside the grid entirely.
+    if (typeof invId !== "number" || typeof overId !== "string") { releaseAndRevert(); return; }
     // Drop targets keyed as "cell-{x}-{y}".
     const match = /^cell-(\d+)-(\d+)$/.exec(overId);
-    if (!match) return;
+    if (!match) { releaseAndRevert(); return; }
     const x = Number(match[1]);
     const y = Number(match[2]);
     const moving = inventory.find((r) => r.inventoryId === invId);
-    if (!moving?.avatarItem) return;
-    const { cols, rows } = sizeFor(moving.avatarItem, rotations.has(invId));
+    if (!moving?.avatarItem) { releaseAndRevert(); return; }
+    const rotated = rotations.has(invId);
+    const { cols, rows } = sizeFor(moving.avatarItem, rotated);
     // Only collide against same-tab items; hair shares coords with equipment.
     const movingIsHair = isHairSlot(moving.avatarItem.slot);
     const sameTab = inventory.filter((r) => isHairSlot(r.avatarItem?.slot) === movingIsHair);
-    if (!rectFits(sameTab, invId, x, y, cols, rows, rotations, gridCols, gridRows)) return;
-    const rotated = rotations.has(invId);
+    if (!rectFits(sameTab, invId, x, y, cols, rows, rotations, gridCols, gridRows)) {
+      // Overlap / off-grid — drop rejected, revert any in-drag rotation toggle.
+      releaseAndRevert();
+      return;
+    }
+    setActiveDragId(null);
     if (moving.positionX === x && moving.positionY === y && moving.isRotated === rotated) return;
     setInventory((prev) => prev.map((row) =>
       row.inventoryId === invId ? { ...row, positionX: x, positionY: y, isRotated: rotated } : row));
@@ -603,9 +705,12 @@ export default function AvatarPage() {
     avatarApi.setPosition(invId, x, y, rotated, isDesktop ? "desktop" : "mobile").then(({ error }) => {
       if (error) setError(error);
     });
-  }, [inventory, rotations, setError, gridCols, gridRows, hasToken, isDesktop]);
+  }, [inventory, rotations, setError, gridCols, gridRows, hasToken, isDesktop, revertDragRotation]);
 
-  // Q/E toggles rotation on dragged item; handler installed only during active drag.
+  // Q/E toggles rotation on the dragged item; handler installed only during active drag.
+  // The toggle is unconditional — no overlap or in-grid check here, so users can spin
+  // a 2-cell item even when its current position would conflict. The drop handler is
+  // responsible for validating the final placement and reverting rotation on rejection.
   useEffect(() => {
     if (activeDragId == null) return;
     const dragging = inventory.find((r) => r.inventoryId === activeDragId);
@@ -616,30 +721,16 @@ export default function AvatarPage() {
       // Browser fires keydown repeatedly while held (~30Hz); respond only once per physical press.
       if (e.repeat) return;
       e.preventDefault();
-      const newRotated = !rotations.has(activeDragId);
-      // Compute rotated footprint and clamp positionX/Y inside grid bounds.
-      const newSize = sizeFor(dragging.avatarItem!, newRotated);
-      const curX = dragging.positionX ?? 0;
-      const curY = dragging.positionY ?? 0;
-      const clampedX = Math.max(0, Math.min(curX, gridCols - newSize.cols));
-      const clampedY = Math.max(0, Math.min(curY, gridRows - newSize.rows));
       setRotations((prev) => {
         const n = new Set(prev);
-        if (newRotated) n.add(activeDragId);
-        else n.delete(activeDragId);
+        if (n.has(activeDragId)) n.delete(activeDragId);
+        else n.add(activeDragId);
         return n;
       });
-      setInventory((prev) => prev.map((r) =>
-        r.inventoryId === activeDragId
-          ? { ...r, isRotated: newRotated, positionX: clampedX, positionY: clampedY }
-          : r));
-      if (!hasToken) return;
-      // Fire-and-forget; keeps rotation pinned even on drag-cancel.
-      avatarApi.setPosition(activeDragId, clampedX, clampedY, newRotated, isDesktop ? "desktop" : "mobile");
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [activeDragId, inventory, rotations, hasToken, isDesktop, gridCols, gridRows]);
+  }, [activeDragId, inventory]);
 
   async function onCardClick(inv: UserInventoryDto) {
     if (busyIds.has(inv.inventoryId)) return;
@@ -654,26 +745,54 @@ export default function AvatarPage() {
           row.inventoryId === inv.inventoryId ? { ...row, isEquipped: false } : row));
       } else {
         const slot = inv.avatarItem?.slot;
-        // Cross-slot weapon group: equipping any HAND/WEAPON_FRONT/WEAPON_BACK
-        // unequips every other weapon, not just same-slot duplicates.
+        const newIsOffhand = slot === "OFFHAND";
+        const newIs2H = isTwoHanded(inv.avatarItem);
+        // Cross-slot weapon group: equipping a weapon-slot item unequips other weapon-slot items,
+        // EXCEPT OFFHAND coexists with 1H primary weapons (MapleStory sword + shield rule).
+        // 2H primaries (staff/polearm/bow) still mutex with OFFHAND.
         const crossWeaponRows = isWeaponSlot(slot)
-          ? inventory.filter((row) =>
-              row.isEquipped
-              && row.inventoryId !== inv.inventoryId
-              && isWeaponSlot(row.avatarItem?.slot)
-              && row.avatarItem?.slot !== slot)
+          ? inventory.filter((row) => {
+              if (!row.isEquipped) return false;
+              if (row.inventoryId === inv.inventoryId) return false;
+              const rowSlot = row.avatarItem?.slot;
+              if (!isWeaponSlot(rowSlot)) return false;
+              // Same-slot duplicates handled by the same-slot drop below — skip here.
+              if (rowSlot === slot) return false;
+              // Coexistence rules between OFFHAND and the primary weapon.
+              if (newIsOffhand && rowSlot === "WEAPON_FRONT") {
+                // Only drop the existing primary if it's two-handed.
+                return isTwoHanded(row.avatarItem);
+              }
+              if (rowSlot === "OFFHAND" && slot === "WEAPON_FRONT") {
+                // Only drop the existing off-hand if the new primary is two-handed.
+                return newIs2H;
+              }
+              // Default: all other weapon-slot combos remain mutually exclusive.
+              return true;
+            })
           : [];
+        // Cross-slot mutex outside the weapon family: outfit (OVERALL/BODY ↔ TOP/BOTTOM),
+        // hair (HAIR/HAIR_FRONT/HAIR_BACK), and hat (HAT/HEAD) groups.
+        const crossSlotRows = inventory.filter((row) => {
+          if (!row.isEquipped) return false;
+          if (row.inventoryId === inv.inventoryId) return false;
+          return shouldDropOnEquip(slot, row.avatarItem?.slot);
+        });
+        // Dedupe in case any row qualifies under both weapon + cross-slot rules.
+        const allDrops = new Map<number, UserInventoryDto>();
+        for (const row of crossWeaponRows) allDrops.set(row.inventoryId, row);
+        for (const row of crossSlotRows) allDrops.set(row.inventoryId, row);
         if (hasToken) {
           // Sequential unequip so 5xx on one doesn't leave the rest half-applied.
-          for (const row of crossWeaponRows) {
+          for (const row of allDrops.values()) {
             const { error } = await avatarApi.unequip(row.inventoryId);
             if (error) { setError(error); return; }
           }
           const { error } = await avatarApi.equip(inv.inventoryId);
           if (error) { setError(error); return; }
         }
-        // Mirror locally: flip this on; turn off same-slot dup and cross-weapon rows.
-        const droppedIds = new Set(crossWeaponRows.map((r) => r.inventoryId));
+        // Mirror locally: flip this on; turn off same-slot dup and all cross-mutex rows.
+        const droppedIds = new Set(allDrops.keys());
         setInventory((prev) => prev.map((row) => {
           if (row.inventoryId === inv.inventoryId) return { ...row, isEquipped: true };
           if (droppedIds.has(row.inventoryId)) return { ...row, isEquipped: false };
@@ -683,6 +802,36 @@ export default function AvatarPage() {
       }
       // Equip changed — drop modal cache so next open re-fetches.
       clearEquippedAvatarCache();
+    } finally {
+      setBusyIds((prev) => {
+        const n = new Set(prev);
+        n.delete(inv.inventoryId);
+        return n;
+      });
+    }
+  }
+
+  // Sell-back: right-click an inventory card → confirm → server refund + remove row.
+  // 50% rate mirrors SellInventoryHandler.SellRefundRatio on the backend.
+  async function onCardSell(inv: UserInventoryDto) {
+    if (busyIds.has(inv.inventoryId)) return;
+    const item = inv.avatarItem;
+    if (!item) return;
+    const expectedRefund = Math.floor(item.cost * 0.5);
+    const ok = window.confirm(
+      `Sell "${item.name}" for ${expectedRefund} pts?\n\nThis can't be undone — you'll need to buy it back from the shop.`,
+    );
+    if (!ok) return;
+    setBusyIds((prev) => new Set(prev).add(inv.inventoryId));
+    try {
+      const { data, error } = await avatarApi.sellInventory(inv.inventoryId);
+      if (error) { setError(error); return; }
+      // Splice the row out locally; chibi re-renders without it (and its slot frees up).
+      setInventory((prev) => prev.filter((row) => row.inventoryId !== inv.inventoryId));
+      clearEquippedAvatarCache();
+      if (data) {
+        setSuccess(`Sold "${item.name}" for ${data.refundedPoints} pts (new balance: ${data.newBalance}).`);
+      }
     } finally {
       setBusyIds((prev) => {
         const n = new Set(prev);
@@ -858,6 +1007,7 @@ export default function AvatarPage() {
                       rotated={rotations.has(inv.inventoryId)}
                       dimmed={activeDragId != null && activeDragId !== inv.inventoryId}
                       onCardClick={onCardClick}
+                      onCardSell={onCardSell}
                       onImageError={(itemId) => setFailedIds((prev) => {
                         if (prev.has(itemId)) return prev;
                         const n = new Set(prev);
@@ -909,11 +1059,13 @@ interface DraggableItemProps {
   rotated: boolean;
   dimmed: boolean;
   onCardClick: (inv: UserInventoryDto) => void;
+  // Right-click on a card triggers sell-back (parent shows confirm + handles refund).
+  onCardSell: (inv: UserInventoryDto) => void;
   onImageError: (itemId: number) => void;
 }
 
 // Single inventory card; renders ON TOP of drop-cell underlay via explicit grid placement.
-function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImageError }: DraggableItemProps) {
+function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onCardSell, onImageError }: DraggableItemProps) {
   const item = inv.avatarItem!;
   // Effective footprint — rotation-aware, except BODY items keep native shape.
   const size = sizeFor(item, rotated);
@@ -931,8 +1083,14 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
       ref={setNodeRef}
       type="button"
       onClick={() => { if (!isDragging) onCardClick(inv); }}
+      onContextMenu={(e) => {
+        // Override the browser context menu so right-click on an inventory card opens the
+        // sell-back confirm dialog instead. Cards have nothing useful in the native menu.
+        e.preventDefault();
+        if (!isDragging) onCardSell(inv);
+      }}
       disabled={busy}
-      title={item.description ?? item.name}
+      title={`${item.description ?? item.name} (right-click to sell)`}
       // Drop `re-cell` while dragging so :hover can't override; `is-dragging` pins yellow look.
       className={isDragging ? "is-dragging" : "re-cell"}
       style={{
@@ -975,7 +1133,13 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
         const cardSize = getItemSize(item);
         // Two-layer items: primary bbox doesn't represent combined visual; skip auto-centre.
         const isTwoLayer = !!item.secondaryAssetUrl && hasRealAsset(item.secondaryAssetUrl);
-        const autoBounds = isTwoLayer
+        // HAT/HEAD: per-image autoBounds renders each hat at a different scale/position based on its
+        // own bbox; helmets, hats, and headwear end up visually inconsistent. Force every hat to use
+        // the uniform SLOT_TRANSFORM instead. Same treatment for OFFHAND so shields/daggers/orbs
+        // all render at the same scale and position regardless of their own bbox.
+        const isHatSlot = item.slot === "HAT" || item.slot === "HEAD";
+        const isOffhandSlot = item.slot === "OFFHAND";
+        const autoBounds = (isTwoLayer || isHatSlot || isOffhandSlot)
           ? null
           : boundsTransformFor(item, clientBounds, { cols: cardSize.cols, rows: cardSize.rows });
         const baseTransform =
@@ -985,7 +1149,7 @@ function DraggableItem({ inv, busy, failed, rotated, dimmed, onCardClick, onImag
           ?? SLOT_TRANSFORM[item.slot]
           ?? "scale(1.4)";
         const layerTransform = (() => {
-          if (!rotated || item.slot === "BODY") return baseTransform;
+          if (!rotated) return baseTransform;
           const rotatedOverride = CARD_TRANSFORM_ROTATED_OVERRIDE[filename];
           if (rotatedOverride) return rotatedOverride;
           const rotatedClass = cardClassRotatedTransform(item);

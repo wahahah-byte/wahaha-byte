@@ -363,11 +363,16 @@ function AdminItemRow({ item, busy, canDelete, onEdit, onToggleAvailability, onR
     item.contentMinX != null && item.contentMinY != null
     && item.contentMaxX != null && item.contentMaxY != null;
   // 1x1 thumbnail bounds transform regardless of storage footprint.
+  // Helmets bypass the bounded path and use a uniform transform — matches the inventory
+  // grid's HAT slot treatment so helmet thumbs read consistently in the admin list.
+  const isHelmet = `${item.name ?? ""} ${item.category ?? ""}`.toLowerCase().includes("helmet");
   const clientBounds = useClientBounds(
     item.previewAssetUrl ? assetPath(item.previewAssetUrl) : null,
   );
   const thumbTransform = hasAsset
-    ? boundsTransformFor(item, clientBounds, { cols: 1, rows: 1 }) ?? "scale(1.2)"
+    ? (isHelmet
+        ? "scale(1.85) translateY(24%)"
+        : boundsTransformFor(item, clientBounds, { cols: 1, rows: 1 }) ?? "scale(1.2)")
     : undefined;
   return (
     <li

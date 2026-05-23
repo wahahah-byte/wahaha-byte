@@ -81,6 +81,9 @@ export function boundsTransformFor(
 export function getItemSize(item: AvatarItemDto): { cols: number; rows: number } {
   const cat = (item.category ?? "").toLowerCase();
   if (cat.includes("staff")) return { cols: 2, rows: 1 };
+  if (cat.includes("sword")) return { cols: 1, rows: 1 };
+  // Full-body outfits — overrides legacy BODY slot's 1×1 default.
+  if (cat === "outfit") return { cols: 1, rows: 2 };
   if (item.slot === "HAT" || item.slot === "HEAD") return { cols: 1, rows: 1 };
   if (item.gridCols && item.gridRows) {
     return { cols: item.gridCols, rows: item.gridRows };
@@ -113,6 +116,9 @@ export function getItemSize(item: AvatarItemDto): { cols: number; rows: number }
     case "WEAPON_BACK":
     case "WEAPON_FRONT":
       return { cols: 2, rows: 1 };
+    case "OFFHAND":
+      // Shields/daggers/orbs sit in a single cell — small footprint by default.
+      return { cols: 1, rows: 1 };
     default:
       return { cols: 1, rows: 1 };
   }
@@ -123,9 +129,27 @@ export function isHairSlot(slot: string | undefined | null): boolean {
   return slot === "HAIR" || slot === "HAIR_FRONT" || slot === "HAIR_BACK";
 }
 
-// Weapons share one "held by chibi" group across HAND / WEAPON_FRONT / WEAPON_BACK.
+// Weapons share one "held by chibi" group across HAND / WEAPON_FRONT / WEAPON_BACK / OFFHAND.
 export function isWeaponSlot(slot: string | undefined | null): boolean {
-  return slot === "HAND" || slot === "WEAPON_FRONT" || slot === "WEAPON_BACK";
+  return slot === "HAND"
+    || slot === "WEAPON_FRONT"
+    || slot === "WEAPON_BACK"
+    || slot === "OFFHAND";
+}
+
+// Two-handed primary weapons block the off-hand slot (MapleStory rule). Category-based so
+// admin-defined "greatsword" etc. is detected even if not yet in the WEAPON_FRONT default list.
+// Mirrors apps/web/src/app/avatar/page.tsx isTwoHanded and the C# IsTwoHanded in
+// wahaha.API/Repositories/UserInventoryRepository.cs — keep the token list in sync.
+export function isTwoHanded(item: AvatarItemDto | undefined | null): boolean {
+  if (!item || item.slot !== "WEAPON_FRONT") return false;
+  const cat = (item.category ?? "").toLowerCase();
+  return cat.includes("staff")
+    || cat.includes("polearm")
+    || cat.includes("bow")
+    || cat.includes("greatsword")
+    || cat.includes("two-hand")
+    || cat.includes("twohand");
 }
 
 // ---- Inventory-card transform fallbacks -----------------------------------
@@ -172,30 +196,34 @@ export interface CardTransform {
 // multiplied by scale in screen px). For items WITH bounds the bounds-based
 // path in resolveCardTransform takes over and provides exact bbox centring.
 const SLOT_CARD_TRANSFORM: Record<string, CardTransform> = {
-  HEAD:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 22 },
+  // HAT / HEAD: hat sprite sits in upper third of canvas — bumped scale + Y shift to
+  // centre the visible content. 28% lifts helmets ~2px higher than the original 32%.
+  HEAD:  { scale: 1.85, translateXPercent: ZERO, translateYPercent: 24 },
   HAIR:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 20 },
   BODY:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: -4 },
-  HAND:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: -6 },
+  HAND:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: -14 },
   FACE:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 12 },
   BACK:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: 2 },
   FEET:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: -22 },
   HAIR_FRONT: { scale: 1.7, translateXPercent: ZERO, translateYPercent: 20 },
   HAIR_BACK:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 20 },
-  HAT:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 22 },
+  HAT:  { scale: 1.85, translateXPercent: ZERO, translateYPercent: 24 },
   EYE:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 14 },
   EAR:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: 12 },
   TOP:     { scale: 1.4, translateXPercent: ZERO, translateYPercent: -4 },
   BOTTOM:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: 8 },
   OVERALL: { scale: 1.3, translateXPercent: ZERO, translateYPercent: 2 },
   // Two-layer capes (primary back panel + secondary front drape) skip the
-  // bounds-based path, so this slot value runs permanently. Web uses 0%
-  // which centres source y=192; most cape sprites sit a touch lower (y≈220)
-  // so -8% nudges the centring point to match the typical visual centre.
+  // bounds-based path, so this slot value runs permanently. -8% nudges the
+  // centring point to match the typical visual centre of the cape drape.
   CAPE:   { scale: 1.3, translateXPercent: ZERO, translateYPercent: -8 },
   GLOVES: { scale: 1.4, translateXPercent: ZERO, translateYPercent: -6 },
   SHOES:  { scale: 1.7, translateXPercent: ZERO, translateYPercent: -22 },
   WEAPON_FRONT: { scale: 1.4, translateXPercent: ZERO, translateYPercent: ZERO },
   WEAPON_BACK:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: ZERO },
+  // Off-hand items (shields, daggers, orbs): sized large, shifted right (back-arm canvas
+  // content sits left of centre), and lifted to balance the cell's vertical centre.
+  OFFHAND:      { scale: 2.15, translateXPercent: 8, translateYPercent: -4 },
   WRIST:  { scale: 1.4, translateXPercent: ZERO, translateYPercent: -6 },
 };
 
@@ -205,8 +233,22 @@ const CARD_TRANSFORM_OVERRIDE: Record<string, CardTransform> = {
   "weapon_front_magic_staff.png": { scale: 1.4, translateXPercent: 0, translateYPercent: -16 },
 };
 
+// Order matters — first matching token wins. Specific tokens (helmet) must precede
+// broader ones (hat) so e.g. "Robot Helmet" matches helmet and not hat.
 const CARD_CLASS_TRANSFORM: Array<{ token: string; tf: CardTransform }> = [
   { token: "polearm", tf: { scale: 2.0, translateXPercent: 0, translateYPercent: -12 } },
+  // Swords: lift higher than the HAND slot default — sword sprite is bottom-anchored
+  // in the canvas, so a stronger negative Y is needed to centre it.
+  { token: "sword",  tf: { scale: 1.7, translateXPercent: 8, translateYPercent: -14 } },
+  // Helmets: scale 2.0 reads as a beefier round silhouette; 24% Y keeps content centred.
+  { token: "helmet", tf: { scale: 2.0, translateXPercent: 0, translateYPercent: 24 } },
+  // Hats (wizard, pirate, etc.): sprite anchored higher on the canvas than helmets;
+  // 32% Y pulls the visible content down to sit at the cell's vertical centre.
+  // NB: "cap" is intentionally omitted — substring of "cape" so the token would mis-match
+  //     CAPE-slot items. Cap-category items fall back to the HAT slot transform (close enough).
+  { token: "hat",      tf: { scale: 2.0, translateXPercent: 0, translateYPercent: 32 } },
+  { token: "crown",    tf: { scale: 2.0, translateXPercent: 0, translateYPercent: 32 } },
+  { token: "headband", tf: { scale: 2.0, translateXPercent: 0, translateYPercent: 32 } },
 ];
 
 function cardClassTransformFor(item: AvatarItemDto): CardTransform | null {
@@ -219,8 +261,9 @@ function cardClassTransformFor(item: AvatarItemDto): CardTransform | null {
 
 /** Resolves the final card transform for a given item, applying the same
  *  precedence as web's DraggableItem render: optional bounds-derived
- *  auto-centre (skipped for two-layer items) → per-filename override →
- *  class match → slot default → 1.4× fallback. */
+ *  auto-centre (skipped for two-layer items and HAT/HEAD/OFFHAND slots so
+ *  helmets/shields render at a uniform forced size) → per-filename override
+ *  → class match → slot default → 1.4× fallback. */
 export function resolveCardTransform(
   item: AvatarItemDto,
   opts: {
@@ -231,7 +274,13 @@ export function resolveCardTransform(
     fillFactor?: number;
   },
 ): CardTransform {
-  if (!opts.isTwoLayer) {
+  // Slots where per-item bounds-based centring produces inconsistent visuals across items
+  // (helmets render at varying sizes; shields end up off-centre because their bbox is small).
+  // Force these slots through SLOT_CARD_TRANSFORM so every item in the slot reads the same.
+  const skipAutoBounds = item.slot === "HAT"
+    || item.slot === "HEAD"
+    || item.slot === "OFFHAND";
+  if (!opts.isTwoLayer && !skipAutoBounds) {
     const auto = boundsTransformFor(item, opts.boundsOverride ?? null, {
       cols: opts.cols,
       rows: opts.rows,

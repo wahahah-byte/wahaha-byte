@@ -6,6 +6,7 @@ export * from "./api/users";
 export * from "./api/avatar";
 export * from "./avatar/hints";
 export * from "./avatar/boundsTransform";
+export * from "./avatar/categories";
 export * from "./theme/colors";
 export * from "./time/dateUtils";
 export * from "./tasks/taskList";

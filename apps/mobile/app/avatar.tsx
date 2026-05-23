@@ -22,6 +22,7 @@ import {
   applyHints,
   getItemSize,
   isHairSlot,
+  isTwoHanded,
   isWeaponSlot,
   resolveCardTransform,
   type AvatarItemDto,
@@ -31,9 +32,12 @@ import {
 import { avatarApi } from "@/lib/api";
 import { bustedAssetUrl } from "@/lib/avatar-asset";
 import { equippedCache } from "@/lib/equipped-cache";
+import { autoPlace, rectFits, type Placed } from "@/lib/grid-collision";
 import { ChibiAvatar } from "@/components/chibi-avatar";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { InventoryItemMenu } from "@/components/inventory-item-menu";
+import { ItemLayers } from "@/components/item-layers";
 import { useColors } from "@/hooks/use-colors";
 
 const GRID_COLS = 5;
@@ -51,68 +55,8 @@ const DRAG_TAP_TOLERANCE = 8;
 
 type Tab = "equipment" | "hair";
 
-type Placed = { positionX: number; positionY: number; cols: number; rows: number };
-
-function rectFits(
-  placed: Placed[],
-  x: number,
-  y: number,
-  cols: number,
-  rows: number,
-): boolean {
-  if (x < 0 || y < 0 || x + cols > GRID_COLS || y + rows > GRID_ROWS) return false;
-  for (const p of placed) {
-    const overlap =
-      x < p.positionX + p.cols
-      && x + cols > p.positionX
-      && y < p.positionY + p.rows
-      && y + rows > p.positionY;
-    if (overlap) return false;
-  }
-  return true;
-}
-
-function autoPlace(rows: UserInventoryDto[]): UserInventoryDto[] {
-  // Persisted positions go down first to avoid collisions.
-  const placed: Placed[] = [];
-  const out: UserInventoryDto[] = new Array(rows.length);
-
-  // Phase 1: honour rows with valid stored position.
-  rows.forEach((row, idx) => {
-    if (!row.avatarItem) { out[idx] = row; return; }
-    const size = getItemSize(row.avatarItem);
-    if (
-      row.positionX != null
-      && row.positionY != null
-      && rectFits(placed, row.positionX, row.positionY, size.cols, size.rows)
-    ) {
-      placed.push({ positionX: row.positionX, positionY: row.positionY, cols: size.cols, rows: size.rows });
-      out[idx] = row;
-    }
-  });
-
-  // Phase 2: first-fit scan for missing slots.
-  rows.forEach((row, idx) => {
-    if (out[idx] || !row.avatarItem) return;
-    const size = getItemSize(row.avatarItem);
-    let assigned: { x: number; y: number } | null = null;
-    outer: for (let y = 0; y < GRID_ROWS; y++) {
-      for (let x = 0; x < GRID_COLS; x++) {
-        if (rectFits(placed, x, y, size.cols, size.rows)) {
-          assigned = { x, y };
-          break outer;
-        }
-      }
-    }
-    if (assigned) {
-      placed.push({ positionX: assigned.x, positionY: assigned.y, cols: size.cols, rows: size.rows });
-      out[idx] = { ...row, positionX: assigned.x, positionY: assigned.y };
-    } else {
-      out[idx] = { ...row, positionX: null, positionY: null };
-    }
-  });
-  return out;
-}
+// Grid dimensions threaded into the (extracted) collision helpers below.
+const GRID = { cols: GRID_COLS, rows: GRID_ROWS } as const;
 
 export default function AvatarScreen() {
   const c = useColors();
@@ -123,6 +67,10 @@ export default function AvatarScreen() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("equipment");
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  // Inventory item the long-press menu is open for; null = closed.
+  const [menuItem, setMenuItem] = useState<UserInventoryDto | null>(null);
+  // True while the sell request is mid-flight; locks the menu actions.
+  const [menuBusy, setMenuBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -143,7 +91,7 @@ export default function AvatarScreen() {
     // Auto-place per tab — hair and equipment share coords.
     const equipRows = hinted.filter((r) => !isHairSlot(r.avatarItem?.slot));
     const hairRows = hinted.filter((r) => isHairSlot(r.avatarItem?.slot));
-    const placed = [...autoPlace(equipRows), ...autoPlace(hairRows)];
+    const placed = [...autoPlace(equipRows, GRID), ...autoPlace(hairRows, GRID)];
     setInventory(placed);
     // Persist freshly auto-placed items.
     for (let i = 0; i < placed.length; i++) {
@@ -180,14 +128,30 @@ export default function AvatarScreen() {
     setBusyId(inv.inventoryId);
     const slot = inv.avatarItem?.slot;
     const isWeapon = slot && isWeaponSlot(slot);
+    const newIsOffhand = slot === "OFFHAND";
+    const newIs2H = isTwoHanded(inv.avatarItem);
     const nextEquipped = !inv.isEquipped;
     setInventory((prev) =>
       prev.map((r) => {
         if (r.inventoryId === inv.inventoryId) return { ...r, isEquipped: nextEquipped };
         if (!nextEquipped) return r;
         const rSlot = r.avatarItem?.slot;
-        if (isWeapon && rSlot && isWeaponSlot(rSlot)) return { ...r, isEquipped: false };
-        if (!isWeapon && r.isEquipped && rSlot === slot) return { ...r, isEquipped: false };
+        if (!r.isEquipped) return r;
+        // Same-slot mutex (always applies — server enforces this too).
+        if (rSlot === slot) return { ...r, isEquipped: false };
+        // Cross-weapon mutex with the 1H + OFFHAND coexistence rule. Mirrors
+        // apps/web/src/app/avatar/page.tsx crossWeaponRows and the C# EquipAsync.
+        if (isWeapon && rSlot && isWeaponSlot(rSlot)) {
+          // OFFHAND vs WEAPON_FRONT: only drop when the WEAPON_FRONT side is 2H.
+          if (newIsOffhand && rSlot === "WEAPON_FRONT") {
+            return isTwoHanded(r.avatarItem) ? { ...r, isEquipped: false } : r;
+          }
+          if (rSlot === "OFFHAND" && slot === "WEAPON_FRONT") {
+            return newIs2H ? { ...r, isEquipped: false } : r;
+          }
+          // All other weapon-slot combos (HAND / WEAPON_FRONT / WEAPON_BACK) stay mutex.
+          return { ...r, isEquipped: false };
+        }
         return r;
       }),
     );
@@ -201,6 +165,34 @@ export default function AvatarScreen() {
     }
     // Refresh equipped cache for next detail-modal open.
     equippedCache.revalidate();
+  }
+
+  // Open the long-press action menu for an inventory item. Triggered from InventoryCard
+  // when the user long-presses without dragging.
+  function onSellRequest(inv: UserInventoryDto) {
+    // The long-press path activates pan ⇒ parent sets draggingId. Clear it before opening
+    // the menu so the card returns to its idle visual state behind the sheet.
+    setDraggingId(null);
+    if (busyId) return;
+    if (!inv.avatarItem) return;
+    setMenuItem(inv);
+  }
+
+  // Sell-back. 50% refund matches SellInventoryHandler.SellRefundRatio on the backend.
+  async function confirmSell() {
+    const inv = menuItem;
+    if (!inv || menuBusy) return;
+    setMenuBusy(true);
+    const res = await avatarApi.sellInventory(inv.inventoryId);
+    setMenuBusy(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    // Splice the row out locally; chibi re-renders without it.
+    setInventory((prev) => prev.filter((row) => row.inventoryId !== inv.inventoryId));
+    equippedCache.revalidate();
+    setMenuItem(null);
   }
 
   // Drag commit — returns true on accept (card pins at new cell).
@@ -227,7 +219,7 @@ export default function AvatarScreen() {
           rows: s.rows,
         };
       });
-      if (!rectFits(placed, newX, newY, size.cols, size.rows)) return false;
+      if (!rectFits(placed, newX, newY, size.cols, size.rows, GRID)) return false;
       if (moving.positionX === newX && moving.positionY === newY) return true;
       setInventory((prev) =>
         prev.map((r) =>
@@ -369,6 +361,7 @@ export default function AvatarScreen() {
                     dimmed={draggingId != null && draggingId !== inv.inventoryId}
                     isDragging={draggingId === inv.inventoryId}
                     onTap={() => toggle(inv)}
+                    onSellRequest={() => onSellRequest(inv)}
                     onDragStart={() => setDraggingId(inv.inventoryId)}
                     onDragEnd={(targetX, targetY) => {
                       setDraggingId(null);
@@ -380,6 +373,15 @@ export default function AvatarScreen() {
           )}
         </View>
       </ScrollView>
+
+      <InventoryItemMenu
+        item={menuItem?.avatarItem ?? null}
+        visible={menuItem != null}
+        refundPoints={menuItem?.avatarItem ? Math.floor(menuItem.avatarItem.cost * 0.5) : 0}
+        busy={menuBusy}
+        onSell={confirmSell}
+        onCancel={() => { if (!menuBusy) setMenuItem(null); }}
+      />
     </ThemedView>
   );
 }
@@ -390,6 +392,8 @@ interface InventoryCardProps {
   dimmed: boolean;
   isDragging: boolean;
   onTap: () => void;
+  // Long-press without dragging — opens the sell-back confirm.
+  onSellRequest: () => void;
   onDragStart: () => void;
   onDragEnd: (targetX: number, targetY: number) => boolean;
 }
@@ -397,7 +401,7 @@ interface InventoryCardProps {
 // 70% snap-hysteresis to kill boundary flicker during drag.
 const SNAP_HYSTERESIS = CELL_STEP * 0.7;
 
-function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDragEnd }: InventoryCardProps) {
+function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onSellRequest, onDragStart, onDragEnd }: InventoryCardProps) {
   const item = inv.avatarItem!;
   const size = getItemSize(item);
   const cols = size.cols;
@@ -406,7 +410,6 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
   const h = rows * CELL_PX + (rows - 1) * CELL_GAP;
 
   const hasSecondary = !!item.secondaryAssetUrl;
-  const secondaryInFront = item.slot === "CAPE";
   const t = resolveCardTransform(item, { cols: size.cols, rows: size.rows, isTwoLayer: hasSecondary });
 
   // SharedValue-driven layout; avoids one-frame jump on drop.
@@ -415,6 +418,9 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
   // Captured at drag start so onUpdate doesn't closure stale state.
   const dragStartX = useSharedValue(inv.positionX ?? 0);
   const dragStartY = useSharedValue(inv.positionY ?? 0);
+  // Flips true the moment a drag actually moves the finger past a small threshold.
+  // If a long-press fires + ends without movement, we treat that as a sell request.
+  const dragMoved = useSharedValue(false);
   useEffect(() => {
     cellX.value = inv.positionX ?? 0;
     cellY.value = inv.positionY ?? 0;
@@ -426,10 +432,15 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
       "worklet";
       dragStartX.value = cellX.value;
       dragStartY.value = cellY.value;
+      dragMoved.value = false;
       runOnJS(onDragStart)();
     })
     .onUpdate((e) => {
       "worklet";
+      // Anything beyond a small jitter counts as a real drag — anything below = stationary long-press.
+      if (!dragMoved.value && (Math.abs(e.translationX) > 4 || Math.abs(e.translationY) > 4)) {
+        dragMoved.value = true;
+      }
       // Snap-to-cell with 70% hysteresis.
       const curDCol = cellX.value - dragStartX.value;
       const curDRow = cellY.value - dragStartY.value;
@@ -453,6 +464,12 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
     })
     .onEnd(() => {
       "worklet";
+      // Long-press without movement = sell intent. Bail out of the drop logic so we don't
+      // accidentally persist a no-op move + fire the parent's "dropped at origin" handler.
+      if (!dragMoved.value) {
+        runOnJS(onSellRequest)();
+        return;
+      }
       const targetX = cellX.value;
       const targetY = cellY.value;
       const origX = dragStartX.value;
@@ -524,13 +541,9 @@ function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onDragStart, onDr
         ]}
       >
         {/* View-on-View layers so RN transform composition stays predictable. */}
-        {hasSecondary && !secondaryInFront ? (
-          <LayerImage uri={bustedAssetUrl(item, item.secondaryAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
-        ) : null}
-        <LayerImage uri={bustedAssetUrl(item, item.previewAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
-        {hasSecondary && secondaryInFront ? (
-          <LayerImage uri={bustedAssetUrl(item, item.secondaryAssetUrl)!} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
-        ) : null}
+        <ItemLayers item={item} renderImage={(uri, key) => (
+          <LayerImage key={key} uri={uri} w={w} h={h} tx={tx} ty={ty} scale={t.scale} />
+        )} />
 
         {inv.isEquipped ? (
           <View style={styles.equippedDot} />

@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -12,6 +13,8 @@ interface Props {
   capAtGoal?: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
+  // When supplied, wraps the widget in a bordered Pressable that opens a custom-log modal.
+  onPress?: () => void;
 }
 
 // Mobile QuickLogStepper — inline +/- chip with running total, optional progress bar.
@@ -24,6 +27,7 @@ export function QuickLogStepper({
   capAtGoal,
   onIncrement,
   onDecrement,
+  onPress,
 }: Props) {
   const c = useColors();
   const sum = cycleSum + pendingLog;
@@ -92,34 +96,68 @@ export function QuickLogStepper({
     </View>
   );
 
+  const tappableLabel = onPress ? (
+    <ThemedText style={{ color: c.fgMuted, fontSize: 11, opacity: 0.7 }}>›</ThemedText>
+  ) : null;
+
+  function withTappable(node: ReactNode) {
+    if (!onPress) return node;
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.tappable,
+          {
+            borderColor: c.borderHairline,
+            backgroundColor: pressed ? c.overlayHover : c.input,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Log a custom amount"
+      >
+        {node}
+      </Pressable>
+    );
+  }
+
   if (goal == null) {
     return (
-      <View style={styles.row}>
-        <ThemedText style={[styles.label, { color: c.fg }]}>Today</ThemedText>
-        {chip}
-      </View>
+      <Fragment>
+        {withTappable(
+          <View style={styles.row}>
+            <ThemedText style={[styles.label, { color: c.fg }]}>Today</ThemedText>
+            {chip}
+            {tappableLabel}
+          </View>,
+        )}
+      </Fragment>
     );
   }
 
   const pct = Math.min(100, Math.round((sum / goal) * 100));
   return (
-    // Today + stepper centered above full-width progress meter.
-    <View style={{ gap: 6, minWidth: 180, alignItems: "center" }}>
-      <View style={styles.row}>
-        <ThemedText style={[styles.label, { color: c.fg }]}>Today</ThemedText>
-        {chip}
-      </View>
-      <View style={[styles.barTrack, { backgroundColor: c.track }]}>
-        <View
-          style={{
-            width: `${pct}%`,
-            height: "100%",
-            backgroundColor: reached ? c.success : c.activeHighlightAlt,
-            borderRadius: 2,
-          }}
-        />
-      </View>
-    </View>
+    <Fragment>
+      {withTappable(
+        // Today + stepper centered above full-width progress meter.
+        <View style={{ gap: 6, minWidth: 180, alignItems: "center" }}>
+          <View style={styles.row}>
+            <ThemedText style={[styles.label, { color: c.fg }]}>Today</ThemedText>
+            {chip}
+            {tappableLabel}
+          </View>
+          <View style={[styles.barTrack, { backgroundColor: c.track }]}>
+            <View
+              style={{
+                width: `${pct}%`,
+                height: "100%",
+                backgroundColor: reached ? c.success : c.activeHighlightAlt,
+                borderRadius: 2,
+              }}
+            />
+          </View>
+        </View>,
+      )}
+    </Fragment>
   );
 }
 
@@ -157,5 +195,12 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     overflow: "hidden",
+  },
+  tappable: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignSelf: "center",
   },
 });

@@ -9,12 +9,17 @@ const SLOT_Z: Record<string, number> = {
   WEAPON_BACK: 0,
   CAPE: 10,
   HAIR_BACK: 20,
+  // Off-hand sits on the back arm — behind the body (base z=30) but in front of back-hair/cape.
+  OFFHAND: 25,
   BOTTOM: 40,
   TOP: 50,
   // OVERALL shares TOP's z-band; hides TOP/BOTTOM when equipped.
   OVERALL: 50,
   // Front drape of a two-layer cape; sits over body but below GLOVES.
   CAPE_FRONT: 55,
+  // Off-hand strap wrap — drawn over body so the grip appears to loop around the arm.
+  // Sits just above CAPE_FRONT but still below GLOVES so a gauntlet covers it.
+  OFFHAND_FRONT: 56,
   GLOVES: 60,
   SHOES: 70,
   HAIR_FRONT: 80,
@@ -106,10 +111,14 @@ export default function ChibiAvatar({
       ((hideHairFront || hideHairBack) && isLegacyHair);
 
     if (!primarySuppressed) {
+      // Worn view (equippedAssetUrl) overrides catalog preview when set — used for items
+      // whose chibi-side appearance differs from the shop icon (e.g. shields show their
+      // back/strap when worn, but a front face in the catalog).
+      const wornSrc = item.equippedAssetUrl ?? item.previewAssetUrl;
       layered.push({
         key: `${inv.inventoryId}:primary`,
         inv,
-        src: item.previewAssetUrl,
+        src: wornSrc,
         z: SLOT_Z[item.slot] ?? 100,
       });
     }
@@ -123,6 +132,10 @@ export default function ChibiAvatar({
         respectHairCover = false;
       } else if (item.slot === "WEAPON_FRONT") {
         secondaryZ = SLOT_Z.WEAPON_BACK;
+        respectHairCover = false;
+      } else if (item.slot === "OFFHAND") {
+        // Strap/grip overlay drawn over body so it appears to wrap the arm.
+        secondaryZ = SLOT_Z.OFFHAND_FRONT;
         respectHairCover = false;
       } else {
         secondaryZ = SLOT_Z.HAIR_BACK;

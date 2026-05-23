@@ -5,8 +5,32 @@ import { type CheckInCycleDto, dateKey, isCycleClosed, type TaskDto } from "@wah
 
 const QUICK_LOG_DEBOUNCE_MS = 1500;
 
+// Module-level: tracks in-flight log POSTs per taskId so reopen-after-dismiss can wait on them
+// (otherwise the GET races ahead of the fire-and-forget unmount flush and misses the new cycle).
+const pendingFlushes = new Map<string, Set<Promise<unknown>>>();
+
+function trackFlush<T>(taskId: string, promise: Promise<T>): Promise<T> {
+  let set = pendingFlushes.get(taskId);
+  if (!set) {
+    set = new Set();
+    pendingFlushes.set(taskId, set);
+  }
+  set.add(promise);
+  promise.finally(() => {
+    set!.delete(promise);
+    if (set!.size === 0) pendingFlushes.delete(taskId);
+  });
+  return promise;
+}
+
+export async function awaitPendingLogFlushes(taskId: string): Promise<void> {
+  const set = pendingFlushes.get(taskId);
+  if (!set || set.size === 0) return;
+  await Promise.allSettled(Array.from(set));
+}
+
 interface Args {
-  task: TaskDto;
+  task: TaskDto | null;
   heatmapCycles: CheckInCycleDto[];
   onFlushQuickLog?: (taskId: string, delta: number) => Promise<CheckInCycleDto | null>;
   onDelete?: () => void;
@@ -18,6 +42,12 @@ interface Result {
   handleStepperIncrement: () => void;
   handleStepperDecrement: () => void;
   handleDeleteClick: () => void;
+  // Add an arbitrary positive amount to the pending log buffer (custom-log modal).
+  addPending: (amount: number) => void;
+  // Drain buffered logs into a single value (for auto-checkin); cancels the pending debounce.
+  consumePending: () => number;
+  // Set displayed total (cycleSumToday + pendingLog) to an absolute value; clamps so it can't go below 0.
+  setPending: (targetTotal: number) => void;
 }
 
 // Mobile useQuickLog — buffered +/- with debounced flush + AppState bg-flush.
@@ -62,7 +92,7 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
   }, [cycleSumToday]);
 
   // After cycle close, discard buffer so debounced tap can't slip through.
-  const cycleClosed = isCycleClosed(task.dueDate, task.lastCheckInDate);
+  const cycleClosed = task ? isCycleClosed(task.dueDate, task.lastCheckInDate) : false;
   useEffect(() => {
     if (!cycleClosed) return;
     if (pendingLogRef.current === 0 && inFlightSentRef.current === 0) return;
@@ -71,9 +101,11 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     setPendingLog(0);
   }, [cycleClosed]);
 
-  // Flush buffered delta on unmount/task change; skip when cycle closed.
+  // Flush buffered delta on unmount/task change; skip when cycle closed or task null.
+  const taskId = task?.taskId;
   useEffect(() => {
-    const tid = task.taskId;
+    if (!taskId) return;
+    const tid = taskId;
     return () => {
       if (cycleClosed) {
         pendingLogRef.current = 0;
@@ -81,25 +113,29 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
         return;
       }
       const remainder = pendingLogRef.current - inFlightSentRef.current;
-      if (remainder !== 0) flushRef.current?.(tid, remainder);
+      if (remainder !== 0 && flushRef.current) {
+        trackFlush(tid, flushRef.current(tid, remainder));
+      }
       pendingLogRef.current = 0;
       inFlightSentRef.current = 0;
     };
-  }, [task.taskId, cycleClosed]);
+  }, [taskId, cycleClosed]);
 
   // Debounced auto-flush; cycleClosed gate blocks post-commit firings.
   useEffect(() => {
+    if (!taskId) return;
     if (!flushRef.current) return;
     if (cycleClosed) return;
     const remainder = pendingLog - inFlightSentRef.current;
     if (remainder === 0) return;
-    const tid = task.taskId;
+    const tid = taskId;
     const timer = setTimeout(async () => {
       const delta = pendingLogRef.current - inFlightSentRef.current;
       if (delta === 0) return;
       inFlightSentRef.current += delta;
       try {
-        const result = await flushRef.current?.(tid, delta);
+        const promise = flushRef.current?.(tid, delta) ?? Promise.resolve(null);
+        const result = await trackFlush(tid, promise);
         if (!result) {
           inFlightSentRef.current -= delta;
           return;
@@ -111,11 +147,12 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
       }
     }, QUICK_LOG_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [pendingLog, task.taskId, cycleClosed]);
+  }, [pendingLog, taskId, cycleClosed]);
 
   // AppState bg flush so killed app doesn't lose buffered taps.
   useEffect(() => {
-    const tid = task.taskId;
+    if (!taskId) return;
+    const tid = taskId;
     const onChange = (state: AppStateStatus) => {
       if (state !== "background" && state !== "inactive") return;
       if (cycleClosed) return;
@@ -123,11 +160,32 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
       if (remainder === 0) return;
       inFlightSentRef.current += remainder;
       // Fire-and-forget; resume re-fetches task state via useFocusEffect.
-      flushRef.current?.(tid, remainder);
+      const promise = flushRef.current?.(tid, remainder);
+      if (promise) trackFlush(tid, promise);
     };
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, [task.taskId, cycleClosed]);
+  }, [taskId, cycleClosed]);
+
+  const addPending = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    setPendingLog((p) => p + amount);
+  }, []);
+
+  const consumePending = useCallback(() => {
+    const remainder = Math.max(0, pendingLogRef.current - inFlightSentRef.current);
+    pendingLogRef.current = 0;
+    inFlightSentRef.current = 0;
+    setPendingLog(0);
+    return remainder;
+  }, []);
+
+  // Edit-style: caller passes desired displayed total; we derive the signed delta from cycleSumToday.
+  // pendingLog can go negative — debounced flush POSTs negative deltas to revoke already-persisted logs.
+  const setPending = useCallback((targetTotal: number) => {
+    const safe = Math.max(0, Math.floor(targetTotal));
+    setPendingLog(safe - cycleSumToday);
+  }, [cycleSumToday]);
 
   return {
     pendingLog,
@@ -135,5 +193,8 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     handleStepperIncrement,
     handleStepperDecrement,
     handleDeleteClick,
+    addPending,
+    consumePending,
+    setPending,
   };
 }

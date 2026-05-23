@@ -1034,14 +1034,23 @@ function TaskRowImpl({
             // Strict in-flight gate — blocks alternating taps too.
             if (inFlight) return;
             if (checkedThisCycle && latestCheckinCycle) {
-              // Server allows undo only on same-day check-ins.
-              const couldBeTodaysCheckin =
-                wasCheckedInToday ||
-                latestCheckinCycle.checkInDate.split("T")[0] === todayKey;
-              if (couldBeTodaysCheckin) {
+              // Server only undoes same-day; require cycle's checkInDate == today, not just wasCheckedInToday (which optimistic patch sets before recentCycles updates).
+              const isTodaysCycle = latestCheckinCycle.checkInDate.split("T")[0] === todayKey;
+              if (isTodaysCycle) {
                 if (!canActNow(item.taskId)) return;
                 armGuard("undo", latestCheckinCycle.cycleId);
                 onUndoCheckIn(item, latestCheckinCycle.cycleId);
+                return;
+              }
+              // wasCheckedInToday but cycle is stale = race window (POST in flight) — queue or repair.
+              if (wasCheckedInToday) {
+                if (isCheckInPending(item.taskId)) {
+                  queueUndoOnCommit(item.taskId);
+                  return;
+                }
+                tasksApi.repairCheckIn(item.taskId).finally(() => {
+                  taskEvents.emitRefreshRequested();
+                });
                 return;
               }
               // Multi-day cadence past its commit day — fall through.
@@ -1052,9 +1061,8 @@ function TaskRowImpl({
               onCheckIn(item);
               return;
             }
-            // Stuck-state repair: closed cycle with no backing cycle row.
+            // Stuck-state repair: closed cycle with no backing cycle row at all.
             if (checkedThisCycle && !latestCheckinCycle) {
-              // Active POST in flight — queue undo for when cycleId lands.
               if (isCheckInPending(item.taskId)) {
                 queueUndoOnCommit(item.taskId);
                 return;

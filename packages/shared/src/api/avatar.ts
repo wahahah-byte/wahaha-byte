@@ -27,7 +27,9 @@ export type ItemSlot =
   | "SHOES"
   | "WEAPON_FRONT"
   | "WEAPON_BACK"
-  | "WRIST";
+  | "WRIST"
+  // Off-hand: shield, dagger, orb, tome — the secondary item held in the off-hand.
+  | "OFFHAND";
 
 export const GRANULAR_SLOTS: ItemSlot[] = [
   "HAT", "HAIR_FRONT", "HAIR_BACK",
@@ -35,7 +37,7 @@ export const GRANULAR_SLOTS: ItemSlot[] = [
   "TOP", "BOTTOM", "OVERALL",
   "GLOVES", "SHOES",
   "CAPE",
-  "WEAPON_FRONT", "WEAPON_BACK", "WRIST",
+  "WEAPON_FRONT", "WEAPON_BACK", "OFFHAND", "WRIST",
 ];
 
 export const LEGACY_SLOTS: ItemSlot[] = [
@@ -54,6 +56,9 @@ export interface AvatarItemDto {
   description?: string | null;
   previewAssetUrl?: string | null;
   secondaryAssetUrl?: string | null;
+  // Optional "worn" view used by the chibi composite when distinct from the catalog preview
+  // (e.g. shields: shop = front face, chibi = back/strap). Null = fall back to previewAssetUrl.
+  equippedAssetUrl?: string | null;
   isAvailable: boolean;
   offsetX?: number;
   offsetY?: number;
@@ -133,6 +138,8 @@ export interface AvatarItemRegisterByUrlInput extends AvatarItemRenderHintsInput
   description?: string | null;
   previewAssetUrl: string;
   secondaryAssetUrl?: string | null;
+  // Optional already-uploaded "worn" URL; null = chibi falls back to previewAssetUrl.
+  equippedAssetUrl?: string | null;
   isAvailable?: boolean;
   grantAndEquipForCurrentUser?: boolean;
 }
@@ -147,6 +154,13 @@ export interface PurchaseAvatarItemInput {
 
 export interface PurchaseAvatarItemResponse {
   inventory: UserInventoryDto;
+  newBalance: number;
+}
+
+// Response from sell — refund amount + new wallet balance + inventoryId that was removed.
+export interface SellInventoryResponse {
+  inventoryId: number;
+  refundedPoints: number;
   newBalance: number;
 }
 
@@ -196,6 +210,9 @@ export function createAvatarApi(client: ApiClient) {
         ...(layout === undefined ? {} : { layout }),
       }),
     release: (inventoryId: number) => client.authedDelete<void>(`/api/UserInventory/${inventoryId}`),
+    // PATCH /api/UserInventory/{id}/sell — removes the row and credits a partial refund.
+    sellInventory: (inventoryId: number) =>
+      client.authedPatch<SellInventoryResponse>(`/api/UserInventory/${inventoryId}/sell`),
 
     // ---- Admin / Moderator endpoints --------------------------------------
     registerItemByUrl: (input: AvatarItemRegisterByUrlInput) =>

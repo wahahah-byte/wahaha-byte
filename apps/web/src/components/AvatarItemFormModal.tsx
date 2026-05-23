@@ -13,39 +13,13 @@ import {
   type ItemSlot,
   type Rarity,
 } from "@/lib/api/avatar";
+import {
+  CATEGORIES_BY_SLOT as CANONICAL_CATEGORIES_BY_SLOT,
+  isValidCategory,
+} from "@wahaha/shared";
 import { assetPath } from "@/lib/assetPath";
 
 const RARITIES: Rarity[] = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
-
-// Slot-aware category suggestions for the <datalist>; free-text on the backend.
-const CATEGORIES_BY_SLOT: Partial<Record<ItemSlot, readonly string[]>> = {
-  HAT:        ["hat", "headband", "headgear", "helmet", "crown"],
-  HAIR_FRONT: ["hair"],
-  HAIR_BACK:  ["hair"],
-  FACE:       ["mask", "scar", "facial-hair", "mouth"],
-  EYE:        ["glasses", "eyepatch", "eye-makeup"],
-  EAR:        ["earring", "ear-cuff", "ear-stud"],
-  TOP:        ["t-shirt", "sweater", "hoodie", "jacket", "vest"],
-  BOTTOM:     ["pants", "shorts", "skirt"],
-  OVERALL:    ["dress", "robe", "jumpsuit", "kimono"],
-  CAPE:       ["cape", "wings", "scarf"],
-  GLOVES:     ["gloves", "mittens"],
-  SHOES:      ["boots", "sneakers", "sandals"],
-  WEAPON_FRONT: ["sword", "staff", "bow", "polearm"],
-  WEAPON_BACK:  ["quiver", "holster", "sheath"],
-  WRIST:      ["bracelet", "watch"],
-  // Legacy slots; generic set for editing old rows.
-  HEAD: ["headwear"],
-  HAIR: ["hair"],
-  BODY: ["outerwear"],
-  HAND: ["tool", "weapon"],
-  BACK: ["back"],
-  FEET: ["footwear"],
-};
-
-function categorySuggestionsFor(slot: ItemSlot): readonly string[] {
-  return CATEGORIES_BY_SLOT[slot] ?? [];
-}
 
 export type FormMode =
   | { kind: "create" }
@@ -80,16 +54,83 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
   // Two-layer support for HAIR_FRONT/CAPE/WEAPON_FRONT slots.
   const [secondaryImage, setSecondaryImage] = useState<File | null>(null);
   const [secondaryAssetUrl, setSecondaryAssetUrl] = useState(seed?.secondaryAssetUrl ?? "");
+  // Distinct "worn" view (e.g. shield back/strap) — optional, falls back to catalog preview.
+  const [equippedImage, setEquippedImage] = useState<File | null>(null);
+  const [equippedAssetUrl, setEquippedAssetUrl] = useState(seed?.equippedAssetUrl ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const secondaryFileInputRef = useRef<HTMLInputElement | null>(null);
+  const equippedFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Canonical category options for the current slot (drives the dropdown).
+  const canonicalCategoriesForSlot = useMemo<readonly string[]>(
+    () => CANONICAL_CATEGORIES_BY_SLOT[slot] ?? [],
+    [slot],
+  );
+
+  // When slot changes, reset the category if it's no longer valid for the new slot.
+  // Skip on initial mount so editing an existing item doesn't blank its category.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    if (category && !isValidCategory(slot, category)) setCategory("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slot]);
 
   // Slots that support a secondary asset (mirrors ChibiAvatar z-resolution).
   const supportsSecondaryAsset =
-    slot === "HAIR_FRONT" || slot === "CAPE" || slot === "WEAPON_FRONT";
-  // Semantic label for the secondary layer.
-  const secondaryLayerLabel = slot === "CAPE" ? "Front" : "Back";
+    slot === "HAIR_FRONT" || slot === "CAPE" || slot === "WEAPON_FRONT" || slot === "OFFHAND";
+  // Per-slot copy for the secondary upload — describes the role of the second image so
+  // admins know whether they're uploading a back layer, front drape, etc.
+  const secondaryCopy = (() => {
+    switch (slot) {
+      case "HAIR_FRONT":
+        return {
+          short: "Back hair",
+          field: "Back hair layer",
+          help: "Drawn behind the body when equipped. Pairs with the catalog image (front hair).",
+        };
+      case "CAPE":
+        return {
+          short: "Front drape",
+          field: "Front drape",
+          help: "Drawn over the body when equipped. Pairs with the catalog image (back panel).",
+        };
+      case "WEAPON_FRONT":
+        return {
+          short: "Back portion",
+          field: "Back portion of weapon",
+          help: "Part of the weapon visible behind the chibi (e.g. the back end of a polearm).",
+        };
+      case "OFFHAND":
+        return {
+          short: "Strap",
+          field: "Strap / front overlay",
+          help: "Drawn over the arm so the shield grip appears to wrap around it. Sits in front of the body.",
+        };
+      default:
+        return { short: "Secondary", field: "Secondary layer", help: "" };
+    }
+  })();
+  const secondaryLayerLabel = secondaryCopy.short;
+  // OFFHAND is the main use case (shield back face), but any slot may want a worn variant.
+  // Surface the field only on slots where it's likely relevant to keep the form short.
+  const supportsEquippedAsset =
+    slot === "OFFHAND" || slot === "WEAPON_FRONT" || slot === "WEAPON_BACK" || slot === "HAND";
+  // Per-slot copy for the worn/equipped upload — explains where this image is used on the chibi.
+  const equippedCopy = (() => {
+    if (slot === "OFFHAND") return {
+      field: "Worn-from-behind image",
+      help: "Shown on the chibi instead of the catalog image (shields face away when held in the back hand).",
+      thumbLabel: "Worn (back)",
+    };
+    return {
+      field: "Worn view",
+      help: "Shown on the chibi instead of the catalog image when the worn appearance differs from the catalog view.",
+      thumbLabel: "Worn",
+    };
+  })();
 
   // Render hints; empty string means "use slot default".
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -140,6 +181,15 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     return null;
   }, [supportsSecondaryAsset, secondaryImage, isEdit, seed, createMode, secondaryAssetUrl]);
 
+  // Mirror of previewSrc for the "worn" asset when slot supports it.
+  const equippedPreviewSrc = useMemo(() => {
+    if (!supportsEquippedAsset) return null;
+    if (equippedImage) return URL.createObjectURL(equippedImage);
+    if (isEdit && seed?.equippedAssetUrl) return assetPath(seed.equippedAssetUrl);
+    if (!isEdit && createMode === "url" && equippedAssetUrl) return equippedAssetUrl;
+    return null;
+  }, [supportsEquippedAsset, equippedImage, isEdit, seed, createMode, equippedAssetUrl]);
+
   // Revoke object URLs to avoid blob leaks.
   useEffect(() => {
     if (!image) return;
@@ -153,10 +203,20 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     return () => URL.revokeObjectURL(src);
   }, [secondaryImage]);
 
+  useEffect(() => {
+    if (!equippedImage) return;
+    const src = URL.createObjectURL(equippedImage);
+    return () => URL.revokeObjectURL(src);
+  }, [equippedImage]);
+
   async function handleSave() {
     if (submitting) return;
     if (!name.trim()) { setError("Name is required."); return; }
     if (!category.trim()) { setError("Category is required."); return; }
+    if (!isValidCategory(slot, category)) {
+      setError(`"${category}" is not a valid category for slot ${slot}.`);
+      return;
+    }
     const costN = Number(cost);
     if (!Number.isFinite(costN) || costN < 0) { setError("Cost must be a non-negative number."); return; }
 
@@ -188,6 +248,11 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
     const secondaryUrlPayload = supportsSecondaryAsset && secondaryAssetUrl.trim()
       ? secondaryAssetUrl.trim()
       : null;
+    // Drop equipped state for non-supporting slots so a stale field doesn't leak through.
+    const equippedImagePayload = supportsEquippedAsset ? (equippedImage ?? null) : null;
+    const equippedUrlPayload = supportsEquippedAsset && equippedAssetUrl.trim()
+      ? equippedAssetUrl.trim()
+      : null;
 
     try {
       if (isEdit) {
@@ -201,6 +266,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
           isAvailable,
           image: image ?? null,
           secondaryImage: secondaryImagePayload,
+          equippedImage: equippedImagePayload,
           ...hints,
         };
         const { data, error: apiError } = await avatarApi.updateItem(seed!.itemId, payload);
@@ -233,6 +299,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
           description: description.trim() || null,
           previewAssetUrl: previewAssetUrl.trim(),
           secondaryAssetUrl: secondaryUrlPayload,
+          equippedAssetUrl: equippedUrlPayload,
           isAvailable,
           grantAndEquipForCurrentUser: grantAndEquip,
           ...hints,
@@ -253,6 +320,7 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
           isAvailable,
           image,
           secondaryImage: secondaryImagePayload,
+          equippedImage: equippedImagePayload,
           ...hints,
         };
         const { data, error: apiError } = await avatarApi.createItem(payload);
@@ -354,18 +422,22 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
             <Field label="Category *">
-              <input
-                type="text"
+              <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                maxLength={50}
-                list="avatar-item-categories"
                 className="themed-form-input"
-              />
-              {/* Slot-aware category suggestions */}
-              <datalist id="avatar-item-categories">
-                {categorySuggestionsFor(slot).map((c) => <option key={c} value={c} />)}
-              </datalist>
+              >
+                {/* Existing legacy category not in the canonical list — keep it selectable so
+                    editing an old row doesn't silently change its category. */}
+                {category && !canonicalCategoriesForSlot.includes(category) && (
+                  <option value={category}>{category} (legacy)</option>
+                )}
+                {/* Placeholder forces an explicit selection on create. */}
+                {!category && <option value="" disabled>Choose a category…</option>}
+                {canonicalCategoriesForSlot.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Cost (pts)">
               <input
@@ -389,9 +461,13 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             />
           </Field>
 
-          {/* Asset section */}
+          {/* Asset section — primary "catalog" image is shown in the shop, inventory grid, and as
+              the default chibi layer when no separate worn image is uploaded. */}
           {isEdit || createMode === "upload" ? (
-            <Field label={isEdit ? "Replace image (optional)" : "Image (PNG) *"}>
+            <Field
+              label={isEdit ? "Replace catalog image (optional)" : "Catalog image (PNG) *"}
+              help="Shown in the shop and inventory grid. Also used on the chibi unless a separate worn image is uploaded below."
+            >
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
                   ref={fileInputRef}
@@ -416,7 +492,10 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             </Field>
           ) : (
             <>
-              <Field label="Preview URL *">
+              <Field
+                label="Catalog image URL *"
+                help="Shown in the shop and inventory grid. Also used on the chibi unless a separate worn image URL is provided below."
+              >
                 <input
                   type="url"
                   value={previewAssetUrl}
@@ -439,12 +518,17 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             </>
           )}
 
-          {/* Secondary asset (slot-conditional, optional) */}
+          {/* Secondary asset (slot-conditional, optional) — separate render layer paired with the
+              catalog image. Role depends on slot: back hair, front cape drape, back of weapon,
+              or shield strap wrap. */}
           {supportsSecondaryAsset && (
             isEdit || createMode === "upload" ? (
-              <Field label={isEdit
-                ? `Replace ${secondaryLayerLabel.toLowerCase()} layer (optional)`
-                : `${secondaryLayerLabel} layer (PNG, optional)`}>
+              <Field
+                label={isEdit
+                  ? `Replace ${secondaryCopy.field.toLowerCase()} (optional)`
+                  : `${secondaryCopy.field} (PNG, optional)`}
+                help={secondaryCopy.help}
+              >
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     ref={secondaryFileInputRef}
@@ -468,7 +552,10 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                 </div>
               </Field>
             ) : (
-              <Field label={`${secondaryLayerLabel} layer URL (optional)`}>
+              <Field
+                label={`${secondaryCopy.field} URL (optional)`}
+                help={secondaryCopy.help}
+              >
                 <input
                   type="url"
                   value={secondaryAssetUrl}
@@ -479,7 +566,9 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
                       ? "https://…/avatar-items/cape_valor_front.png"
                       : slot === "WEAPON_FRONT"
                         ? "https://…/avatar-items/weapon_polearm_back.png"
-                        : "https://…/avatar-items/hair_seraph_back.png"
+                        : slot === "OFFHAND"
+                          ? "https://…/avatar-items/shield_kite_strap.png"
+                          : "https://…/avatar-items/hair_seraph_back.png"
                   }
                   className="themed-form-input"
                 />
@@ -487,13 +576,66 @@ export default function AvatarItemFormModal({ mode, onClose, onSaved }: Props) {
             )
           )}
 
-          {(previewSrc || secondaryPreviewSrc) && (
+          {/* Equipped/worn asset (slot-conditional, optional) — substitutes the catalog image
+              on the chibi when the worn appearance differs from the catalog photo
+              (e.g. shield: catalog = front face, chibi = back/strap). */}
+          {supportsEquippedAsset && (
+            isEdit || createMode === "upload" ? (
+              <Field
+                label={isEdit
+                  ? `Replace ${equippedCopy.field.toLowerCase()} (optional)`
+                  : `${equippedCopy.field} (PNG, optional)`}
+                help={equippedCopy.help}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    ref={equippedFileInputRef}
+                    type="file"
+                    accept="image/png"
+                    onChange={(e) => setEquippedImage(e.target.files?.[0] ?? null)}
+                    style={{ flex: 1, minWidth: 0, color: "var(--color-fg-muted)", fontSize: 11 }}
+                  />
+                  {equippedImage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEquippedImage(null);
+                        if (equippedFileInputRef.current) equippedFileInputRef.current.value = "";
+                      }}
+                      style={smallBtnStyle}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </Field>
+            ) : (
+              <Field
+                label={`${equippedCopy.field} URL (optional)`}
+                help={equippedCopy.help}
+              >
+                <input
+                  type="url"
+                  value={equippedAssetUrl}
+                  onChange={(e) => setEquippedAssetUrl(e.target.value)}
+                  maxLength={255}
+                  placeholder="https://…/avatar-items/shield_kite_worn.png"
+                  className="themed-form-input"
+                />
+              </Field>
+            )
+          )}
+
+          {(previewSrc || secondaryPreviewSrc || equippedPreviewSrc) && (
             <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "4px 0" }}>
               {previewSrc && (
-                <PreviewThumb src={previewSrc} label={slot === "CAPE" ? "Back" : "Front"} />
+                <PreviewThumb src={previewSrc} label="Catalog" />
               )}
               {secondaryPreviewSrc && (
                 <PreviewThumb src={secondaryPreviewSrc} label={secondaryLayerLabel} />
+              )}
+              {equippedPreviewSrc && (
+                <PreviewThumb src={equippedPreviewSrc} label={equippedCopy.thumbLabel} />
               )}
             </div>
           )}
@@ -679,13 +821,18 @@ function PreviewThumb({ src, label }: { src: string; label: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ color: "var(--color-fg-subtle)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600 }}>
         {label}
       </span>
       {children}
+      {help && (
+        <span style={{ color: "var(--color-fg-muted)", fontSize: 10, lineHeight: 1.35, marginTop: 2 }}>
+          {help}
+        </span>
+      )}
     </label>
   );
 }
