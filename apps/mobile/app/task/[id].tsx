@@ -1,26 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import BottomSheet, {
   BottomSheetScrollView,
-  type BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Polyline } from "react-native-svg";
 
@@ -30,165 +19,32 @@ import {
   type CheckInCycleDto,
   getNextDueDate,
   isOverdue,
-  parseLocalDate,
-  todayLocalKey,
   willStreakResetOnCheckIn,
   PRIORITY_DOT,
   type Subtask,
   type TaskDto,
   type UpdateTaskRequest,
-  type UserInventoryDto,
 } from "@wahaha/shared";
 import { subtasksApi, tasksApi } from "@/lib/api";
-import { equippedCache } from "@/lib/equipped-cache";
 import { taskCache } from "@/lib/task-cache";
 import { taskEvents } from "@/lib/task-events";
 import { CheckIcon, DeleteIcon, PauseIcon, StartIcon, UndoIcon } from "@/components/action-icons";
 import { SwipeableRow } from "@/components/swipeable-row";
 import { SwipeRowProvider } from "@/components/swipe-row-context";
-import { ChibiAvatar } from "@/components/chibi-avatar";
-import { DetailPager } from "@/components/detail-pager";
-import { HeatmapStrip } from "@/components/heatmap-strip";
 import { CustomLogModal } from "@/components/custom-log-modal";
 import { LogCheckinButton } from "@/components/log-checkin-button";
 import { QuickLogStepper } from "@/components/quick-log-stepper";
 import { TapSlideCheckIn } from "@/components/tap-slide-check-in";
-import { StreakDisplay } from "@/components/streak-display";
 import { TaskForm, type TaskFormValues, emptyTaskForm } from "@/components/task-form";
+import { AvatarOnlyHero, CounterPanel } from "@/components/task-detail/avatar-hero";
+import { EditPaneSwipeWrapper } from "@/components/task-detail/edit-pane-swipe";
+import { IconActionBtn, MetaChip } from "@/components/task-detail/meta-chip";
+import { PageHeader } from "@/components/task-detail/page-header";
+import { SubtaskAddBar } from "@/components/task-detail/subtask-add-bar";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 import { awaitPendingLogFlushes, useQuickLog } from "@/hooks/use-quick-log";
-
-function fmtShort(dateStr: string | null | undefined): string {
-  if (!dateStr) return "";
-  const d = parseLocalDate(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function fmtFull(dateStr: string | null | undefined): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-// Drag handle pill at top of sheet; always a guaranteed drag target.
-function makeSheetHandle(c: ReturnType<typeof useColors>, topInset: number) {
-  return function SheetHandle() {
-    return (
-      <View
-        style={[
-          styles.dragZone,
-          { paddingTop: topInset + 10, backgroundColor: c.bg },
-        ]}
-      >
-        <View style={[styles.dragHandle, { backgroundColor: c.border }]} />
-      </View>
-    );
-  };
-}
-
-// Solid sheet bg — opaque against transparent-modal route's underlying screen.
-function makeSheetBackground(bg: string) {
-  return function SheetBackground({ style }: BottomSheetBackgroundProps) {
-    return <View style={[style, { backgroundColor: bg }]} />;
-  };
-}
-
-// Full-page header with back arrow + optional right slot.
-function PageHeader({
-  c,
-  onBack,
-  backLabel,
-  right,
-}: {
-  c: ReturnType<typeof useColors>;
-  onBack: () => void;
-  backLabel?: string;
-  right?: React.ReactNode;
-}) {
-  return (
-    <View style={[styles.pageHeader, { borderColor: c.borderHairline }]}>
-      <Pressable
-        onPress={onBack}
-        hitSlop={10}
-        style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.5 : 1 }]}
-      >
-        <ThemedText style={[styles.backArrow, { color: c.fg }]}>‹</ThemedText>
-        {backLabel ? (
-          <ThemedText style={[styles.backLabel, { color: c.fg }]}>{backLabel}</ThemedText>
-        ) : null}
-      </Pressable>
-      <View style={styles.headerRight}>{right}</View>
-    </View>
-  );
-}
-
-// Edit-mode swipe-right-to-dismiss via manualActivation pan over Pressables.
-function EditPaneSwipeWrapper({
-  onDismiss,
-  children,
-}: {
-  onDismiss: () => void;
-  children: React.ReactNode;
-}) {
-  const screenWidth = Dimensions.get("window").width;
-  // Commit: drag past 25% of screen width OR flick with rightward velocity.
-  const COMMIT_DISTANCE = screenWidth * 0.25;
-  const COMMIT_VELOCITY = 700;
-  const SWIPE_THRESHOLD = 12;
-  const tx = useSharedValue(0);
-  const startX = useSharedValue(0);
-  const startY = useSharedValue(0);
-
-  const pan = Gesture.Pan()
-    .manualActivation(true)
-    .onBegin((e) => {
-      "worklet";
-      startX.value = e.x;
-      startY.value = e.y;
-    })
-    .onTouchesMove((e, state) => {
-      "worklet";
-      const t = e.allTouches[0];
-      if (!t) return;
-      const dx = t.x - startX.value;
-      const dy = t.y - startY.value;
-      // Horizontal-dominant rightward past threshold → activate.
-      if (dx > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-        state.activate();
-      } else if (Math.abs(dy) > SWIPE_THRESHOLD) {
-        // Vertical → hand off to ScrollView.
-        state.fail();
-      }
-    })
-    .onUpdate((e) => {
-      "worklet";
-      // Subtract threshold so position starts at 0 on activation.
-      tx.value = Math.max(0, e.translationX - SWIPE_THRESHOLD);
-    })
-    .onEnd((e) => {
-      "worklet";
-      const commit = e.translationX > COMMIT_DISTANCE || e.velocityX > COMMIT_VELOCITY;
-      if (commit) {
-        // Slide off-screen, then flip state to avoid jarring underlying reveal.
-        tx.value = withTiming(screenWidth, { duration: 220 }, (done) => {
-          if (done) runOnJS(onDismiss)();
-        });
-      } else {
-        tx.value = withTiming(0, { duration: 200 });
-      }
-    });
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={pan}>
-      <Animated.View style={[{ flex: 1 }, animStyle]}>{children}</Animated.View>
-    </GestureDetector>
-  );
-}
+import { fmtFull, fmtShort, makeSheetBackground, makeSheetHandle } from "@/lib/task-detail-helpers";
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -1041,341 +897,11 @@ export default function TaskDetailScreen() {
   );
 }
 
-function AvatarOnlyHero() {
-  const [equipped, setEquipped] = useState<UserInventoryDto[]>(
-    () => equippedCache.read() ?? [],
-  );
-  useEffect(() => {
-    const unsubscribe = equippedCache.subscribe(setEquipped);
-    equippedCache.revalidate();
-    return unsubscribe;
-  }, []);
-  return (
-    <View style={{ height: 232, alignItems: "center", justifyContent: "center" }}>
-      <ChibiAvatar equipped={equipped} height={168} />
-    </View>
-  );
-}
-
-// Heatmap + counter stepper share pendingLog for real-time today cell.
-function CounterPanel({
-  task,
-  pendingLog,
-}: {
-  task: TaskDto;
-  pendingLog: number;
-}) {
-  const cycles = task.recentCycles ?? [];
-
-  // Equipped avatar from module cache for instant chibi compose.
-  const [equipped, setEquipped] = useState<UserInventoryDto[]>(
-    () => equippedCache.read() ?? [],
-  );
-  useEffect(() => {
-    const unsubscribe = equippedCache.subscribe(setEquipped);
-    equippedCache.revalidate();
-    return unsubscribe;
-  }, []);
-
-  // Always render Stats tab for consistent swipe gesture.
-  const rule = task.recurrenceRule ?? "";
-
-  const stageCard = (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
-      <ChibiAvatar equipped={equipped} height={168} />
-      {task.isRecurring ? (
-        <View style={{ width: "78%", maxWidth: 320 }}>
-          <StreakDisplay
-            currentStreakCount={task.currentStreakCount}
-            longestStreakCount={task.longestStreakCount}
-          />
-        </View>
-      ) : null}
-    </View>
-  );
-
-  const statsCard = (
-    <View style={{ flex: 1, paddingTop: 4 }}>
-      <HeatmapStrip
-        rule={rule}
-        hasCounter={task.hasCounter ?? false}
-        cycles={cycles}
-        pendingTodayDelta={task.hasCounter ? pendingLog : 0}
-      />
-    </View>
-  );
-
-  return (
-    <DetailPager
-      height={232}
-      labels={["Stage", "Stats"]}
-      cards={[
-        { key: "stage", content: stageCard },
-        { key: "stats", content: statsCard },
-      ]}
-    />
-  );
-}
-
-
-// Floating add-subtask bar pinned to route bottom, lifted by keyboard listener.
-function SubtaskAddBar({
-  value,
-  onChange,
-  onSubmit,
-  onCancel,
-  disabled,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  // Returns true on success so bar can flash "Added" toast.
-  onSubmit: () => Promise<boolean>;
-  onCancel: () => void;
-  disabled: boolean;
-}) {
-  const c = useColors();
-  const insets = useSafeAreaInsets();
-  const inputRef = useRef<TextInput>(null);
-  const kbHeight = useSharedValue(0);
-  // "Added" toast — fade in, rise, hold, fade back.
-  const toastOpacity = useSharedValue(0);
-  const toastTranslateY = useSharedValue(8);
-  const toastHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Guard against stray keyboardDidHide before our input ever raised one.
-  const hasShownRef = useRef(false);
-  // Captured onCancel so listener doesn't re-subscribe.
-  const onCancelRef = useRef(onCancel);
-  onCancelRef.current = onCancel;
-
-  useEffect(() => {
-    // iOS Will*, Android Did*.
-    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const show = Keyboard.addListener(showEvt, (e) => {
-      hasShownRef.current = true;
-      kbHeight.value = withTiming(e.endCoordinates.height, { duration: 200 });
-    });
-    const hide = Keyboard.addListener(hideEvt, () => {
-      kbHeight.value = withTiming(0, { duration: 200 });
-      // Dismiss bar when keyboard retracts (guarded by hasShownRef).
-      if (hasShownRef.current) onCancelRef.current?.();
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-      if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
-    };
-  }, [kbHeight]);
-
-  const barStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -kbHeight.value }],
-  }));
-  const toastStyle = useAnimatedStyle(() => ({
-    opacity: toastOpacity.value,
-    transform: [{ translateY: toastTranslateY.value }],
-  }));
-
-  // Submit wrapper — flashes "Added" pill; no manual .focus() (blurOnSubmit=false).
-  async function handleSubmit() {
-    const ok = await onSubmit();
-    if (!ok) return;
-    if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
-    toastOpacity.value = withTiming(1, { duration: 140 });
-    toastTranslateY.value = withTiming(0, { duration: 140 });
-    toastHideTimer.current = setTimeout(() => {
-      toastOpacity.value = withTiming(0, { duration: 220 });
-      toastTranslateY.value = withTiming(8, { duration: 220 });
-    }, 900);
-  }
-
-  // Single Pressable across both states (swapping causes iOS focus-out).
-  const hasText = value.trim().length > 0;
-  const onButtonPress = hasText ? handleSubmit : onCancel;
-
-  return (
-    <Animated.View style={[styles.subtaskAddBarWrapper, barStyle]}>
-      {/* "Added" pill — column sibling above bar to avoid Android elevation clip. */}
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.subtaskAddedToast, toastStyle]}
-      >
-        <View
-          style={[
-            styles.subtaskAddedToastPill,
-            { backgroundColor: c.success, borderColor: c.success },
-          ]}
-        >
-          <ThemedText
-            style={{
-              color: c.bg,
-              fontSize: 10,
-              fontWeight: "700",
-              letterSpacing: 1.4,
-              textTransform: "uppercase",
-            }}
-          >
-            Added
-          </ThemedText>
-        </View>
-      </Animated.View>
-
-      <View
-        style={[
-          styles.subtaskAddBar,
-          {
-            backgroundColor: c.panel,
-            borderTopColor: c.border,
-            paddingBottom: 10 + insets.bottom,
-          },
-        ]}
-      >
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChange}
-          placeholder="Add a subtask…"
-          placeholderTextColor={c.fgSubtle}
-          onSubmitEditing={handleSubmit}
-          returnKeyType="done"
-          // No `editable={!disabled}` — iOS treats it as focus loss.
-          autoFocus
-          blurOnSubmit={false}
-          textAlignVertical="center"
-          style={[
-            styles.subtaskAddBarInput,
-            { color: c.inputFg },
-          ]}
-        />
-        <Pressable
-          onPress={onButtonPress}
-          disabled={disabled && hasText}
-          hitSlop={8}
-          style={[
-            styles.subtaskAddBarBtn,
-            { backgroundColor: hasText ? c.activeHighlight : c.input },
-          ]}
-        >
-          <ThemedText
-            style={{
-              color: hasText ? c.bg : c.fgSubtle,
-              fontSize: hasText ? 16 : 14,
-              fontWeight: hasText ? "700" : "400",
-              lineHeight: hasText ? 18 : 16,
-            }}
-          >
-            {hasText ? "↑" : "✕"}
-          </ThemedText>
-        </Pressable>
-      </View>
-    </Animated.View>
-  );
-}
-
-function IconActionBtn({
-  color,
-  bg,
-  onPress,
-  icon,
-}: {
-  color: string;
-  bg: string;
-  onPress: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.iconActionBtn,
-        {
-          borderColor: color,
-          backgroundColor: pressed ? color : bg,
-        },
-      ]}
-    >
-      {icon}
-    </Pressable>
-  );
-}
-
-function MetaChip({
-  color,
-  label,
-  leading,
-}: {
-  color: string;
-  label: string;
-  leading?: React.ReactNode;
-}) {
-  // Translucent tint: ${color}1A appends 10% alpha for hex.
-  const bg = color.startsWith("#") ? `${color}1A` : color;
-  return (
-    <View
-      style={[
-        styles.chip,
-        {
-          borderColor: color,
-          backgroundColor: color.startsWith("#") ? bg : "transparent",
-        },
-      ]}
-    >
-      {leading}
-      <ThemedText
-        style={{
-          color,
-          fontSize: 10,
-          fontWeight: "700",
-          letterSpacing: 1.2,
-        }}
-      >
-        {label}
-      </ThemedText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   // Page = sheet content root; explicit relative for 3 absolute children.
+  // (dragZone/dragHandle moved to lib/task-detail-helpers.ts with makeSheetHandle.
+  //  pageHeader/backBtn/backArrow/backLabel/headerRight moved to components/task-detail/page-header.tsx.)
   page: { flex: 1, position: "relative" },
-  // Generous swipe target above header.
-  dragZone: {
-    paddingTop: 10,
-    paddingBottom: 8,
-    alignItems: "center",
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-  },
-  pageHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  backArrow: {
-    fontSize: 28,
-    lineHeight: 28,
-    fontWeight: "300",
-  },
-  backLabel: {
-    fontSize: 14,
-    marginLeft: 2,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   overflowBtn: {
     width: 36,
     height: 36,
@@ -1433,6 +959,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   // Invisible full-screen tap target behind SubtaskAddBar; zIndex between sheet + bar.
+  // (SubtaskAddBar's own styles live in components/task-detail/subtask-add-bar.tsx.)
   subtaskAddBarOverlay: {
     position: "absolute",
     top: 0,
@@ -1440,50 +967,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 90,
-  },
-  // Wrapper anchors bar+toast at route bottom; translateY lift applied here.
-  subtaskAddBarWrapper: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "stretch",
-    zIndex: 100,
-    elevation: 18,
-  },
-  // Floating add-subtask bar — wrapper child, no own absolute positioning.
-  subtaskAddBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    boxShadow: "0px -8px 24px rgba(0, 0, 0, 0.35)",
-  },
-  subtaskAddBarInput: {
-    flex: 1,
-    fontSize: 14,
-    paddingVertical: 6,
-    includeFontPadding: false,
-  },
-  subtaskAddBarBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // "Added" toast — column sibling above bar, centered horizontally.
-  subtaskAddedToast: {
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  subtaskAddedToastPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
   },
   // Footer column: TapSlideCheckIn + Edit/Delete row.
   footerStack: {
@@ -1511,31 +994,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     fontWeight: "600",
   },
-  // Compact pill row sized to label.
+  // Compact pill row sized to label. (chip + iconActionBtn moved to
+  // components/task-detail/meta-chip.tsx with MetaChip/IconActionBtn.)
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  // Round icon button — matches quick-add submit pill diameter.
+  // Status-action row holds 1–2 IconActionBtns (start/complete/pause/undo).
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  iconActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   subRow: {
     flexDirection: "row",
