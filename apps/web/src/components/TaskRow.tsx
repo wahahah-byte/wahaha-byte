@@ -840,9 +840,8 @@ function TaskRowImpl({
                 </svg>
               )}
               {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                // Overdue signalled by red date column — skip the recurring badge.
-                if (isOverdue(task.dueDate)) return null;
-                const isLocked = !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+                const overdue = isOverdue(task.dueDate);
+                const isLocked = !overdue && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
                 const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
                 const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
@@ -861,39 +860,54 @@ function TaskRowImpl({
                     : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`
                   : null;
                 const tooltip = unlockText ? `${ruleLabel} · unlocks ${unlockText}` : ruleLabel;
-                const abbrColor = isLocked && unlockInfo ? "rgba(245,158,11,0.7)" : "var(--color-active-highlight-alt)";
+                // Chip colours track state: amber when locked, red when overdue, alt-highlight when ready.
+                const stateColor = overdue
+                  ? "rgba(239,68,68,0.85)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.85)"
+                    : "var(--color-active-highlight-alt)";
+                const chipBg = overdue
+                  ? "rgba(239,68,68,0.10)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.10)"
+                    : "color-mix(in srgb, var(--color-active-highlight-alt) 14%, transparent)";
+                const chipBorder = overdue
+                  ? "rgba(239,68,68,0.40)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.40)"
+                    : "color-mix(in srgb, var(--color-active-highlight-alt) 40%, transparent)";
                 return (
                   <>
-                    {isLocked && unlockInfo ? (
-                      <span title={tooltip} aria-label={tooltip} style={{ display: "inline-flex", flexShrink: 0, lineHeight: 0 }}>
-                        <svg width="7" height="8" viewBox="0 0 10 12" fill="none">
-                          <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" fill="none"/>
-                          <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.55)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
-                        </svg>
-                      </span>
-                    ) : (
-                      <span
-                        style={{ color: "var(--color-active-highlight-alt)", fontSize: "10px", lineHeight: 1, flexShrink: 0 }}
-                        title={tooltip}
-                      >
-                        ↻
-                      </span>
-                    )}
                     {ruleAbbr && (
                       <span
                         title={tooltip}
                         aria-label={ruleLabel}
+                        className="inline-flex items-center"
                         style={{
-                          color: abbrColor,
-                          fontSize: "8px",
+                          gap: 3,
+                          color: stateColor,
+                          background: chipBg,
+                          border: `1px solid ${chipBorder}`,
+                          borderRadius: "2px",
+                          padding: "1px 5px",
+                          fontSize: "9px",
                           letterSpacing: "0.14em",
                           textTransform: "uppercase",
                           fontWeight: 600,
                           flexShrink: 0,
                           fontVariantNumeric: "tabular-nums",
-                          opacity: 0.85,
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
                         }}
                       >
+                        {isLocked ? (
+                          <svg width="7" height="8" viewBox="0 0 10 12" fill="none" aria-hidden>
+                            <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+                            <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+                          </svg>
+                        ) : (
+                          <span aria-hidden style={{ fontSize: "9px", lineHeight: 1 }}>↻</span>
+                        )}
                         {ruleAbbr}
                       </span>
                     )}
