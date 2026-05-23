@@ -848,6 +848,12 @@ function TaskRowImpl({
                   : task.recurrenceRule === "weekdays" ? "Weekdays"
                   : task.recurrenceRule === "biweekly" ? "Biweekly"
                   : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
+                const ruleAbbr = task.recurrenceRule === "daily" ? "D"
+                  : task.recurrenceRule === "weekdays" ? "WD"
+                  : task.recurrenceRule === "weekly" ? "W"
+                  : task.recurrenceRule === "biweekly" ? "2W"
+                  : task.recurrenceRule === "monthly" ? "M"
+                  : null;
                 const streakCount = task.currentStreakCount ?? 0;
                 const unlockText = unlockInfo
                   ? (task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
@@ -855,6 +861,7 @@ function TaskRowImpl({
                     : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`
                   : null;
                 const tooltip = unlockText ? `${ruleLabel} · unlocks ${unlockText}` : ruleLabel;
+                const abbrColor = isLocked && unlockInfo ? "rgba(245,158,11,0.7)" : "var(--color-active-highlight-alt)";
                 return (
                   <>
                     {isLocked && unlockInfo ? (
@@ -870,6 +877,24 @@ function TaskRowImpl({
                         title={tooltip}
                       >
                         ↻
+                      </span>
+                    )}
+                    {ruleAbbr && (
+                      <span
+                        title={tooltip}
+                        aria-label={ruleLabel}
+                        style={{
+                          color: abbrColor,
+                          fontSize: "8px",
+                          letterSpacing: "0.14em",
+                          textTransform: "uppercase",
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          fontVariantNumeric: "tabular-nums",
+                          opacity: 0.85,
+                        }}
+                      >
+                        {ruleAbbr}
                       </span>
                     )}
                     {(() => {
