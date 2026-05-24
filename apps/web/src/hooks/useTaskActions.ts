@@ -61,6 +61,11 @@ export function useTaskActions({
   const [undoableCheckIn, setUndoableCheckIn] = useState<{ taskId: string; cycleId: number; taskTitle: string } | null>(null);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 5s undo window after a delete; actual DELETE call is deferred until expiry or explicit dismiss.
+  const [undoableDelete, setUndoableDelete] = useState<{ taskId: string; taskTitle: string } | null>(null);
+  const pendingDeleteRef = useRef<{ snapshot: TaskDto; wasStaged: boolean } | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const dismissUndoableCheckIn = useCallback(() => {
     if (undoTimeoutRef.current) { clearTimeout(undoTimeoutRef.current); undoTimeoutRef.current = null; }
     setUndoableCheckIn(null);
@@ -396,35 +401,59 @@ export function useTaskActions({
     setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: "pending" } : t));
   });
 
+  // Commits any pending delete by firing the actual DELETE; on server error, restores the snapshot.
+  const commitPendingDelete = useCallback(async () => {
+    if (pendingDeleteTimerRef.current) { clearTimeout(pendingDeleteTimerRef.current); pendingDeleteTimerRef.current = null; }
+    const pending = pendingDeleteRef.current;
+    pendingDeleteRef.current = null;
+    setUndoableDelete(null);
+    if (!pending) return;
+    const { error } = await tasksApi.delete(pending.snapshot.taskId);
+    if (error) {
+      // Server rejected the delete — restore the task and surface the error.
+      setTasks((prev) => prev.some((t) => t.taskId === pending.snapshot.taskId) ? prev : [pending.snapshot, ...prev]);
+      setError(error);
+    }
+  }, [setError, setTasks]);
+
+  const dismissUndoableDelete = useCallback(() => { void commitPendingDelete(); }, [commitPendingDelete]);
+
+  const handleUndoDelete = useCallback(() => {
+    if (pendingDeleteTimerRef.current) { clearTimeout(pendingDeleteTimerRef.current); pendingDeleteTimerRef.current = null; }
+    const pending = pendingDeleteRef.current;
+    pendingDeleteRef.current = null;
+    setUndoableDelete(null);
+    if (!pending) return;
+    const { snapshot, wasStaged } = pending;
+    setTasks((prev) => prev.some((t) => t.taskId === snapshot.taskId) ? prev : [snapshot, ...prev]);
+    if (wasStaged && snapshot.pointValue) {
+      updateStaged(snapshot.pointValue);
+      setStagedTaskIds((prev) => prev.includes(snapshot.taskId) ? prev : [...prev, snapshot.taskId]);
+    }
+  }, [setTasks, setStagedTaskIds, updateStaged]);
+
   const handleDelete = useEvent(async function handleDelete(id: string) {
     const snapshot = tasks.find((t) => t.taskId === id);
     // Dismiss detail panel upfront so user doesn't see stale data during slash animation.
     setDetailTask?.((curr) => curr?.taskId === id ? null : curr);
-    if (!isAuthenticated) {
-      if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
-      setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
-      setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-      setSlashingId(id);
-      // Outlast row-delete animation (1.6s) so glide + fade + collapse finish before yank.
-    await new Promise((r) => setTimeout(r, 1600));
-      setSlashingId(null);
-      setTasks((prev) => prev.filter((t) => t.taskId !== id));
-      return;
+    // Any prior pending delete must commit before a new one is armed (only one undoable at a time).
+    if (pendingDeleteRef.current && pendingDeleteRef.current.snapshot.taskId !== id) {
+      await commitPendingDelete();
     }
-    setSlashingId(id);
-    const deletePromise = tasksApi.delete(id);
-    if (stagedTaskIds.includes(id) && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
+    const wasStaged = stagedTaskIds.includes(id);
+    if (wasStaged && snapshot?.pointValue) updateStaged(-snapshot.pointValue);
     setStagedTaskIds((prev) => prev.filter((sid) => sid !== id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    // Outlast row-delete animation (1.6s) before yanking the task.
+    setSlashingId(id);
+    // Outlast row-delete animation (1.6s) so glide + fade + collapse finish before yank.
     await new Promise((r) => setTimeout(r, 1600));
     setSlashingId(null);
     setTasks((prev) => prev.filter((t) => t.taskId !== id));
-    const { error } = await deletePromise;
-    if (error) {
-      if (snapshot) setTasks((prev) => [snapshot, ...prev]);
-      setError(error);
-    }
+    if (!isAuthenticated || !snapshot) return;
+    // Arm 5s undo window; timer expiry fires the DELETE, user undo cancels + restores.
+    pendingDeleteRef.current = { snapshot, wasStaged };
+    setUndoableDelete({ taskId: id, taskTitle: snapshot.title });
+    pendingDeleteTimerRef.current = setTimeout(() => { void commitPendingDelete(); }, 5000);
   });
 
   const handleSkip = useEvent(async function handleSkip(task: TaskDto) {
@@ -475,5 +504,5 @@ export function useTaskActions({
     await handleUndoCheckIn(task, cycleId);
   });
 
-  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn };
+  return { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handleDeleteLogCycle, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn, undoableDelete, handleUndoDelete, dismissUndoableDelete };
 }

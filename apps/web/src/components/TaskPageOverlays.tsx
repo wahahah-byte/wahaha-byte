@@ -35,6 +35,11 @@ interface Props {
   onUndoCheckInFromToast: (task: TaskDto, cycleId: number) => void;
   onDismissUndoableCheckIn: () => void;
 
+  // Undo-most-recent-delete toast (server delete deferred until expiry/dismiss).
+  undoableDelete?: { taskId: string; taskTitle: string } | null;
+  onUndoDelete?: () => void;
+  onDismissUndoableDelete?: () => void;
+
   // Extra overlays slot (page-specific extras like CapWarningModal).
   children?: ReactNode;
 }
@@ -45,6 +50,7 @@ export default function TaskPageOverlays({
   counterPromptTask, onCloseCounterPrompt, onSubmitCounterCheckIn,
   logPromptTask, onCancelLog, onSubmitLog,
   undoableCheckIn, tasks, onUndoCheckInFromToast, onDismissUndoableCheckIn,
+  undoableDelete, onUndoDelete, onDismissUndoableDelete,
   children,
 }: Props) {
   const recentValuesFor = (t: TaskDto) =>
@@ -88,6 +94,14 @@ export default function TaskPageOverlays({
           taskTitle={undoableCheckIn.taskTitle}
           onUndo={() => onUndoCheckInFromToast(undoTask, undoableCheckIn.cycleId)}
           onDismiss={onDismissUndoableCheckIn}
+        />
+      )}
+      {undoableDelete && onUndoDelete && onDismissUndoableDelete && (
+        <CheckInUndoToast
+          prefix="Deleted"
+          taskTitle={undoableDelete.taskTitle}
+          onUndo={onUndoDelete}
+          onDismiss={onDismissUndoableDelete}
         />
       )}
     </>

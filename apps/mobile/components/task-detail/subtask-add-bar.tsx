@@ -17,12 +17,18 @@ interface Props {
   onSubmit: () => Promise<boolean>;
   onCancel: () => void;
   disabled: boolean;
+  // Fitness-only: surface sets/reps inputs alongside the title.
+  showSetsReps?: boolean;
+  setsValue?: string;
+  onSetsChange?: (next: string) => void;
+  repsValue?: string;
+  onRepsChange?: (next: string) => void;
 }
 
 // Floating add-subtask bar pinned to the route bottom, lifted by a Keyboard listener
 // so the input rides above the on-screen keyboard. Wires an "Added" toast above the bar
 // (column sibling, not absolute, to avoid Android elevation clipping).
-export function SubtaskAddBar({ value, onChange, onSubmit, onCancel, disabled }: Props) {
+export function SubtaskAddBar({ value, onChange, onSubmit, onCancel, disabled, showSetsReps, setsValue, onSetsChange, repsValue, onRepsChange }: Props) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
@@ -115,7 +121,7 @@ export function SubtaskAddBar({ value, onChange, onSubmit, onCancel, disabled }:
           ref={inputRef}
           value={value}
           onChangeText={onChange}
-          placeholder="Add a subtask…"
+          placeholder={showSetsReps ? "Add an exercise…" : "Add a subtask…"}
           placeholderTextColor={c.fgSubtle}
           onSubmitEditing={handleSubmit}
           returnKeyType="done"
@@ -125,6 +131,34 @@ export function SubtaskAddBar({ value, onChange, onSubmit, onCancel, disabled }:
           textAlignVertical="center"
           style={[styles.input, { color: c.inputFg }]}
         />
+        {showSetsReps ? (
+          <View style={styles.setsRepsGroup}>
+            <TextInput
+              value={setsValue ?? ""}
+              onChangeText={onSetsChange}
+              placeholder="sets"
+              placeholderTextColor={c.fgSubtle}
+              keyboardType="number-pad"
+              returnKeyType="next"
+              maxLength={3}
+              blurOnSubmit={false}
+              style={[styles.numInput, { color: c.inputFg, borderColor: c.border, backgroundColor: c.input }]}
+            />
+            <ThemedText style={{ color: c.fgSubtle, fontSize: 11, fontWeight: "700" }}>×</ThemedText>
+            <TextInput
+              value={repsValue ?? ""}
+              onChangeText={onRepsChange}
+              placeholder="reps"
+              placeholderTextColor={c.fgSubtle}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              maxLength={3}
+              blurOnSubmit={false}
+              onSubmitEditing={handleSubmit}
+              style={[styles.numInput, { color: c.inputFg, borderColor: c.border, backgroundColor: c.input }]}
+            />
+          </View>
+        ) : null}
         <Pressable
           onPress={onButtonPress}
           disabled={disabled && hasText}
@@ -175,6 +209,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     paddingVertical: 6,
+    includeFontPadding: false,
+  },
+  setsRepsGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  numInput: {
+    width: 64,
+    height: 30,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 0,
+    fontSize: 13,
+    textAlign: "center",
     includeFontPadding: false,
   },
   btn: {

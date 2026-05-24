@@ -19,7 +19,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
-import Svg, { Path, Polyline, Rect } from "react-native-svg";
+import Svg, { Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { ArchiveIcon, CheckIcon, DeleteIcon, PauseIcon, StartIcon, UnarchiveIcon } from "@/components/action-icons";
 import { BankBurstEffect } from "@/components/bank-burst-effect";
@@ -126,6 +126,7 @@ import { taskEvents } from "@/lib/task-events";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
+import { useUndo } from "@/context/undo-context";
 
 interface Props {
   filters?: TaskFilterParams;
@@ -183,6 +184,7 @@ export function TaskList({
   useCheckinCheckbox,
 }: Props) {
   const c = useColors();
+  const undo = useUndo();
 
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,6 +242,16 @@ export function TaskList({
     return true;
   }, []);
 
+  // Hide tasks during the undo window so focus refetches don't resurrect them before the server delete fires.
+  const PENDING_DELETE_TTL_MS = 7000;
+  const pendingDeletesRef = useRef<Map<string, number>>(new Map());
+  const markPendingDelete = useCallback((taskId: string) => {
+    pendingDeletesRef.current.set(taskId, Date.now());
+  }, []);
+  const clearPendingDelete = useCallback((taskId: string) => {
+    pendingDeletesRef.current.delete(taskId);
+  }, []);
+
   const fetchTasks = useCallback(async () => {
     setError(null);
     const res = await tasksApi.getAll({ pageSize: 50, ...filters });
@@ -247,9 +259,15 @@ export function TaskList({
       setError(res.error ?? "Failed to load tasks.");
       return;
     }
-    const incoming = res.data.data;
-    // Drop stale pending-checkin entries.
     const now = Date.now();
+    // Drop stale pending-delete entries; filter rest out of the incoming list.
+    for (const [tid, ts] of pendingDeletesRef.current) {
+      if (now - ts > PENDING_DELETE_TTL_MS) pendingDeletesRef.current.delete(tid);
+    }
+    const incoming = pendingDeletesRef.current.size > 0
+      ? res.data.data.filter((t) => !pendingDeletesRef.current.has(t.taskId))
+      : res.data.data;
+    // Drop stale pending-checkin entries.
     for (const [tid, ts] of pendingCheckInsRef.current) {
       if (now - ts > PENDING_CHECKIN_TTL_MS) pendingCheckInsRef.current.delete(tid);
     }
@@ -326,6 +344,19 @@ export function TaskList({
       });
     });
   }, [markPendingCheckIn]);
+
+  // Cross-screen optimistic delete/restore (detail-screen overflow delete).
+  useEffect(() => {
+    const offDel = taskEvents.subscribeDeleted((taskId) => {
+      markPendingDelete(taskId);
+      setTasks((prev) => prev.filter((t) => t.taskId !== taskId));
+    });
+    const offRes = taskEvents.subscribeRestored((task) => {
+      clearPendingDelete(task.taskId);
+      setTasks((prev) => prev.some((t) => t.taskId === task.taskId) ? prev : [task, ...prev]);
+    });
+    return () => { offDel(); offRes(); };
+  }, [markPendingDelete, clearPendingDelete]);
 
   // Authoritative server response — append real cycleId for undo path.
   useEffect(() => {
@@ -632,18 +663,32 @@ export function TaskList({
   }
 
   async function handleDelete(task: TaskDto) {
-    // No confirm — swipe commitment is enough intent.
+    // No confirm — swipe commitment is enough intent. Snapshot first so undo can restore.
+    const snapshot = task;
     setSlashingId(task.taskId);
-    const deletePromise = tasksApi.delete(task.taskId);
     await new Promise((r) => setTimeout(r, SLASH_MS));
     setSlashingId(null);
     setTasks((prev) => prev.filter((t) => t.taskId !== task.taskId));
     taskCache.remove(task.taskId);
-    const res = await deletePromise;
-    if (res.error) {
-      setError(res.error);
-      await fetchTasks();
-    }
+    // Mark so concurrent focus-refetches don't resurrect the row during the undo window.
+    markPendingDelete(snapshot.taskId);
+    undo.arm({
+      prefix: "Deleted",
+      subject: snapshot.title,
+      onUndo: () => {
+        clearPendingDelete(snapshot.taskId);
+        setTasks((prev) => prev.some((t) => t.taskId === snapshot.taskId) ? prev : [snapshot, ...prev]);
+        taskCache.set(snapshot);
+      },
+      onCommit: async () => {
+        const res = await tasksApi.delete(snapshot.taskId);
+        clearPendingDelete(snapshot.taskId);
+        if (res.error) {
+          setError(res.error);
+          await fetchTasks();
+        }
+      },
+    });
   }
 
   const { sections, showCollapse, activeCount } = useMemo(() => {
@@ -1137,6 +1182,18 @@ function TaskRowImpl({
               const isCheckedButLocked = checkedThisCycle && !couldBeTodaysCheckin;
               const isActionable = !checkedThisCycle && (canCheckInThisCycle || overdueRecurring);
               const isLocked = (!checkedThisCycle && !isActionable) || isCheckedButLocked;
+              // Tier-coloured check: streak colour replaces priority on the check; iOS-only glow at T3/T4.
+              const tier = currentStreakTier(item.currentStreakCount ?? 0);
+              const checkStroke = tier ? c.secondaryAccent : dot;
+              const checkWidth = !tier ? 2 : tier.tier >= 4 ? 2.5 : tier.tier === 3 ? 2.25 : 2;
+              const glow = tier && tier.tier >= 3
+                ? {
+                    shadowColor: c.secondaryAccent,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.95,
+                    shadowRadius: tier.tier === 4 ? 4 : 2,
+                  }
+                : null;
               return (
                 <View
                   style={[
@@ -1154,16 +1211,18 @@ function TaskRowImpl({
                   }}
                 >
                   {checkedThisCycle ? (
-                    <Svg width={10} height={8} viewBox="0 0 12 9" fill="none">
-                      <Polyline
-                        points="1.5,4.5 4.5,7.5 10.5,1.5"
-                        stroke={dot}
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                      />
-                    </Svg>
+                    <View style={glow ?? undefined}>
+                      <Svg width={10} height={8} viewBox="0 0 12 9" fill="none">
+                        <Polyline
+                          points="1.5,4.5 4.5,7.5 10.5,1.5"
+                          stroke={checkStroke}
+                          strokeWidth={checkWidth}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    </View>
                   ) : null}
                 </View>
               );
@@ -1213,23 +1272,7 @@ function TaskRowImpl({
                     </ThemedText>
                   </View>
                 ) : null}
-                {item.isRecurring && (() => {
-                  // Streak badge shows any positive count; tier label only above tier-1.
-                  const count = item.currentStreakCount ?? 0;
-                  if (count < 1) return null;
-                  const tier = currentStreakTier(count);
-                  return (
-                    <ThemedText style={{
-                      fontSize: 8,
-                      color: c.secondaryAccent,
-                      letterSpacing: 1.5,
-                      fontVariant: ["tabular-nums"],
-                      opacity: 0.85,
-                    }}>
-                      {tier ? `${tier.label} · ${count}` : `STREAK · ${count}`}
-                    </ThemedText>
-                  );
-                })()}
+                {/* Tier moved to a corner badge on the check-in checkbox (LoL-style). */}
               </View>
             </View>
           </View>

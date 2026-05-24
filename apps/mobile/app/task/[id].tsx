@@ -28,6 +28,7 @@ import {
 import { subtasksApi, tasksApi } from "@/lib/api";
 import { taskCache } from "@/lib/task-cache";
 import { taskEvents } from "@/lib/task-events";
+import { useUndo } from "@/context/undo-context";
 import { CheckIcon, DeleteIcon, PauseIcon, StartIcon, UndoIcon } from "@/components/action-icons";
 import { SwipeableRow } from "@/components/swipeable-row";
 import { SwipeRowProvider } from "@/components/swipe-row-context";
@@ -50,13 +51,20 @@ export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const undo = useUndo();
 
   // Seed from list task cache so first frame renders content without spinner.
   const [task, setTask] = useState<TaskDto | null>(() => taskCache.read(id) ?? null);
   const [loading, setLoading] = useState(() => !taskCache.read(id));
   const [error, setError] = useState<string | null>(null);
   const [newSubtask, setNewSubtask] = useState("");
+  const [newSubtaskSets, setNewSubtaskSets] = useState("");
+  const [newSubtaskReps, setNewSubtaskReps] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
+  // The id of the subtask currently being edited via the floating bar; null when adding.
+  const [editingSubtaskId, setEditingSubtaskId] = useState<number | null>(null);
+  // Hit-test bounds for sets/reps chips (SwipeableRow blocks Pressable children).
+  const chipBoundsRef = useRef<Map<number, { left: number; top: number; right: number; bottom: number }>>(new Map());
   const [isEditing, setIsEditing] = useState(false);
   // Overflow menu (Archive) anchored to header.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -196,13 +204,45 @@ export default function TaskDetailScreen() {
     if (!task) return false;
     const title = newSubtask.trim();
     if (!title) return false;
+    const isFitness = task.category === "Fitness";
+    const setsNum = isFitness && newSubtaskSets.trim() !== "" ? Number(newSubtaskSets) : NaN;
+    const repsNum = isFitness && newSubtaskReps.trim() !== "" ? Number(newSubtaskReps) : NaN;
+    const setsTarget = Number.isFinite(setsNum) && setsNum > 0 ? setsNum : null;
+    const repsTarget = Number.isFinite(repsNum) && repsNum > 0 ? repsNum : null;
+    // Edit branch — save back to the existing subtask instead of creating a new one.
+    if (editingSubtaskId != null) {
+      const existing = (task.subtasks ?? []).find((s) => s.subtaskId === editingSubtaskId);
+      if (!existing) { setEditingSubtaskId(null); return false; }
+      const fields: { title?: string; setsTarget?: number | null; repsTarget?: number | null } = {};
+      if (title !== existing.title) fields.title = title;
+      if (setsTarget !== (existing.setsTarget ?? null)) fields.setsTarget = setsTarget;
+      if (repsTarget !== (existing.repsTarget ?? null)) fields.repsTarget = repsTarget;
+      // Clear inputs so a subsequent open is in add-mode again.
+      setNewSubtask("");
+      setNewSubtaskSets("");
+      setNewSubtaskReps("");
+      setEditingSubtaskId(null);
+      if (Object.keys(fields).length === 0) return true;
+      setTask((prev) =>
+        prev
+          ? { ...prev, subtasks: prev.subtasks?.map((s) => s.subtaskId === existing.subtaskId ? { ...s, ...fields } : s) }
+          : prev
+      );
+      const res = await subtasksApi.update(existing.subtaskId, fields);
+      if (res.error) { setError(res.error); await load(); return false; }
+      return true;
+    }
     setAddingSubtask(true);
     setNewSubtask("");
-    const res = await subtasksApi.create(task.taskId, title);
+    setNewSubtaskSets("");
+    setNewSubtaskReps("");
+    const res = await subtasksApi.create(task.taskId, { title, setsTarget, repsTarget });
     setAddingSubtask(false);
     if (res.error || !res.data) {
       setError(res.error ?? "Failed to add subtask.");
       setNewSubtask(title);
+      if (setsTarget != null) setNewSubtaskSets(String(setsTarget));
+      if (repsTarget != null) setNewSubtaskReps(String(repsTarget));
       return false;
     }
     setTask((prev) =>
@@ -222,6 +262,16 @@ export default function TaskDetailScreen() {
       setError(res.error);
       setTask((prev) => (prev ? { ...prev, subtasks: prevList } : prev));
     }
+  }
+
+  // Open the floating add bar pre-filled with a subtask's values for editing.
+  // Reusing the bar (instead of an inline editor) avoids the iOS keyboard-position bug.
+  function startEditSubtask(sub: Subtask) {
+    setEditingSubtaskId(sub.subtaskId);
+    setNewSubtask(sub.title);
+    setNewSubtaskSets(sub.setsTarget != null ? String(sub.setsTarget) : "");
+    setNewSubtaskReps(sub.repsTarget != null ? String(sub.repsTarget) : "");
+    setAddingSubtaskOpen(true);
   }
 
   async function handleCheckIn(counterValue?: number) {
@@ -366,13 +416,29 @@ export default function TaskDetailScreen() {
     router.back();
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!task) return;
-    // No confirm — overflow tap is enough intent; mirrors swipe-delete.
-    const res = await tasksApi.delete(task.taskId);
-    if (res.error) { setError(res.error); return; }
-    taskCache.remove(task.taskId);
+    // No confirm — overflow tap is enough intent. Defer the DELETE through the undo toast.
+    const snapshot = task;
+    taskCache.remove(snapshot.taskId);
+    // Notify any open list to drop the row immediately.
+    taskEvents.publishDeleted(snapshot.taskId);
     router.back();
+    undo.arm({
+      prefix: "Deleted",
+      subject: snapshot.title,
+      onUndo: () => {
+        taskCache.set(snapshot);
+        taskEvents.publishRestored(snapshot);
+      },
+      onCommit: async () => {
+        const res = await tasksApi.delete(snapshot.taskId);
+        if (res.error) {
+          // Best-effort surfacing — detail screen unmounted, so republish for the list.
+          taskEvents.publishRestored(snapshot);
+        }
+      },
+    });
   }
 
   async function handleEditSubmit(v: TaskFormValues): Promise<string | null> {
@@ -742,7 +808,10 @@ export default function TaskDetailScreen() {
             >
               {/* SwipeRowProvider scopes auto-close to subtask list. */}
               <SwipeRowProvider>
-                {(task.subtasks ?? []).map((sub, idx, arr) => (
+                {(task.subtasks ?? []).map((sub, idx, arr) => {
+                  const isFitness = task.category === "Fitness";
+                  const hasSetsReps = (sub.setsTarget ?? 0) > 0 || (sub.repsTarget ?? 0) > 0;
+                  return (
                   <SwipeableRow
                     key={sub.subtaskId}
                     rowId={String(sub.subtaskId)}
@@ -762,7 +831,15 @@ export default function TaskDetailScreen() {
                     fullSwipeAction={() => deleteSubtask(sub)}
                     fullSwipeThreshold={0.5}
                     fullSwipeColor={c.danger}
-                    onTap={() => toggleSubtask(sub)}
+                    // Hit-test the chip area on tap; SwipeableRow blocks Pressable children, so we route taps manually.
+                    onTap={(e) => {
+                      const b = chipBoundsRef.current.get(sub.subtaskId);
+                      if (isFitness && b && e.x >= b.left && e.x <= b.right && e.y >= b.top && e.y <= b.bottom) {
+                        startEditSubtask(sub);
+                        return;
+                      }
+                      toggleSubtask(sub);
+                    }}
                   >
                     <View style={[styles.subRow, styles.subRowPadded]}>
                       <View
@@ -795,9 +872,33 @@ export default function TaskDetailScreen() {
                       >
                         {sub.title}
                       </ThemedText>
+                      {isFitness ? (
+                        <View
+                          onLayout={(ev) => {
+                            const { x, y, width, height } = ev.nativeEvent.layout;
+                            chipBoundsRef.current.set(sub.subtaskId, { left: x, top: y, right: x + width, bottom: y + height });
+                          }}
+                          style={[styles.setsChip, {
+                            borderColor: hasSetsReps ? c.borderSoft : c.borderHairline,
+                          }]}
+                        >
+                          <ThemedText style={{
+                            fontSize: 10,
+                            fontWeight: "600",
+                            color: hasSetsReps ? c.fgMuted : c.fgSubtle,
+                            letterSpacing: 0.2,
+                            fontVariant: ["tabular-nums"],
+                          }}>
+                            {hasSetsReps
+                              ? `${sub.setsTarget ?? "—"}×${sub.repsTarget ?? "—"}`
+                              : "+ sets"}
+                          </ThemedText>
+                        </View>
+                      ) : null}
                     </View>
                   </SwipeableRow>
-                ))}
+                  );
+                })}
               </SwipeRowProvider>
 
               {/* Opens floating SubtaskAddBar (sibling of BottomSheet). */}
@@ -876,6 +977,9 @@ export default function TaskDetailScreen() {
           style={styles.subtaskAddBarOverlay}
           onPress={() => {
             setNewSubtask("");
+            setNewSubtaskSets("");
+            setNewSubtaskReps("");
+            setEditingSubtaskId(null);
             setAddingSubtaskOpen(false);
             Keyboard.dismiss();
           }}
@@ -885,8 +989,16 @@ export default function TaskDetailScreen() {
           onChange={setNewSubtask}
           disabled={addingSubtask}
           onSubmit={addSubtask}
+          showSetsReps={task?.category === "Fitness"}
+          setsValue={newSubtaskSets}
+          onSetsChange={setNewSubtaskSets}
+          repsValue={newSubtaskReps}
+          onRepsChange={setNewSubtaskReps}
           onCancel={() => {
             setNewSubtask("");
+            setNewSubtaskSets("");
+            setNewSubtaskReps("");
+            setEditingSubtaskId(null);
             setAddingSubtaskOpen(false);
             Keyboard.dismiss();
           }}
@@ -1029,5 +1141,12 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Fitness-only chip on the right of a subtask row; tap to open the inline editor.
+  setsChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    borderWidth: 1,
   },
 });

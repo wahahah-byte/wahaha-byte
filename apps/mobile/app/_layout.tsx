@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { darkPalette, lightPalette } from '@wahaha/shared';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/context/theme-context';
+import { UndoProvider } from '@/context/undo-context';
 import { MobileEdgeDrawer } from '@/components/mobile-edge-drawer';
 import { useColors } from '@/hooks/use-colors';
 
@@ -102,9 +103,11 @@ function ThemedRoot() {
     document.body.style.backgroundColor = c.bg;
   }, [c.bg]);
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <NavigationChrome />
-    </View>
+    <UndoProvider>
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <NavigationChrome />
+      </View>
+    </UndoProvider>
   );
 }
 

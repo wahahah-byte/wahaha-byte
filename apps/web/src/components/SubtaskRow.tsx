@@ -33,8 +33,18 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
   const [editSets, setEditSets] = useState(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
   const [editReps, setEditReps] = useState(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  // Wraps title + sets/reps inputs so blurs that move to a sibling don't commit early.
+  const editClusterRef = useRef<HTMLDivElement>(null);
   // Skip next blur-commit after Enter/Escape settle the field.
   const skipNextBlurRef = useRef(false);
+
+  // Defer commit unless focus is leaving the entire edit cluster — otherwise tabbing/clicking between fields would unmount mid-edit.
+  function handleFieldBlur(e: React.FocusEvent<HTMLElement>) {
+    if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
+    const next = e.relatedTarget as HTMLElement | null;
+    if (next && editClusterRef.current?.contains(next)) return;
+    commitEdit();
+  }
 
   useEffect(() => {
     if (editing && titleInputRef.current) {
@@ -141,8 +151,9 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
         )}
       </div>
 
-      {/* Foreground row */}
+      {/* Foreground row — also acts as the edit-cluster boundary for blur handling. */}
       <div
+        ref={editClusterRef}
         className="flex items-center gap-2"
         style={{
           position: "relative",
@@ -192,10 +203,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
               if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
               else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
             }}
-            onBlur={() => {
-              if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
-              commitEdit();
-            }}
+            onBlur={handleFieldBlur}
             className="flex-1 text-xs outline-none bg-transparent"
             style={{ color: "var(--color-fg)", border: "none", padding: "2px 0", minWidth: 0 }}
           />
@@ -229,10 +237,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
                 if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
                 else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
               }}
-              onBlur={() => {
-                if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
-                commitEdit();
-              }}
+              onBlur={handleFieldBlur}
               placeholder="sets"
               aria-label="Sets"
               className="num-input-themed"
@@ -248,10 +253,7 @@ export default function SubtaskRow({ subtask, readOnly, showSetsReps, onToggle, 
                 if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEdit(); }
                 else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
               }}
-              onBlur={() => {
-                if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
-                commitEdit();
-              }}
+              onBlur={handleFieldBlur}
               placeholder="reps"
               aria-label="Reps"
               className="num-input-themed"

@@ -78,7 +78,7 @@ function Home() {
     remaining, recurringRemaining, selectedPts, willAward, capped, limitReached,
   } = submission;
 
-  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn } =
+  const { advancing, pausing, slashingId, recurringPopups, handleAdvance, handleCheckIn, handleUndoCheckIn, handleUndoCheckInFromToast, handlePause, handleDelete, handleSkip, handleArchive, undoableCheckIn, dismissUndoableCheckIn, undoableDelete, handleUndoDelete, dismissUndoableDelete } =
     useTaskActions({
       tasks, setTasks, isAuthenticated,
       stagedTaskIds, setStagedTaskIds,
@@ -367,6 +367,9 @@ function Home() {
       tasks={tasks}
       onUndoCheckInFromToast={handleUndoCheckInFromToast}
       onDismissUndoableCheckIn={dismissUndoableCheckIn}
+      undoableDelete={undoableDelete}
+      onUndoDelete={handleUndoDelete}
+      onDismissUndoableDelete={dismissUndoableDelete}
     >
       {showCapWarning && (
         <CapWarningModal

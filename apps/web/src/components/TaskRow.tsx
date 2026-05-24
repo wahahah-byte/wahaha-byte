@@ -94,6 +94,50 @@ function TaskRowImpl({
     const { error } = await subtasksApi.delete(s.subtaskId);
     if (error) onSubtasksChange?.(task.taskId, list);
   }
+
+  async function handleUpdateSubtask(s: Subtask, fields: { title?: string; setsTarget?: number | null; repsTarget?: number | null }) {
+    if (Object.keys(fields).length === 0) return;
+    const list = task.subtasks ?? [];
+    // Clamp setsCompleted if setsTarget shrinks below it.
+    const next = list.map((x) => {
+      if (x.subtaskId !== s.subtaskId) return x;
+      const merged: Subtask = { ...x, ...fields };
+      if (fields.setsTarget !== undefined) {
+        const target = fields.setsTarget;
+        if (target == null) merged.setsCompleted = null;
+        else if ((merged.setsCompleted ?? 0) > target) merged.setsCompleted = target;
+      }
+      return merged;
+    });
+    onSubtasksChange?.(task.taskId, next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const updatedRow = next.find((x) => x.subtaskId === s.subtaskId)!;
+    const apiFields: { title?: string; setsTarget?: number | null; repsTarget?: number | null; setsCompleted?: number | null } = { ...fields };
+    if (fields.setsTarget !== undefined && updatedRow.setsCompleted !== s.setsCompleted) {
+      apiFields.setsCompleted = updatedRow.setsCompleted ?? null;
+    }
+    const { error } = await subtasksApi.update(s.subtaskId, apiFields);
+    if (error) onSubtasksChange?.(task.taskId, list);
+  }
+
+  async function handleIncrementSubtaskSet(s: Subtask) {
+    if (s.setsTarget == null) return;
+    const currentDone = s.setsCompleted ?? 0;
+    if (currentDone >= s.setsTarget) return;
+    const nextDone = currentDone + 1;
+    const nextCompleted = nextDone >= s.setsTarget;
+    const list = task.subtasks ?? [];
+    const next = list.map((x) => x.subtaskId === s.subtaskId
+      ? { ...x, setsCompleted: nextDone, completed: nextCompleted || x.completed }
+      : x);
+    onSubtasksChange?.(task.taskId, next);
+    if (!isAuthenticated || s.subtaskId < 0) return;
+    const { error } = await subtasksApi.update(s.subtaskId, {
+      setsCompleted: nextDone,
+      ...(nextCompleted && !s.completed ? { completed: true } : {}),
+    });
+    if (error) onSubtasksChange?.(task.taskId, list);
+  }
   const { theme } = useTheme();
   const isLightTheme = theme === "light";
   const isInProgress = task.status === "in_progress";
@@ -578,13 +622,22 @@ function TaskRowImpl({
               if (isActionable) onCheckIn(task);
             };
             // Mirrors apps/mobile checkinBox: 14x14, no fill, priority-coloured border + check.
+            // Tier-coloured check: streak colour replaces priority on the check polyline; brighter/glow at higher tiers.
+            const tier = currentStreakTier(task.currentStreakCount ?? 0);
+            const accent = "var(--color-active-highlight-alt)";
+            const checkStroke = tier ? accent : dot;
+            const checkWidth = !tier ? 2 : tier.tier >= 4 ? 2.5 : tier.tier === 3 ? 2.25 : 2;
+            const checkFilter = !tier ? undefined
+              : tier.tier >= 4 ? `drop-shadow(0 0 2.5px ${accent}) drop-shadow(0 0 4px ${accent})`
+              : tier.tier === 3 ? `drop-shadow(0 0 1.5px ${accent})`
+              : undefined;
             const box = (
               <button
                 onClick={isInteractive ? onBoxClick : (e) => e.stopPropagation()}
                 disabled={!isInteractive}
                 aria-label={label}
                 aria-pressed={filledThisCycle}
-                title={label}
+                title={tier ? `${label} · ${tier.label} · streak ${task.currentStreakCount ?? 0}` : label}
                 className="flex-shrink-0"
                 style={{
                   width: 14, height: 14,
@@ -603,99 +656,15 @@ function TaskRowImpl({
                 onMouseLeave={(e) => { if (isActionable) e.currentTarget.style.background = "transparent"; }}
               >
                 {filledThisCycle && (
-                  <svg width="10" height="8" viewBox="0 0 12 9" fill="none" aria-hidden>
-                    <polyline points="1.5,4.5 4.5,7.5 10.5,1.5" stroke={dot} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <svg width="10" height="8" viewBox="0 0 12 9" fill="none" aria-hidden style={{ overflow: "visible", filter: checkFilter }}>
+                    <polyline points="1.5,4.5 4.5,7.5 10.5,1.5" stroke={checkStroke} strokeWidth={checkWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
                   </svg>
                 )}
               </button>
             );
-            if (task.subtasks && task.subtasks.length > 0) {
-              return (
-                <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
-                  {box}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-                    title={expanded ? "Hide subtasks" : "Show subtasks"}
-                    aria-label={expanded ? "Hide subtasks" : "Show subtasks"}
-                    aria-expanded={expanded}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-                      transformOrigin: "50% 50%",
-                      transition: "transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                      color: dot,
-                    }}
-                  >
-                    <svg width="5" height="7" viewBox="0 0 5 7" fill="none">
-                      <polyline points="1,1 3.5,3.5 1,6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    </svg>
-                  </button>
-                </div>
-              );
-            }
+            // Subtasks expansion moved to the metaRow chip; no chevron next to the checkbox.
             return box;
-          })() : task.subtasks && task.subtasks.length > 0 ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
-              title={expanded ? "Hide subtasks" : "Show subtasks"}
-              aria-label={expanded ? "Hide subtasks" : "Show subtasks"}
-              aria-expanded={expanded}
-              className="flex-shrink-0"
-              style={{
-                marginLeft: -3, marginRight: -3,
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              {task.isRecurring ? (
-                <span
-                  style={{
-                    width: 22, height: 22,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: CATEGORY_COLOR[task.category] ?? "var(--color-fg-muted)",
-                  }}
-                >
-                  <CategoryIcon category={task.category} size={22} />
-                </span>
-              ) : (
-                <span
-                  style={{
-                    width: 14, height: 14,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
-                </span>
-              )}
-              <span
-                style={{
-                  display: "inline-flex",
-                  transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-                  transformOrigin: "50% 50%",
-                  transition: "transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  color: dot,
-                }}
-              >
-                <svg width="5" height="7" viewBox="0 0 5 7" fill="none">
-                  <polyline points="1,1 3.5,3.5 1,6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-              </span>
-            </button>
-          ) : task.isRecurring ? (
+          })() : task.isRecurring ? (
             <span
               className="flex-shrink-0 flex items-center justify-center"
               style={{
@@ -721,6 +690,56 @@ function TaskRowImpl({
               <span className="truncate" title={task.title}>
                 {task.title.length > 18 ? `${task.title.slice(0, 17)}…` : task.title}
               </span>
+              {task.subtasks && task.subtasks.length > 0 && (() => {
+                const done = task.subtasks.filter((s) => s.completed).length;
+                const total = task.subtasks.length;
+                const allDone = done === total;
+                const chipColor = allDone ? "var(--color-success)" : "var(--color-fg-subtle)";
+                const chipBorder = allDone
+                  ? "color-mix(in srgb, var(--color-success) 50%, transparent)"
+                  : "var(--color-border-hairline)";
+                return (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+                    title={expanded ? `Hide subtasks (${done}/${total})` : `Show subtasks (${done}/${total})`}
+                    aria-label={expanded ? "Hide subtasks" : "Show subtasks"}
+                    aria-expanded={expanded}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3,
+                      padding: "1px 4px 1px 3px",
+                      background: "transparent",
+                      border: `1px solid ${chipBorder}`,
+                      borderRadius: 2,
+                      color: chipColor,
+                      fontSize: "9px",
+                      letterSpacing: "0.06em",
+                      fontVariantNumeric: "tabular-nums",
+                      fontWeight: allDone ? 600 : 500,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                      lineHeight: 1,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        display: "inline-flex",
+                        transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+                        transformOrigin: "50% 50%",
+                        transition: "transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                      }}
+                    >
+                      <svg width="4" height="6" viewBox="0 0 5 7" fill="none">
+                        <polyline points="1,1 3.5,3.5 1,6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    </span>
+                    <span>{done}/{total}</span>
+                  </button>
+                );
+              })()}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5" style={{ overflow: "hidden" }}>
               {task.category && (() => {
@@ -739,6 +758,77 @@ function TaskRowImpl({
                     fontWeight: isLightTheme ? 600 : 400,
                   }}>
                     {task.category}
+                  </span>
+                );
+              })()}
+              {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
+                const overdue = isOverdue(task.dueDate);
+                const isLocked = !overdue && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+                const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
+                const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
+                  : task.recurrenceRule === "weekdays" ? "Weekdays"
+                  : task.recurrenceRule === "biweekly" ? "Biweekly"
+                  : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
+                const ruleAbbr = task.recurrenceRule === "daily" ? "D"
+                  : task.recurrenceRule === "weekdays" ? "WD"
+                  : task.recurrenceRule === "weekly" ? "W"
+                  : task.recurrenceRule === "biweekly" ? "2W"
+                  : task.recurrenceRule === "monthly" ? "M"
+                  : null;
+                const unlockText = unlockInfo
+                  ? (task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
+                    ? unlockInfo.date
+                    : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`
+                  : null;
+                const tooltip = unlockText ? `${ruleLabel} · unlocks ${unlockText}` : ruleLabel;
+                // Chip colours track state: amber when locked, red when overdue, alt-highlight when ready.
+                const stateColor = overdue
+                  ? "rgba(239,68,68,0.85)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.85)"
+                    : "var(--color-active-highlight-alt)";
+                const chipBg = overdue
+                  ? "rgba(239,68,68,0.10)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.10)"
+                    : "color-mix(in srgb, var(--color-active-highlight-alt) 14%, transparent)";
+                const chipBorder = overdue
+                  ? "rgba(239,68,68,0.40)"
+                  : isLocked
+                    ? "rgba(245,158,11,0.40)"
+                    : "color-mix(in srgb, var(--color-active-highlight-alt) 40%, transparent)";
+                if (!ruleAbbr) return null;
+                return (
+                  <span
+                    title={tooltip}
+                    aria-label={ruleLabel}
+                    className="inline-flex items-center"
+                    style={{
+                      gap: 3,
+                      color: stateColor,
+                      background: chipBg,
+                      border: `1px solid ${chipBorder}`,
+                      borderRadius: "2px",
+                      padding: "1px 5px",
+                      fontSize: "9px",
+                      letterSpacing: "0.14em",
+                      textTransform: "uppercase",
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      fontVariantNumeric: "tabular-nums",
+                      lineHeight: 1.1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {isLocked ? (
+                      <svg width="7" height="8" viewBox="0 0 10 12" fill="none" aria-hidden>
+                        <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+                        <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+                      </svg>
+                    ) : (
+                      <span aria-hidden style={{ fontSize: "9px", lineHeight: 1 }}>↻</span>
+                    )}
+                    {ruleAbbr}
                   </span>
                 );
               })()}
@@ -802,28 +892,6 @@ function TaskRowImpl({
                   </span>
                 );
               })()}
-              {task.subtasks && task.subtasks.length > 0 && (() => {
-                const done = task.subtasks.filter((s) => s.completed).length;
-                const total = task.subtasks.length;
-                if (done === 0) return null;
-                const allDone = done === total;
-                return (
-                  <span
-                    title={`${done} of ${total} subtasks done`}
-                    style={{
-                      color: allDone ? "var(--color-success)" : "var(--color-fg-subtle)",
-                      fontSize: "8px",
-                      letterSpacing: "0.1em",
-                      flexShrink: 0,
-                      fontVariantNumeric: "tabular-nums",
-                      fontWeight: allDone ? 600 : 400,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {done}/{total}
-                  </span>
-                );
-              })()}
               {canUndo && (
                 <svg
                   width="8"
@@ -839,99 +907,14 @@ function TaskRowImpl({
                   <polyline points="3.5,4 1,1.5 3.5,0" style={{ stroke: "var(--color-warning)" }} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 </svg>
               )}
-              {task.isRecurring && task.recurrenceRule && !isInProgress && !canUndo && (() => {
-                const overdue = isOverdue(task.dueDate);
-                const isLocked = !overdue && !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
-                const unlockInfo = isLocked ? getUnlockInfo(task.dueDate) : null;
-                const ruleLabel = task.recurrenceRule === "daily" ? "Daily"
-                  : task.recurrenceRule === "weekdays" ? "Weekdays"
-                  : task.recurrenceRule === "biweekly" ? "Biweekly"
-                  : getNextOccurrenceLabel(task.dueDate, task.recurrenceRule);
-                const ruleAbbr = task.recurrenceRule === "daily" ? "D"
-                  : task.recurrenceRule === "weekdays" ? "WD"
-                  : task.recurrenceRule === "weekly" ? "W"
-                  : task.recurrenceRule === "biweekly" ? "2W"
-                  : task.recurrenceRule === "monthly" ? "M"
-                  : null;
-                const streakCount = task.currentStreakCount ?? 0;
-                const unlockText = unlockInfo
-                  ? (task.recurrenceRule === "biweekly" || task.recurrenceRule === "monthly")
-                    ? unlockInfo.date
-                    : unlockInfo.days === 1 ? "tomorrow" : `in ${unlockInfo.days} days`
-                  : null;
-                const tooltip = unlockText ? `${ruleLabel} · unlocks ${unlockText}` : ruleLabel;
-                // Chip colours track state: amber when locked, red when overdue, alt-highlight when ready.
-                const stateColor = overdue
-                  ? "rgba(239,68,68,0.85)"
-                  : isLocked
-                    ? "rgba(245,158,11,0.85)"
-                    : "var(--color-active-highlight-alt)";
-                const chipBg = overdue
-                  ? "rgba(239,68,68,0.10)"
-                  : isLocked
-                    ? "rgba(245,158,11,0.10)"
-                    : "color-mix(in srgb, var(--color-active-highlight-alt) 14%, transparent)";
-                const chipBorder = overdue
-                  ? "rgba(239,68,68,0.40)"
-                  : isLocked
-                    ? "rgba(245,158,11,0.40)"
-                    : "color-mix(in srgb, var(--color-active-highlight-alt) 40%, transparent)";
-                return (
-                  <>
-                    {ruleAbbr && (
-                      <span
-                        title={tooltip}
-                        aria-label={ruleLabel}
-                        className="inline-flex items-center"
-                        style={{
-                          gap: 3,
-                          color: stateColor,
-                          background: chipBg,
-                          border: `1px solid ${chipBorder}`,
-                          borderRadius: "2px",
-                          padding: "1px 5px",
-                          fontSize: "9px",
-                          letterSpacing: "0.14em",
-                          textTransform: "uppercase",
-                          fontWeight: 600,
-                          flexShrink: 0,
-                          fontVariantNumeric: "tabular-nums",
-                          lineHeight: 1.1,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {isLocked ? (
-                          <svg width="7" height="8" viewBox="0 0 10 12" fill="none" aria-hidden>
-                            <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="currentColor" strokeWidth="1.4" fill="none"/>
-                            <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
-                          </svg>
-                        ) : (
-                          <span aria-hidden style={{ fontSize: "9px", lineHeight: 1 }}>↻</span>
-                        )}
-                        {ruleAbbr}
-                      </span>
-                    )}
-                    {(() => {
-                      const tier = currentStreakTier(streakCount);
-                      if (!tier) return null;
-                      return (
-                        <span
-                          className={streakJustIncremented ? "streak-chip-pop" : undefined}
-                          style={{ color: "var(--color-active-highlight-alt)", fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85, flexShrink: 0, fontVariantNumeric: "tabular-nums", display: "inline-block", transformOrigin: "center" }}
-                        >
-                          {tier.label} · {streakCount}
-                        </span>
-                      );
-                    })()}
-                  </>
-                );
-              })()}
+              {/* Recurrence chip moved to sit beside the category badge. */}
             </div>
           </div>
         </div>
 
         <div className="flex items-center justify-center gap-1">
-          {wasCheckedInToday ? (
+          {/* Routines: checkbox handles undo, so the date-column pill is suppressed in the Checked In section. */}
+          {wasCheckedInToday && !useCheckinCheckbox ? (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1263,6 +1246,9 @@ function TaskRowImpl({
             isLast={i === task.subtasks!.length - 1}
             onToggle={() => handleToggleSubtask(s)}
             onDelete={() => handleDeleteSubtask(s)}
+            showSetsReps={task.category === "Fitness"}
+            onUpdate={(fields) => handleUpdateSubtask(s, fields)}
+            onIncrementSet={() => handleIncrementSubtaskSet(s)}
           />
         ))}
       </div>

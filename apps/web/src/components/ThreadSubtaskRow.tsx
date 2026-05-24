@@ -3,12 +3,22 @@
 import { useRef, useState } from "react";
 import type { Subtask } from "@/lib/api/tasks";
 
+export interface SubtaskUpdateFields {
+  title?: string;
+  setsTarget?: number | null;
+  repsTarget?: number | null;
+}
+
 type Props = {
   subtask: Subtask;
   isFirst: boolean;
   isLast: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  // Fitness-only sets/reps support.
+  showSetsReps?: boolean;
+  onUpdate?: (fields: SubtaskUpdateFields) => void;
+  onIncrementSet?: () => void;
 };
 
 const COMMIT_THRESHOLD = 80;
@@ -17,9 +27,46 @@ const ROW_HEIGHT = 36;
 const THREAD_GUTTER = 22;
 const GAP_ABOVE = 4;
 
-export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, onDelete }: Props) {
+export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, onDelete, showSetsReps, onUpdate, onIncrementSet }: Props) {
   const [dragX, setDragX] = useState(0);
   const swipeRef = useRef<{ startX: number; startY: number; locked: "h" | "v" | null } | null>(null);
+
+  // Fitness-only inline sets/reps editor.
+  const [editing, setEditing] = useState(false);
+  const [editSets, setEditSets] = useState(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
+  const [editReps, setEditReps] = useState(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
+  const skipNextBlurRef = useRef(false);
+  // Cluster ref so tabbing between sets and reps inputs doesn't commit mid-edit.
+  const editClusterRef = useRef<HTMLDivElement>(null);
+  function handleSetsBlur(e: React.FocusEvent<HTMLInputElement>) {
+    if (skipNextBlurRef.current) { skipNextBlurRef.current = false; return; }
+    const next = e.relatedTarget as HTMLElement | null;
+    if (next && editClusterRef.current?.contains(next)) return;
+    commitEditSets();
+  }
+
+  function startEditSets() {
+    if (!onUpdate || subtask.completed) return;
+    setEditSets(subtask.setsTarget != null ? String(subtask.setsTarget) : "");
+    setEditReps(subtask.repsTarget != null ? String(subtask.repsTarget) : "");
+    setEditing(true);
+  }
+  function cancelEditSets() {
+    skipNextBlurRef.current = true;
+    setEditing(false);
+  }
+  function commitEditSets() {
+    if (!onUpdate) { setEditing(false); return; }
+    const fields: SubtaskUpdateFields = {};
+    const sets = editSets.trim() ? Number(editSets) : NaN;
+    const nextSets = Number.isFinite(sets) && sets > 0 ? sets : null;
+    if (nextSets !== (subtask.setsTarget ?? null)) fields.setsTarget = nextSets;
+    const reps = editReps.trim() ? Number(editReps) : NaN;
+    const nextReps = Number.isFinite(reps) && reps > 0 ? reps : null;
+    if (nextReps !== (subtask.repsTarget ?? null)) fields.repsTarget = nextReps;
+    if (Object.keys(fields).length > 0) onUpdate(fields);
+    setEditing(false);
+  }
 
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
@@ -151,6 +198,98 @@ export default function ThreadSubtaskRow({ subtask, isFirst, isLast, onToggle, o
         >
           {subtask.title}
         </span>
+
+        {showSetsReps && editing ? (
+          <div ref={editClusterRef} className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              autoFocus
+              value={editSets}
+              onChange={(e) => setEditSets(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEditSets(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancelEditSets(); }
+              }}
+              onBlur={handleSetsBlur}
+              placeholder="sets"
+              aria-label="Sets"
+              className="num-input-themed"
+            />
+            <span style={{ color: "var(--color-fg-subtle)", fontSize: 10, fontWeight: 600 }}>×</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={editReps}
+              onChange={(e) => setEditReps(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); skipNextBlurRef.current = true; commitEditSets(); }
+                else if (e.key === "Escape") { e.preventDefault(); cancelEditSets(); }
+              }}
+              onBlur={handleSetsBlur}
+              placeholder="reps"
+              aria-label="Reps"
+              className="num-input-themed"
+            />
+          </div>
+        ) : showSetsReps && onUpdate ? (() => {
+          const target = subtask.setsTarget ?? 0;
+          const done = subtask.setsCompleted ?? 0;
+          const reps = subtask.repsTarget;
+          const hasSetsReps = target > 0 || (reps ?? 0) > 0;
+          const reached = target > 0 && done >= target;
+          return (
+            <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <span
+                onClick={!subtask.completed ? startEditSets : undefined}
+                title={hasSetsReps ? "Tap to edit sets/reps" : "Tap to add sets/reps"}
+                style={{
+                  fontSize: 10,
+                  color: reached ? "var(--color-success)" : hasSetsReps ? "var(--color-fg-muted)" : "var(--color-fg-subtle)",
+                  fontVariantNumeric: "tabular-nums",
+                  fontWeight: hasSetsReps ? 600 : 500,
+                  letterSpacing: "0.04em",
+                  cursor: !subtask.completed ? "pointer" : "default",
+                  padding: "2px 6px",
+                  border: `1px solid ${hasSetsReps ? "var(--color-border-soft, var(--color-border))" : "var(--color-border-hairline)"}`,
+                  borderRadius: 3,
+                }}
+              >
+                {hasSetsReps
+                  ? (target > 0 ? `${done}/${target}` : "—")
+                  : "+ sets"}
+                {hasSetsReps && reps != null && reps > 0 && (
+                  <span style={{ color: "var(--color-fg-subtle)", fontWeight: 400, marginLeft: 4 }}>
+                    × {reps}
+                  </span>
+                )}
+              </span>
+              {target > 0 && !reached && onIncrementSet && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onIncrementSet(); }}
+                  className="goal-stepper-btn"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    border: "1px solid var(--color-border-hairline)",
+                    borderRadius: 3,
+                    background: "var(--color-input)",
+                    color: "var(--color-fg-muted)",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    fontWeight: 600,
+                  }}
+                  aria-label="Mark one set complete"
+                >
+                  +
+                </button>
+              )}
+            </div>
+          );
+        })() : null}
 
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}

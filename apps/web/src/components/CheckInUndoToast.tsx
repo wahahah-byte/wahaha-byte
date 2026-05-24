@@ -8,10 +8,12 @@ interface Props {
   onUndo: () => void;
   onDismiss: () => void;
   durationMs?: number;
+  /** Leading label, e.g. "Checked in" or "Deleted". Default: "Checked in". */
+  prefix?: string;
 }
 
-// Dismissible 5-second undo toast shown after a check-in.
-export default function CheckInUndoToast({ taskTitle, onUndo, onDismiss, durationMs = 5000 }: Props) {
+// Dismissible 5-second undo toast (used for check-ins and deletes).
+export default function CheckInUndoToast({ taskTitle, onUndo, onDismiss, durationMs = 5000, prefix = "Checked in" }: Props) {
   const [mounted, setMounted] = useState(false);
   const [progress, setProgress] = useState(1);
 
@@ -68,7 +70,7 @@ export default function CheckInUndoToast({ taskTitle, onUndo, onDismiss, duratio
           textOverflow: "ellipsis",
         }}
       >
-        Checked in: {taskTitle}
+        {prefix}: {taskTitle}
       </span>
       <button
         onClick={onUndo}
