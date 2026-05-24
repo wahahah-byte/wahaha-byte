@@ -19,7 +19,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
-import Svg, { Line, Path, Polyline, Rect } from "react-native-svg";
+import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { ArchiveIcon, CheckIcon, DeleteIcon, PauseIcon, StartIcon, UnarchiveIcon } from "@/components/action-icons";
 import { BankBurstEffect } from "@/components/bank-burst-effect";
@@ -153,11 +153,36 @@ interface Props {
   useCheckinCheckbox?: boolean;
 }
 
-function LockIcon() {
+// Bronze/Silver/Gold as filled medal discs; Diamond swaps to a faceted 4-point gem.
+const TIER_FILL: Record<number, string> = {
+  1: "#CD7F32",
+  2: "#C7C7CD",
+  3: "#E5B547",
+  4: "#7DD3FC",
+};
+const TIER_RIM: Record<number, string> = {
+  1: "rgba(120,70,25,0.85)",
+  2: "rgba(110,110,118,0.85)",
+  3: "rgba(150,108,30,0.85)",
+  4: "rgba(40,140,180,0.85)",
+};
+
+function TierMedal({ tier }: { tier: number }) {
+  const fill = TIER_FILL[tier];
+  const rim = TIER_RIM[tier];
+  if (tier === 4) {
+    return (
+      <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+        <Path d="M6 1 L11 6 L6 11 L1 6 Z" fill={fill} stroke={rim} strokeWidth={0.9} strokeLinejoin="round" />
+        <Path d="M3 6 L6 3 L9 6" stroke="rgba(255,255,255,0.55)" strokeWidth={0.7} fill="none" strokeLinecap="round" />
+        <Path d="M6 3 L6 9" stroke="rgba(255,255,255,0.35)" strokeWidth={0.5} />
+      </Svg>
+    );
+  }
   return (
-    <Svg width={7} height={8} viewBox="0 0 10 12" fill="none">
-      <Rect x={2} y={5} width={6} height={6} rx={0.8} stroke="rgba(245,158,11,0.55)" strokeWidth={1.2} fill="none" />
-      <Path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="rgba(245,158,11,0.55)" strokeWidth={1.2} strokeLinecap="round" fill="none" />
+    <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+      <Circle cx={6} cy={6} r={5} fill={fill} stroke={rim} strokeWidth={0.9} />
+      <Circle cx={6} cy={6} r={2.6} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={0.7} />
     </Svg>
   );
 }
@@ -1182,18 +1207,6 @@ function TaskRowImpl({
               const isCheckedButLocked = checkedThisCycle && !couldBeTodaysCheckin;
               const isActionable = !checkedThisCycle && (canCheckInThisCycle || overdueRecurring);
               const isLocked = (!checkedThisCycle && !isActionable) || isCheckedButLocked;
-              // Tier-coloured check: streak colour replaces priority on the check; iOS-only glow at T3/T4.
-              const tier = currentStreakTier(item.currentStreakCount ?? 0);
-              const checkStroke = tier ? c.secondaryAccent : dot;
-              const checkWidth = !tier ? 2 : tier.tier >= 4 ? 2.5 : tier.tier === 3 ? 2.25 : 2;
-              const glow = tier && tier.tier >= 3
-                ? {
-                    shadowColor: c.secondaryAccent,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.95,
-                    shadowRadius: tier.tier === 4 ? 4 : 2,
-                  }
-                : null;
               return (
                 <View
                   style={[
@@ -1211,18 +1224,16 @@ function TaskRowImpl({
                   }}
                 >
                   {checkedThisCycle ? (
-                    <View style={glow ?? undefined}>
-                      <Svg width={10} height={8} viewBox="0 0 12 9" fill="none">
-                        <Polyline
-                          points="1.5,4.5 4.5,7.5 10.5,1.5"
-                          stroke={checkStroke}
-                          strokeWidth={checkWidth}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          fill="none"
-                        />
-                      </Svg>
-                    </View>
+                    <Svg width={10} height={8} viewBox="0 0 12 9" fill="none">
+                      <Polyline
+                        points="1.5,4.5 4.5,7.5 10.5,1.5"
+                        stroke={c.secondaryAccent}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </Svg>
                   ) : null}
                 </View>
               );
@@ -1252,8 +1263,10 @@ function TaskRowImpl({
                   >
                     <ThemedText
                       style={{
-                        fontSize: 8,
-                        letterSpacing: 1.1,
+                        fontSize: 9,
+                        lineHeight: 10,
+                        letterSpacing: 0.8,
+                        fontWeight: "600",
                         color: categoryColor,
                       }}
                     >
@@ -1261,10 +1274,28 @@ function TaskRowImpl({
                     </ThemedText>
                   </View>
                 ) : null}
-                {item.isRecurring && !isInProgress && !overdueRecurring
-                  && !canCheckInNow(item.dueDate, item.recurrenceRule, item.lastCheckInDate) ? (
-                  <LockIcon />
-                ) : null}
+                {item.isRecurring && item.recurrenceRule && !isInProgress && !isCompleted ? (() => {
+                  const ruleAbbr = item.recurrenceRule === "daily" ? "D"
+                    : item.recurrenceRule === "weekdays" ? "WD"
+                    : item.recurrenceRule === "weekly" ? "W"
+                    : item.recurrenceRule === "biweekly" ? "2W"
+                    : item.recurrenceRule === "monthly" ? "M"
+                    : null;
+                  if (!ruleAbbr) return null;
+                  const overdue = isOverdue(item.dueDate);
+                  const locked = !overdue && !canCheckInNow(item.dueDate, item.recurrenceRule, item.lastCheckInDate);
+                  const fg = overdue ? c.danger : locked ? c.warning : c.activeHighlightAlt;
+                  const bg = overdue ? c.dangerBg : locked ? c.warningBg : c.activeHighlightAltBg;
+                  const border = overdue ? c.dangerBorder : locked ? c.warningBorder : c.activeHighlightAltBorder;
+                  return (
+                    <View style={[styles.recurChip, { backgroundColor: bg, borderColor: border }]}>
+                      <ThemedText style={{ fontSize: 9, lineHeight: 10, color: fg }}>↻</ThemedText>
+                      <ThemedText style={{ fontSize: 9, lineHeight: 10, color: fg, letterSpacing: 0.8, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
+                        {ruleAbbr}
+                      </ThemedText>
+                    </View>
+                  );
+                })() : null}
                 {item.wasPenalized ? (
                   <View style={[styles.badge, { backgroundColor: c.dangerBg, borderColor: c.dangerBorder }]}>
                     <ThemedText style={{ fontSize: 9, color: c.danger, letterSpacing: 0.5 }}>
@@ -1272,20 +1303,12 @@ function TaskRowImpl({
                     </ThemedText>
                   </View>
                 ) : null}
-                {/* Tier moved to a corner badge on the check-in checkbox (LoL-style). */}
+                {item.isRecurring ? (() => {
+                  const t = currentStreakTier(item.currentStreakCount ?? 0);
+                  return t ? <TierMedal tier={t.tier} /> : null;
+                })() : null}
               </View>
             </View>
-          </View>
-          <View style={styles.dateCol}>
-            {/* Overdue cue is the date colour going red. */}
-            <ThemedText style={{
-              fontSize: 12,
-              color: overdueRow ? c.danger : c.fgMuted,
-              fontWeight: overdueRow ? "600" : "400",
-              fontVariant: ["tabular-nums"],
-            }}>
-              {due}
-            </ThemedText>
           </View>
           <View style={styles.pointsCol}>
             <CoinIcon overdue={overdueRow} />
@@ -1296,6 +1319,17 @@ function TaskRowImpl({
               fontVariant: ["tabular-nums"],
             }}>
               {item.pointValue.toLocaleString()}
+            </ThemedText>
+          </View>
+          <View style={styles.dateCol}>
+            {/* Overdue cue is the date colour going red. */}
+            <ThemedText style={{
+              fontSize: 12,
+              color: overdueRow ? c.danger : c.fgMuted,
+              fontWeight: overdueRow ? "600" : "400",
+              fontVariant: ["tabular-nums"],
+            }}>
+              {due}
             </ThemedText>
           </View>
         </View>
@@ -1384,6 +1418,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   badge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3, borderWidth: 1 },
+  recurChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
   categoryPill: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 2, borderWidth: 1 },
   sectionHeader: { paddingTop: 16, paddingBottom: 6, paddingHorizontal: 4 },
   activeToggle: {

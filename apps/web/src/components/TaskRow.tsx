@@ -568,7 +568,7 @@ function TaskRowImpl({
         style={{
           position: "absolute",
           inset: 0,
-          gridTemplateColumns: "1fr 64px 60px",
+          gridTemplateColumns: "1fr 60px 64px",
           borderLeft: isInProgress
             ? "2px solid var(--color-active-highlight)"
             : canUndo
@@ -749,13 +749,16 @@ function TaskRowImpl({
                 const tagBorder = isLightTheme ? `color-mix(in srgb, ${cc} 70%, white)` : `${cc}40`;
                 return (
                   <span style={{
-                    fontSize: "8px", letterSpacing: "0.14em", textTransform: "uppercase",
+                    fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase",
                     color: tagColor,
                     background: tagBg,
                     border: `1px solid ${tagBorder}`,
                     borderRadius: "2px",
                     padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0,
-                    fontWeight: isLightTheme ? 600 : 400,
+                    fontWeight: 600,
+                    lineHeight: 1.1,
+                    display: "inline-flex",
+                    alignItems: "center",
                   }}>
                     {task.category}
                   </span>
@@ -820,14 +823,7 @@ function TaskRowImpl({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {isLocked ? (
-                      <svg width="7" height="8" viewBox="0 0 10 12" fill="none" aria-hidden>
-                        <rect x="2" y="5" width="6" height="6" rx="0.8" stroke="currentColor" strokeWidth="1.4" fill="none"/>
-                        <path d="M3.5 5V3.5a1.5 1.5 0 0 1 3 0V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
-                      </svg>
-                    ) : (
-                      <span aria-hidden style={{ fontSize: "9px", lineHeight: 1 }}>↻</span>
-                    )}
+                    <span aria-hidden style={{ fontSize: "9px", lineHeight: 1 }}>↻</span>
                     {ruleAbbr}
                   </span>
                 );
@@ -912,52 +908,6 @@ function TaskRowImpl({
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1">
-          {/* Routines: checkbox handles undo, so the date-column pill is suppressed in the Checked In section. */}
-          {wasCheckedInToday && !useCheckinCheckbox ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (undoableCycle) onUndoCheckIn?.(task, undoableCycle.cycleId);
-              }}
-              title="Undo check-in"
-              aria-label="Undo check-in"
-              className="inline-flex items-center justify-center cursor-pointer"
-              style={{
-                // Icon-only pill — tighter padding for round shape.
-                color: "var(--color-active-highlight-alt)",
-                background: "var(--color-active-highlight-alt-bg)",
-                border: "1px solid var(--color-active-highlight-alt-border, var(--color-border-hairline))",
-                borderRadius: 999,
-                padding: 4,
-                lineHeight: 0,
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
-                <polyline points="4,2 2,4 4,6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                <path d="M2 4H6.5A2.5 2.5 0 0 1 6.5 9H4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1">
-              {(overdueRegular || overdueRecurring) && (
-                <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
-              )}
-              <span
-                className="text-[12px]"
-                style={{
-                  color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
-                  fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
-                }}
-              >
-                {task.dueDate
-                  ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                  : "—"}
-              </span>
-            </div>
-          )}
-        </div>
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", columnGap: 4 }}>
           {isSubmitted ? (
             // Submitted-state coin-stack badge; BankBurstEffect owns submit motion.
@@ -1030,6 +980,52 @@ function TaskRowImpl({
                 <StreakBonusChip task={task} />
               </div>
             </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-center gap-1">
+          {/* Routines: checkbox handles undo, so the date-column pill is suppressed in the Checked In section. */}
+          {wasCheckedInToday && !useCheckinCheckbox ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (undoableCycle) onUndoCheckIn?.(task, undoableCycle.cycleId);
+              }}
+              title="Undo check-in"
+              aria-label="Undo check-in"
+              className="inline-flex items-center justify-center cursor-pointer"
+              style={{
+                // Icon-only pill — tighter padding for round shape.
+                color: "var(--color-active-highlight-alt)",
+                background: "var(--color-active-highlight-alt-bg)",
+                border: "1px solid var(--color-active-highlight-alt-border, var(--color-border-hairline))",
+                borderRadius: 999,
+                padding: 4,
+                lineHeight: 0,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+                <polyline points="4,2 2,4 4,6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M2 4H6.5A2.5 2.5 0 0 1 6.5 9H4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              {(overdueRegular || overdueRecurring) && (
+                <span aria-hidden style={{ color: "var(--color-danger)", fontSize: "11px", lineHeight: 1, fontWeight: 700 }}>⚠</span>
+              )}
+              <span
+                className="text-[12px]"
+                style={{
+                  color: (overdueRegular || overdueRecurring) ? "var(--color-danger)" : "var(--color-fg-muted)",
+                  fontWeight: (overdueRegular || overdueRecurring) ? 600 : 400,
+                }}
+              >
+                {task.dueDate
+                  ? parseLocalDate(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : "—"}
+              </span>
+            </div>
           )}
         </div>
       </div>

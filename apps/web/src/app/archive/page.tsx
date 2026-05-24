@@ -159,7 +159,7 @@ export default function ArchivePage() {
 
           <div
             className="grid text-[9px] tracking-widest uppercase px-4 py-2 select-none"
-            style={{ gridTemplateColumns: "1fr 64px 80px", color: "var(--color-fg-subtle)", background: "var(--color-bg)" }}
+            style={{ gridTemplateColumns: "1fr 80px 64px", color: "var(--color-fg-subtle)", background: "var(--color-bg)" }}
           >
             <span>Name</span>
             <span />
