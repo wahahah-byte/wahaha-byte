@@ -6,6 +6,8 @@ import {
   isOverdue,
   RECURRING_FILTERS,
   recurringTabMatches,
+  type GroupMode,
+  type SortMode,
   type TaskDto,
 } from "@wahaha/shared";
 
@@ -23,6 +25,8 @@ export default function RoutinesScreen() {
   const [activeFilter, setActiveFilter] = useState<RecurringFilter>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [loadedTasks, setLoadedTasks] = useState<TaskDto[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>("due");
+  const [groupMode, setGroupMode] = useState<GroupMode>("none");
 
   const preFilter = useCallback(
     (t: TaskDto) =>
@@ -81,6 +85,8 @@ export default function RoutinesScreen() {
           filters={listFilters}
           activeFilter="all"
           preFilter={preFilter}
+          sortMode={sortMode}
+          groupMode={groupMode}
           // On "all" filter, split checked-in routines under their own section.
           splitCheckedIn={activeFilter === "all"}
           onTasksLoaded={setLoadedTasks}
@@ -109,6 +115,10 @@ export default function RoutinesScreen() {
         availableCategories={availableCategories}
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
+        sortMode={sortMode}
+        groupMode={groupMode}
+        onSortChange={setSortMode}
+        onGroupChange={setGroupMode}
       />
     </ThemedView>
   );

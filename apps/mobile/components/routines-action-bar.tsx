@@ -1,9 +1,10 @@
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
-import { CATEGORY_COLOR } from "@wahaha/shared";
+import { CATEGORY_COLOR, type GroupMode, type SortMode } from "@wahaha/shared";
 
 import { CategoryIcon } from "@/components/category-icon";
+import { TaskListControls } from "@/components/task-list-controls";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
@@ -11,6 +12,10 @@ interface Props {
   availableCategories: string[];
   activeCategory: string | null;
   onCategoryChange: (next: string | null) => void;
+  sortMode?: SortMode;
+  groupMode?: GroupMode;
+  onSortChange?: (m: SortMode) => void;
+  onGroupChange?: (m: GroupMode) => void;
 }
 
 // Hex-with-alpha helper; passes through non-hex strings.
@@ -25,8 +30,18 @@ function alphaHex(hex: string, percent: number): string {
 }
 
 // Routines tab bottom bar — category filter strip + new-task plus button.
-export function RoutinesActionBar({ availableCategories, activeCategory, onCategoryChange }: Props) {
+export function RoutinesActionBar({
+  availableCategories,
+  activeCategory,
+  onCategoryChange,
+  sortMode,
+  groupMode,
+  onSortChange,
+  onGroupChange,
+}: Props) {
   const c = useColors();
+  const showControls =
+    sortMode !== undefined && groupMode !== undefined && !!onSortChange && !!onGroupChange;
 
   return (
     <View
@@ -62,6 +77,15 @@ export function RoutinesActionBar({ availableCategories, activeCategory, onCateg
         })}
       </ScrollView>
 
+      {showControls ? (
+        <TaskListControls
+          sortMode={sortMode!}
+          groupMode={groupMode!}
+          onSortChange={onSortChange!}
+          onGroupChange={onGroupChange!}
+        />
+      ) : null}
+
       <Pressable
         onPress={() => router.push("/new-task?recurring=1")}
         style={({ pressed }) => [styles.plusBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -76,6 +100,7 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     height: 62,
     paddingHorizontal: 8,
     borderTopWidth: 1,
