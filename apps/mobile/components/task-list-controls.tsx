@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import { Dimensions, Modal, Pressable, StyleSheet, View } from "react-native";
 import Svg, { Line, Polyline } from "react-native-svg";
 
 import type { GroupMode, SortMode } from "@wahaha/shared";
@@ -30,6 +30,14 @@ interface Props {
   onGroupChange: (m: GroupMode) => void;
 }
 
+// Popover layout: width is fixed so right-edge alignment with the anchor stays
+// stable across rerenders; height is item-count × row + header so we can offset
+// above the button without measuring the menu itself.
+const MENU_WIDTH = 168;
+const MENU_HEADER_H = 30;
+const MENU_ITEM_H = 38;
+const MENU_GAP_FROM_BUTTON = 8;
+
 function SortIcon({ color }: { color: string }) {
   return (
     <Svg width={10} height={10} viewBox="0 0 10 10" fill="none">
@@ -50,23 +58,46 @@ function GroupIcon({ color }: { color: string }) {
   );
 }
 
-// Sort + group controls — bottom-sheet menus to avoid action-bar clipping.
+// Sort + group controls — popover menus anchored to each button.
 export function TaskListControls({
   sortMode, groupMode, onSortChange, onGroupChange,
 }: Props) {
   const c = useColors();
   const [open, setOpen] = useState<null | "sort" | "group">(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
+  const sortRef = useRef<View>(null);
+  const groupRef = useRef<View>(null);
 
   const sortActive = sortMode !== "due";
   const groupActive = groupMode !== "none";
   const sortTint = sortActive ? c.activeHighlight : c.fgSubtle;
   const groupTint = groupActive ? c.activeHighlight : c.fgSubtle;
 
+  function openMenu(which: "sort" | "group") {
+    const ref = which === "sort" ? sortRef : groupRef;
+    ref.current?.measureInWindow((x, y, w) => {
+      setAnchor({ x, y, w });
+      setOpen(which);
+    });
+  }
+
+  const items = open === "sort" ? SORT_OPTIONS : GROUP_OPTIONS;
+  const menuH = MENU_HEADER_H + items.length * MENU_ITEM_H;
+  // Right-align the menu to the button so it never clips off-screen on the right,
+  // and stay 6px inside the viewport on the left.
+  const screenW = Dimensions.get("window").width;
+  const rawRight = anchor ? screenW - (anchor.x + anchor.w) : 0;
+  const right = Math.max(6, rawRight);
+  // Sit just above the button; flip downward if there isn't room (e.g. top of screen).
+  const screenH = Dimensions.get("window").height;
+  const bottom = anchor ? screenH - anchor.y + MENU_GAP_FROM_BUTTON : 0;
+
   return (
     <>
       <View style={styles.row}>
         <Pressable
-          onPress={() => setOpen("sort")}
+          ref={sortRef}
+          onPress={() => openMenu("sort")}
           style={({ pressed }) => [
             styles.pill,
             {
@@ -79,7 +110,8 @@ export function TaskListControls({
           <SortIcon color={sortTint} />
         </Pressable>
         <Pressable
-          onPress={() => setOpen("group")}
+          ref={groupRef}
+          onPress={() => openMenu("group")}
           style={({ pressed }) => [
             styles.pill,
             {
@@ -100,80 +132,88 @@ export function TaskListControls({
         onRequestClose={() => setOpen(null)}
       >
         <Pressable style={styles.backdrop} onPress={() => setOpen(null)}>
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
-            style={[
-              styles.menu,
-              { backgroundColor: c.surface, borderTopColor: c.border },
-            ]}
-          >
-            <View style={styles.menuHeader}>
-              <ThemedText
-                style={{
-                  fontSize: 9,
-                  color: c.fgSubtle,
-                  letterSpacing: 1.4,
-                  textTransform: "uppercase",
-                  fontWeight: "600",
-                }}
-              >
-                {open === "sort" ? "Sort by" : "Group by"}
-              </ThemedText>
-            </View>
-            {(open === "sort" ? SORT_OPTIONS : GROUP_OPTIONS).map(([value, label]) => {
-              const isActive =
-                open === "sort" ? sortMode === value : groupMode === value;
-              return (
-                <Pressable
-                  key={value}
-                  onPress={() => {
-                    if (open === "sort") onSortChange(value as SortMode);
-                    else onGroupChange(value as GroupMode);
-                    setOpen(null);
+          {anchor ? (
+            <Pressable
+              onPress={(e) => e.stopPropagation?.()}
+              style={[
+                styles.menu,
+                {
+                  width: MENU_WIDTH,
+                  right,
+                  bottom,
+                  backgroundColor: c.surface,
+                  borderColor: c.border,
+                },
+              ]}
+            >
+              <View style={styles.menuHeader}>
+                <ThemedText
+                  style={{
+                    fontSize: 9,
+                    color: c.fgSubtle,
+                    letterSpacing: 1.4,
+                    textTransform: "uppercase",
+                    fontWeight: "600",
                   }}
-                  style={({ pressed }) => [
-                    styles.menuItem,
-                    { backgroundColor: pressed ? c.surfaceHover : "transparent" },
-                  ]}
                 >
-                  <View
-                    style={[
-                      styles.dot,
-                      { backgroundColor: isActive ? c.activeHighlight : c.borderHairline },
-                    ]}
-                  />
-                  <ThemedText
-                    style={{
-                      fontSize: 11,
-                      color: isActive ? c.activeHighlight : c.fgMuted,
-                      letterSpacing: 1.4,
-                      textTransform: "uppercase",
+                  {open === "sort" ? "Sort by" : "Group by"}
+                </ThemedText>
+              </View>
+              {items.map(([value, label]) => {
+                const isActive =
+                  open === "sort" ? sortMode === value : groupMode === value;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => {
+                      if (open === "sort") onSortChange(value as SortMode);
+                      else onGroupChange(value as GroupMode);
+                      setOpen(null);
                     }}
+                    style={({ pressed }) => [
+                      styles.menuItem,
+                      { backgroundColor: pressed ? c.surfaceHover : "transparent" },
+                    ]}
                   >
-                    {label}
-                  </ThemedText>
-                  {isActive ? (
-                    <Svg
-                      width={10}
-                      height={7}
-                      viewBox="0 0 8 6"
-                      fill="none"
-                      style={{ marginLeft: "auto" }}
+                    <View
+                      style={[
+                        styles.dot,
+                        { backgroundColor: isActive ? c.activeHighlight : c.borderHairline },
+                      ]}
+                    />
+                    <ThemedText
+                      style={{
+                        fontSize: 11,
+                        color: isActive ? c.activeHighlight : c.fgMuted,
+                        letterSpacing: 1,
+                        textTransform: "uppercase",
+                      }}
                     >
-                      <Polyline
-                        points="1,3 3,5 7,1"
-                        stroke={c.activeHighlight}
-                        strokeWidth={1.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      {label}
+                    </ThemedText>
+                    {isActive ? (
+                      <Svg
+                        width={10}
+                        height={7}
+                        viewBox="0 0 8 6"
                         fill="none"
-                      />
-                    </Svg>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </Pressable>
+                        style={{ marginLeft: "auto" }}
+                      >
+                        <Polyline
+                          points="1,3 3,5 7,1"
+                          stroke={c.activeHighlight}
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </Pressable>
+          ) : null}
         </Pressable>
       </Modal>
     </>
@@ -193,24 +233,31 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "flex-end",
+    backgroundColor: "transparent",
   },
   menu: {
-    borderTopWidth: 1,
-    paddingBottom: 32,
+    position: "absolute",
+    borderWidth: 1,
+    borderRadius: 6,
+    overflow: "hidden",
+    // Subtle elevation so the popover lifts off the action bar.
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
   menuHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: 6,
   },
   menuItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    height: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
   dot: {
     width: 6,

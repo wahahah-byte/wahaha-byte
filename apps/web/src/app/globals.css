@@ -271,6 +271,14 @@ textarea::placeholder {
   background: var(--color-bg);
 }
 
+/* Checked-in rows: mute foreground cells (text, badges, dots, checkboxes)
+   while leaving the row background and shading untouched. The opacity is
+   applied to grid children rather than the row itself so the background
+   colour reads as-is. */
+.task-row-inner.task-row-checked-in > * {
+  opacity: 0.5;
+}
+
 .task-row-wrapper.task-row-phantom {
   position: relative;
   height: 18px !important;

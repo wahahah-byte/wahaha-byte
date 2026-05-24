@@ -316,17 +316,24 @@ function Recurring() {
       }
     }
     if (current.tasks.length > 0 || current.sep !== null) chunks.push(current);
+    // Drop empty group chunks and suppress labels whose tasks are all checked-in this cycle.
+    // The "Checked In" separator is preserved (its tasks define it).
+    const visibleChunks = chunks.filter((c) => c.tasks.length > 0);
     return (
       <div>
-        {chunks.map((chunk, idx) => (
+        {visibleChunks.map((chunk, idx) => {
+          const isCheckedInSep = chunk.sep?.sepKey === "__sep-checked-in";
+          const hideLabel = !isCheckedInSep && chunk.tasks.every((t) => isCheckedInThisCycle(t));
+          const showLabel = !!chunk.sep && !hideLabel;
+          return (
           <div
             key={chunk.sep?.sepKey ?? `__chunk-${idx}`}
             style={{
-              position: chunk.sep ? "relative" : undefined,
+              position: showLabel ? "relative" : undefined,
               marginTop: chunk.sep ? (idx > 0 ? "14px" : "10px") : undefined,
             }}
           >
-            {chunk.sep && (
+            {showLabel && (
               <span
                 className="tracking-widest uppercase text-[9px]"
                 style={{
@@ -340,7 +347,7 @@ function Recurring() {
                   zIndex: 1,
                 }}
               >
-                {chunk.sep.label}
+                {chunk.sep!.label}
               </span>
             )}
             {chunk.tasks.length > 0 && (
@@ -382,7 +389,8 @@ function Recurring() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   }

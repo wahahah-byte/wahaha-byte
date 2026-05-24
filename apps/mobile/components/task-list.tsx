@@ -764,11 +764,21 @@ export function TaskList({
     const uncompChunks = hasComp ? chunks.slice(0, compIdx) : chunks;
     const activeCount = uncompChunks.reduce((s, c) => s + c.tasks.length, 0);
     const visibleChunks = showCollapse && uncompletedCollapsed ? chunks.slice(compIdx) : chunks;
-    const mapped = visibleChunks.map((ch, i) => ({
-      key: ch.sep?.sepKey ?? `__nosep-${i}`,
-      label: ch.sep?.label ?? "",
-      data: ch.tasks,
-    }));
+    // Drop empty group chunks and suppress labels whose tasks are all checked-in this cycle.
+    // The "Completed" and "Checked In" separators are preserved (their tasks define them).
+    const isStructuralSep = (key: string | undefined) =>
+      key === "__sep-completed" || key === "__sep-checked-in";
+    const mapped = visibleChunks
+      .filter((ch) => ch.tasks.length > 0)
+      .map((ch, i) => {
+        const allCheckedIn = ch.tasks.every((t) => isCheckedInThisCycle(t));
+        const hideLabel = allCheckedIn && !isStructuralSep(ch.sep?.sepKey);
+        return {
+          key: ch.sep?.sepKey ?? `__nosep-${i}`,
+          label: hideLabel ? "" : (ch.sep?.label ?? ""),
+          data: ch.tasks,
+        };
+      });
     return { sections: mapped, showCollapse, activeCount };
   }, [tasks, activeFilter, groupMode, sortMode, preFilter, splitCheckedIn, submittedTaskIds, uncompletedCollapsed, recentCheckinTs]);
 
@@ -996,11 +1006,13 @@ function TaskRowImpl({
 
   const borderLeftColor = isInProgress
     ? c.activeHighlight
-    : wasCheckedInToday
-      ? c.secondaryAccent
-      : overdueRecurring
-        ? c.danger
-        : "transparent";
+    : overdueRecurring
+      ? c.danger
+      : "transparent";
+  // Checked-in rows: mute foreground content (text/badges/checkboxes) without
+  // touching the row background. Opacity is applied per-cell, not on the row.
+  const checkedInMute = wasCheckedInToday && !isInProgress;
+  const cellOpacity = checkedInMute ? 0.55 : 1;
 
   const canCheckInThisCycle =
     item.isRecurring &&
@@ -1171,7 +1183,7 @@ function TaskRowImpl({
           <CheckInBurstEffect active={burstActive} />
           {/* Bank-stamp underline + "+N" popup on submit. */}
           <BankBurstEffect active={bankActive} amount={item.pointValue} />
-          <View style={styles.rowLeft}>
+          <View style={[styles.rowLeft, { opacity: cellOpacity }]}>
             {isSelectable ? (
               // Visual-only — row's onTap toggles selection.
               <View
@@ -1227,7 +1239,7 @@ function TaskRowImpl({
                     <Svg width={10} height={8} viewBox="0 0 12 9" fill="none">
                       <Polyline
                         points="1.5,4.5 4.5,7.5 10.5,1.5"
-                        stroke={c.secondaryAccent}
+                        stroke={c.fgMuted}
                         strokeWidth={2}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1310,7 +1322,7 @@ function TaskRowImpl({
               </View>
             </View>
           </View>
-          <View style={styles.pointsCol}>
+          <View style={[styles.pointsCol, { opacity: cellOpacity }]}>
             <CoinIcon overdue={overdueRow} />
             <ThemedText style={{
               fontSize: 12,
@@ -1321,7 +1333,7 @@ function TaskRowImpl({
               {item.pointValue.toLocaleString()}
             </ThemedText>
           </View>
-          <View style={styles.dateCol}>
+          <View style={[styles.dateCol, { opacity: cellOpacity }]}>
             {/* Overdue cue is the date colour going red. */}
             <ThemedText style={{
               fontSize: 12,

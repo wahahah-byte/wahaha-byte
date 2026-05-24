@@ -9,7 +9,6 @@ import { PRIORITY_DOT, CATEGORY_COLOR } from "@/lib/constants";
 import { CategoryIcon } from "@/lib/categoryIcons";
 import BankBurstEffect from "@/components/BankBurstEffect";
 import CheckInBurstEffect from "@/components/CheckInBurstEffect";
-import { currentStreakTier } from "@/components/TierUpBanner";
 import { useTheme } from "@/context/ThemeContext";
 
 // iOS-style rubber-band damping mapping |x| asymptotically to RUBBER_C.
@@ -563,6 +562,7 @@ function TaskRowImpl({
         className={[
           "task-row-inner grid items-center pl-3 sm:pl-4 pr-0",
           isGreyedOut || wasCheckedInToday ? "greyed" : "",
+          (wasCheckedInToday || cycleClosed) ? "task-row-checked-in" : "",
         ].filter(Boolean).join(" ")}
         onClick={handleRowClick}
         style={{
@@ -573,11 +573,9 @@ function TaskRowImpl({
             ? "2px solid var(--color-active-highlight)"
             : canUndo
               ? "2px solid rgba(245,158,11,0.7)"
-              : wasCheckedInToday
-                ? "2px solid var(--color-active-highlight-alt)"
-                : overdueRecurring
-                  ? "2px solid rgba(239,68,68,0.55)"
-                  : undefined,
+              : overdueRecurring
+                ? "2px solid rgba(239,68,68,0.55)"
+                : undefined,
           background: isCompleted && !canUndo ? "var(--color-bg)" : undefined,
           cursor: "pointer",
         }}
@@ -621,23 +619,17 @@ function TaskRowImpl({
               }
               if (isActionable) onCheckIn(task);
             };
-            // Mirrors apps/mobile checkinBox: 14x14, no fill, priority-coloured border + check.
-            // Tier-coloured check: streak colour replaces priority on the check polyline; brighter/glow at higher tiers.
-            const tier = currentStreakTier(task.currentStreakCount ?? 0);
-            const accent = "var(--color-active-highlight-alt)";
-            const checkStroke = tier ? accent : dot;
-            const checkWidth = !tier ? 2 : tier.tier >= 4 ? 2.5 : tier.tier === 3 ? 2.25 : 2;
-            const checkFilter = !tier ? undefined
-              : tier.tier >= 4 ? `drop-shadow(0 0 2.5px ${accent}) drop-shadow(0 0 4px ${accent})`
-              : tier.tier === 3 ? `drop-shadow(0 0 1.5px ${accent})`
-              : undefined;
+            // Mirrors apps/mobile checkinBox: 14x14, no fill, priority-coloured border + muted check.
+            const checkStroke = "var(--color-fg-muted)";
+            const checkWidth = 2;
+            const checkFilter: string | undefined = undefined;
             const box = (
               <button
                 onClick={isInteractive ? onBoxClick : (e) => e.stopPropagation()}
                 disabled={!isInteractive}
                 aria-label={label}
                 aria-pressed={filledThisCycle}
-                title={tier ? `${label} · ${tier.label} · streak ${task.currentStreakCount ?? 0}` : label}
+                title={label}
                 className="flex-shrink-0"
                 style={{
                   width: 14, height: 14,
