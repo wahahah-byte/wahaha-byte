@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api/auth";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,10 +14,18 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Read from FormData so Firefox/Chrome autofill values are picked up even
+    // when the browser populates inputs without firing React's onChange.
+    const fd = new FormData(e.currentTarget);
+    const submittedEmail = String(fd.get("email") ?? "").trim();
+    const submittedPassword = String(fd.get("password") ?? "");
     setError(null);
     setLoading(true);
 
-    const { data, error } = await authApi.login({ email, password });
+    const { data, error } = await authApi.login({
+      email: submittedEmail,
+      password: submittedPassword,
+    });
 
     setLoading(false);
 
@@ -53,6 +62,7 @@ export default function LoginPage() {
               </label>
               <input
                 type="email"
+                name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -76,6 +86,7 @@ export default function LoginPage() {
               </div>
               <input
                 type="password"
+                name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -102,9 +113,9 @@ export default function LoginPage() {
 
           <p className="text-sm mt-4" style={{ color: "var(--color-fg-muted)" }}>
             Need an account?{" "}
-            <a href="/register" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>
+            <Link href="/register" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>
               Register
-            </a>
+            </Link>
           </p>
         </div>
       </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { usePoints } from "@/context/PointsContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -22,6 +22,7 @@ const AXIS_DEADZONE = 8;
 
 export default function MobileEdgeDrawer({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     username, profilePictureUrl, balance, unsubmittedPoints, dailySubmitted, recurringSubmittedToday,
     setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday,
@@ -543,7 +544,9 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
                         setAccountMenuOpen(false);
                         setOpen(false);
                         localStorage.removeItem("auth_token");
-                        window.location.replace("/");
+                        // router.replace prepends Next's basePath; window.location.replace("/")
+                        // would exit the app on sub-path deploys (GH Pages).
+                        router.replace("/");
                       }}
                       style={{
                         width: "100%",

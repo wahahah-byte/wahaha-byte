@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { usersApi } from "@/lib/api/users";
 import { usePoints } from "@/context/PointsContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -18,6 +18,7 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
   const [hasToken, setHasToken] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, toggleTheme } = useTheme();
 
   const {
@@ -230,7 +231,9 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   onClick={() => {
                     setMenuOpen(false);
                     localStorage.removeItem("auth_token");
-                    window.location.replace("/");
+                    // router.replace prepends Next's basePath; window.location.replace("/") would
+                    // navigate to the host root and exit the app on sub-path deploys (GH Pages).
+                    router.replace("/");
                   }}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors"
                   style={{ color: "var(--color-fg-muted)", background: "transparent" }}
