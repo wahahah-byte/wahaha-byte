@@ -7,6 +7,7 @@ import { usePoints } from "@/context/PointsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 import ThemeToggle from "@/components/ThemeToggle";
+import Link from "next/link";
 
 interface Props {
   variant?: "header" | "sidebar";
@@ -195,7 +196,7 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                     {theme === "dark" ? "Dark" : "Light"}
                   </span>
                 </button>
-                <a
+                <Link
                   href="/avatar"
                   onClick={() => setMenuOpen(false)}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
@@ -204,8 +205,8 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   Avatar
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/profile"
                   onClick={() => setMenuOpen(false)}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
@@ -214,8 +215,8 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   Profile
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
@@ -224,7 +225,7 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
                   Settings
-                </a>
+                </Link>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
