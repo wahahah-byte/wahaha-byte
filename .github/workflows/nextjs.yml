@@ -80,6 +80,10 @@ jobs:
           # configure-pages exposes the computed base path as an output;
           # re-export here so next.config.ts picks it up at build time.
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # Apps/web/.env.production is gitignored, so the API URL must be
+          # passed in explicitly here for the static build. Not a secret —
+          # the URL ships inside the public JS bundle anyway.
+          NEXT_PUBLIC_API_URL: https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net
         run: npm run web:build
 
       - name: Upload artifact
