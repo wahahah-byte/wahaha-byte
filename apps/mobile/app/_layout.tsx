@@ -12,6 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/context/theme-context';
 import { UndoProvider } from '@/context/undo-context';
 import { MobileEdgeDrawer } from '@/components/mobile-edge-drawer';
+import { SignInTab } from '@/components/sign-in-tab';
 import { useColors } from '@/hooks/use-colors';
 
 export const unstable_settings = {
@@ -163,6 +164,8 @@ function NavigationChrome() {
           <Stack.Screen name="profile" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
+        {/* Floats on top of every screen when unauthed; self-hides on /login + /register. */}
+        <SignInTab />
       </MobileEdgeDrawer>
       <StatusBar style="auto" />
     </NavigationThemeProvider>

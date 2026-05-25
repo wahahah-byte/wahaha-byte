@@ -1,5 +1,8 @@
-# Detects the current LAN IPv4 and updates apps/mobile/.env's EXPO_PUBLIC_API_URL
-# accordingly. Run with:   powershell -File .\scripts\set-api-url.ps1
+# Detects the current LAN IPv4 and updates apps/mobile/.env.local's
+# EXPO_PUBLIC_API_URL accordingly. .env.local is used (not .env) because Expo
+# loads it last in dev mode, so it wins over .env.production and other files —
+# pointing it elsewhere would have no effect.
+# Run with:   powershell -File .\scripts\set-api-url.ps1
 # Optional flags:
 #   -Port 5086       backend port (default 5086)
 #   -Scheme http     http or https (default http)
@@ -33,7 +36,11 @@ if (-not $ip) {
     exit 1
 }
 
-$envPath = Join-Path $PSScriptRoot "..\apps\mobile\.env"
+$envPath = Join-Path $PSScriptRoot "..\apps\mobile\.env.local"
+if (-not (Test-Path $envPath)) {
+    # Create empty .env.local so Resolve-Path succeeds and write-back works on first run.
+    New-Item -ItemType File -Path $envPath | Out-Null
+}
 $envPath = (Resolve-Path $envPath).Path
 $newUrl = "$Scheme`://${ip}:${Port}"
 $newLine = "EXPO_PUBLIC_API_URL=$newUrl"

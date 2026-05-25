@@ -7,6 +7,7 @@ import { useToast } from "@/context/ToastContext";
 import { usePoints } from "@/context/PointsContext";
 import ProfilePictureUpload from "@/components/ProfilePictureUpload";
 import { NavIconShop, NavIconSettings } from "@/components/NavIcons";
+import { useAvatarsEnabled } from "@/hooks/useAvatarsEnabled";
 
 // Discord-style profile extras stored locally until a backend lands.
 // Keyed per-user so multiple accounts on one device stay separate.
@@ -64,6 +65,7 @@ function saveExtras(userId: string, extras: ProfileExtras) {
 export default function ProfilePage() {
   const [isMounted, setIsMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
+  const avatarsEnabled = useAvatarsEnabled();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ProfileExtras>(DEFAULT_EXTRAS);
@@ -456,7 +458,7 @@ export default function ProfilePage() {
           zIndex: 30,
         }}
       >
-        <FooterTab href="/shop" label="Shop" icon={<NavIconShop />} />
+        {avatarsEnabled && <FooterTab href="/shop" label="Shop" icon={<NavIconShop />} />}
         <FooterTab href="/settings" label="Settings" icon={<NavIconSettings />} />
       </nav>
     </main>

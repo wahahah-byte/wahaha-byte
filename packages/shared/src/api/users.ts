@@ -36,6 +36,8 @@ export function createUsersApi(client: ApiClient) {
       client.authedPost<SubmitPointsResponse>("/api/points/submit", { taskIds }),
     deleteProfilePicture: () =>
       client.authedDelete<void>("/api/users/me/profile-picture"),
+    // Permanently deletes the user, their auth row, profile picture, and all owned data.
+    deleteAccount: () => client.authedDelete<void>("/api/users/me"),
   };
 }
 

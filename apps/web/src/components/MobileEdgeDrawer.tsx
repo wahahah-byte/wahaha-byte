@@ -9,6 +9,7 @@ import { usePoints } from "@/context/PointsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { usersApi } from "@/lib/api/users";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
+import { useAvatarsEnabled } from "@/hooks/useAvatarsEnabled";
 
 const ITEMS = [
   { href: "/", label: "To Do" },
@@ -23,9 +24,11 @@ const AXIS_DEADZONE = 8;
 export default function MobileEdgeDrawer({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const avatarsEnabled = useAvatarsEnabled();
   const {
     username, profilePictureUrl, balance, unsubmittedPoints, dailySubmitted, recurringSubmittedToday,
     setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday,
+    resetUserState,
   } = usePoints();
   const { theme, toggleTheme } = useTheme();
   const [hasToken, setHasToken] = useState(false);
@@ -36,7 +39,8 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
     const token = !!localStorage.getItem("auth_token");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasToken(token);
-    if (!token) return;
+    // No token → wipe cached fields so the previous user's avatar/name doesn't survive sign-out.
+    if (!token) { resetUserState(); return; }
     // Drawer hydrates points context on route changes (no AuthHeader on mobile).
     usersApi.getMe().then(({ data }) => {
       if (!data) return;
@@ -46,7 +50,7 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
       setDailySubmitted(data.pointsSubmittedToday ?? 0);
       setRecurringSubmittedToday(data.recurringPointsSubmittedToday ?? 0);
     });
-  }, [pathname, setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday]);
+  }, [pathname, setBalance, setUsername, setProfilePictureUrl, setDailySubmitted, setRecurringSubmittedToday, resetUserState]);
 
   // Close account popup whenever drawer closes.
   useEffect(() => {
@@ -369,67 +373,100 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
               borderTop: "1px solid var(--color-border-soft)",
             }}
           >
-            <button
-              type="button"
-              onClick={() => setAccountMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={accountMenuOpen}
-              aria-label="Account menu"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                overflow: "hidden",
-                background: "#3e3f42",
-                border: "1px solid #555659",
-                color: "#ddd",
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              {profilePictureUrl ? (
-                <Image src={profilePictureUrl} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} unoptimized />
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
-                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
-                </svg>
-              )}
-            </button>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                color: "var(--color-fg)",
-                fontSize: 12,
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {username ?? "Guest"}
-            </span>
-            <Link
-              href="/settings"
-              aria-label="Settings"
-              onClick={() => setOpen(false)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                color: "var(--color-fg-muted)",
-                flexShrink: 0,
-              }}
-            >
-              <SettingsIcon />
-            </Link>
+            {hasToken ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-label="Account menu"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background: "#3e3f42",
+                    border: "1px solid #555659",
+                    color: "#ddd",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  {profilePictureUrl ? (
+                    <Image src={profilePictureUrl} alt="" width={28} height={28} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} unoptimized />
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+                      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+                    </svg>
+                  )}
+                </button>
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    color: "var(--color-fg)",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {username ?? ""}
+                </span>
+                <Link
+                  href="/settings"
+                  aria-label="Settings"
+                  onClick={() => setOpen(false)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 28,
+                    height: 28,
+                    color: "var(--color-fg-muted)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <SettingsIcon />
+                </Link>
+              </>
+            ) : (
+              // Logged-out state: whole row is a Sign In CTA. Profile pic is intentionally hidden
+              // (and previously-cached pic was wiped via resetUserState in the auth effect).
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "4px 0",
+                  color: "var(--color-active-highlight)",
+                  textDecoration: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    fontWeight: 600,
+                  }}
+                >
+                  Sign In
+                </span>
+                <span style={{ fontSize: 14, lineHeight: 1 }} aria-hidden>→</span>
+              </Link>
+            )}
 
             {accountMenuOpen && (
               <>
@@ -479,25 +516,27 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
                       {theme === "dark" ? "Dark" : "Light"}
                     </span>
                   </button>
-                  <Link
-                    href="/avatar"
-                    role="menuitem"
-                    onClick={() => { setAccountMenuOpen(false); setOpen(false); }}
-                    style={{
-                      width: "100%",
-                      display: "block",
-                      padding: "10px 14px",
-                      borderTop: "1px solid var(--color-border-soft)",
-                      color: "var(--color-fg-muted)",
-                      fontSize: 11,
-                      letterSpacing: "0.18em",
-                      textTransform: "uppercase",
-                      fontWeight: 500,
-                      textDecoration: "none",
-                    }}
-                  >
-                    Avatar
-                  </Link>
+                  {avatarsEnabled && (
+                    <Link
+                      href="/avatar"
+                      role="menuitem"
+                      onClick={() => { setAccountMenuOpen(false); setOpen(false); }}
+                      style={{
+                        width: "100%",
+                        display: "block",
+                        padding: "10px 14px",
+                        borderTop: "1px solid var(--color-border-soft)",
+                        color: "var(--color-fg-muted)",
+                        fontSize: 11,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        fontWeight: 500,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Avatar
+                    </Link>
+                  )}
                   <Link
                     href="/profile"
                     role="menuitem"
@@ -544,6 +583,7 @@ export default function MobileEdgeDrawer({ children }: { children: React.ReactNo
                         setAccountMenuOpen(false);
                         setOpen(false);
                         localStorage.removeItem("auth_token");
+                        resetUserState();
                         // router.replace prepends Next's basePath; window.location.replace("/")
                         // would exit the app on sub-path deploys (GH Pages).
                         router.replace("/");

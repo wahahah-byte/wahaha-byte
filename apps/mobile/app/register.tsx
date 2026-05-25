@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -10,11 +10,33 @@ import {
   View,
 } from "react-native";
 import { Link, router } from "expo-router";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
 import { authApi, saveToken } from "@/lib/api";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
+
+// Mirrors server-side MinimumAgeYears in RegisterUserHandler.
+const MIN_AGE_YEARS = 13;
+
+// Format a Date as YYYY-MM-DD in local time (matches the server's DateOnly parse).
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function ageInYears(dob: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < dob.getMonth()
+    || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate());
+  if (beforeBirthday) age--;
+  return age;
+}
 
 // Mobile registration screen — mirrors web /register, lands on home tab.
 export default function RegisterScreen() {
@@ -24,10 +46,21 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  // null until the user picks a date — keeps the placeholder visible.
+  const [dob, setDob] = useState<Date | null>(null);
+  // iOS keeps the picker inline; Android pops a one-shot modal toggled by this flag.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const mismatch = confirm.length > 0 && confirm !== password;
+  // Date 13 years ago — used as the picker's default and as a soft max so users can't pick the future.
+  const today = useMemo(() => new Date(), []);
+
+  function handleDobChange(_event: DateTimePickerEvent, picked?: Date) {
+    if (Platform.OS !== "ios") setPickerOpen(false);
+    if (picked) setDob(picked);
+  }
 
   async function handleSubmit() {
     setError(null);
@@ -43,12 +76,22 @@ export default function RegisterScreen() {
       setError("Password must be at least 8 characters.");
       return;
     }
+    if (!dob) {
+      setError("Please enter your date of birth.");
+      return;
+    }
+    const age = ageInYears(dob);
+    if (age < MIN_AGE_YEARS) {
+      setError(`You must be at least ${MIN_AGE_YEARS} years old to register.`);
+      return;
+    }
     Keyboard.dismiss();
     setLoading(true);
     const res = await authApi.register({
       username: username.trim(),
       email: email.trim(),
       password,
+      dateOfBirth: toIsoDate(dob),
     });
     setLoading(false);
     if (!res.data) {
@@ -143,6 +186,64 @@ export default function RegisterScreen() {
                   },
                 ]}
               />
+            </View>
+
+            <View style={styles.field}>
+              <ThemedText style={[styles.label, { color: c.fgMuted }]}>
+                Date of Birth <ThemedText style={{ color: c.danger }}>*</ThemedText>
+              </ThemedText>
+              {Platform.OS === "ios" ? (
+                <View
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: c.input,
+                      borderColor: c.border,
+                      paddingVertical: 4,
+                      flexDirection: "row",
+                      alignItems: "center",
+                    },
+                  ]}
+                >
+                  <DateTimePicker
+                    value={dob ?? new Date(today.getFullYear() - MIN_AGE_YEARS, today.getMonth(), today.getDate())}
+                    mode="date"
+                    display="default"
+                    maximumDate={today}
+                    onChange={handleDobChange}
+                  />
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => setPickerOpen(true)}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: c.input,
+                        borderColor: c.border,
+                        justifyContent: "center",
+                      },
+                    ]}
+                  >
+                    <ThemedText style={{ color: dob ? c.inputFg : c.fgSubtle, fontSize: 14 }}>
+                      {dob ? toIsoDate(dob) : "Tap to choose"}
+                    </ThemedText>
+                  </Pressable>
+                  {pickerOpen ? (
+                    <DateTimePicker
+                      value={dob ?? new Date(today.getFullYear() - MIN_AGE_YEARS, today.getMonth(), today.getDate())}
+                      mode="date"
+                      display="default"
+                      maximumDate={today}
+                      onChange={handleDobChange}
+                    />
+                  ) : null}
+                </>
+              )}
+              <ThemedText style={{ color: c.fgSubtle, fontSize: 10, letterSpacing: 0.4 }}>
+                You must be at least {MIN_AGE_YEARS} years old to use this service.
+              </ThemedText>
             </View>
 
             <View style={styles.field}>

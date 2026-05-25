@@ -18,6 +18,7 @@ import { GoalStepper } from "@/components/goal-stepper";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
+import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
 import { equippedCache } from "@/lib/equipped-cache";
 
 const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
@@ -109,14 +110,16 @@ export function TaskForm({
   const [error, setError] = useState<string | null>(null);
 
   // Equipped avatar hero at top so fields sit in thumb zone.
+  const avatarsEnabled = useAvatarsEnabled();
   const [equipped, setEquipped] = useState<UserInventoryDto[]>(
     () => equippedCache.read() ?? [],
   );
   useEffect(() => {
+    if (!avatarsEnabled) return;
     const unsubscribe = equippedCache.subscribe(setEquipped);
     equippedCache.revalidate();
     return unsubscribe;
-  }, []);
+  }, [avatarsEnabled]);
 
   // Counter only applies to recurring tasks.
   useEffect(() => {
@@ -176,9 +179,11 @@ export function TaskForm({
       keyboardShouldPersistTaps="always"
       {...(Platform.OS === "ios" ? { automaticallyAdjustKeyboardInsets: true } : {})}
     >
-        <View style={styles.avatarHero}>
-          <ChibiAvatar equipped={equipped} height={140} />
-        </View>
+        {avatarsEnabled ? (
+          <View style={styles.avatarHero}>
+            <ChibiAvatar equipped={equipped} height={140} />
+          </View>
+        ) : null}
 
         <TextInput
           value={title}

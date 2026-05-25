@@ -5,12 +5,30 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/lib/api/auth";
 
+// Mirrors server-side MinimumAgeYears in RegisterUserHandler.
+const MIN_AGE_YEARS = 13;
+
+// Years-old between DOB and today, accounting for whether the birthday has passed this year.
+function ageInYears(dobIso: string): number | null {
+  if (!dobIso) return null;
+  const dob = new Date(`${dobIso}T00:00:00`);
+  if (Number.isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < dob.getMonth()
+    || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate());
+  if (beforeBirthday) age--;
+  return age;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,8 +41,22 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!dateOfBirth) {
+      setError("Please enter your date of birth.");
+      return;
+    }
+    const age = ageInYears(dateOfBirth);
+    if (age == null) {
+      setError("Invalid date of birth.");
+      return;
+    }
+    if (age < MIN_AGE_YEARS) {
+      setError(`You must be at least ${MIN_AGE_YEARS} years old to register.`);
+      return;
+    }
+
     setLoading(true);
-    const { data, error } = await authApi.register({ username, email, password });
+    const { data, error } = await authApi.register({ username, email, password, dateOfBirth });
     setLoading(false);
 
     if (error) {
@@ -107,6 +139,32 @@ export default function RegisterPage() {
                 onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
               />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "var(--color-fg-muted)" }}>
+                Date of Birth <span style={{ color: "var(--color-danger)" }}>*</span>
+              </label>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                required
+                max={new Date().toISOString().slice(0, 10)}
+                className="w-full px-3 py-2.5 text-sm transition-colors focus:outline-none"
+                style={{
+                  background: "var(--color-input)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "3px",
+                  color: "var(--color-input-fg)",
+                  colorScheme: "dark",
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-active-highlight)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
+              />
+              <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px", letterSpacing: "0.04em" }}>
+                You must be at least {MIN_AGE_YEARS} years old to use this service.
+              </span>
             </div>
 
             <div className="flex flex-col gap-1.5">

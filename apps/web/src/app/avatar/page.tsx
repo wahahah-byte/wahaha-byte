@@ -21,6 +21,7 @@ import { useToast } from "@/context/ToastContext";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import AvatarAdminPanel from "@/components/AvatarAdminPanel";
+import SellConfirmModal from "@/components/SellConfirmModal";
 import {
   DndContext,
   PointerSensor,
@@ -437,6 +438,8 @@ export default function AvatarPage() {
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   // Item IDs whose preview PNG 404'd — render PaperIcon placeholder instead.
   const [failedIds, setFailedIds] = useState<Set<number>>(new Set());
+  // Inventory row queued for the sell confirmation modal; null while closed.
+  const [sellTarget, setSellTarget] = useState<UserInventoryDto | null>(null);
   const { setError, setSuccess } = useToast();
   const isDesktop = useDesktopLayout();
   const { cols: gridCols, rows: gridRows } = isDesktop ? GRID_DESKTOP : GRID_MOBILE;
@@ -811,24 +814,28 @@ export default function AvatarPage() {
     }
   }
 
-  // Sell-back: right-click an inventory card → confirm → server refund + remove row.
-  // 50% rate mirrors SellInventoryHandler.SellRefundRatio on the backend.
-  async function onCardSell(inv: UserInventoryDto) {
+  // Sell-back: right-click an inventory card → SellConfirmModal opens; modal's Sell button
+  // runs confirmSell() which hits the server and removes the row. 50% rate mirrors
+  // SellInventoryHandler.SellRefundRatio on the backend.
+  function onCardSell(inv: UserInventoryDto) {
     if (busyIds.has(inv.inventoryId)) return;
+    if (!inv.avatarItem) return;
+    setSellTarget(inv);
+  }
+
+  async function confirmSell() {
+    const inv = sellTarget;
+    if (!inv) return;
     const item = inv.avatarItem;
     if (!item) return;
-    const expectedRefund = Math.floor(item.cost * 0.5);
-    const ok = window.confirm(
-      `Sell "${item.name}" for ${expectedRefund} pts?\n\nThis can't be undone — you'll need to buy it back from the shop.`,
-    );
-    if (!ok) return;
+    if (busyIds.has(inv.inventoryId)) return;
     setBusyIds((prev) => new Set(prev).add(inv.inventoryId));
     try {
       const { data, error } = await avatarApi.sellInventory(inv.inventoryId);
       if (error) { setError(error); return; }
-      // Splice the row out locally; chibi re-renders without it (and its slot frees up).
       setInventory((prev) => prev.filter((row) => row.inventoryId !== inv.inventoryId));
       clearEquippedAvatarCache();
+      setSellTarget(null);
       if (data) {
         setSuccess(`Sold "${item.name}" for ${data.refundedPoints} pts (new balance: ${data.newBalance}).`);
       }
@@ -1031,6 +1038,13 @@ export default function AvatarPage() {
           />
         )}
       </div>
+      <SellConfirmModal
+        inv={sellTarget}
+        refundPoints={sellTarget?.avatarItem ? Math.floor(sellTarget.avatarItem.cost * 0.5) : 0}
+        busy={sellTarget ? busyIds.has(sellTarget.inventoryId) : false}
+        onSell={confirmSell}
+        onCancel={() => { if (!sellTarget || !busyIds.has(sellTarget.inventoryId)) setSellTarget(null); }}
+      />
     </main>
   );
 }

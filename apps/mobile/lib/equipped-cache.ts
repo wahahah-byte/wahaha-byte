@@ -48,4 +48,9 @@ export const equippedCache = {
     cached = next;
     notify(next);
   },
+  // Wipe the cache (e.g. on sign-out so a re-login can't render the previous user's avatar).
+  clear(): void {
+    cached = null;
+    notify([]);
+  },
 };

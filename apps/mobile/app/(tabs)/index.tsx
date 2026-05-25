@@ -11,6 +11,7 @@ import {
 } from "@wahaha/shared";
 
 import { getToken, usersApi } from "@/lib/api";
+import { taskEvents } from "@/lib/task-events";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { CapWarningModal } from "@/components/cap-warning-modal";
 import { DemoModeBanner } from "@/components/demo-mode-banner";
@@ -68,12 +69,20 @@ export default function TasksScreen() {
 
   const fetchProfile = useCallback(async () => {
     const tk = await getToken();
-    if (!tk) return;
+    if (!tk) { setMe(null); return; }
     const res = await usersApi.getMe();
     if (res.data) setMe(res.data);
   }, []);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile, refreshKey]);
+
+  // signOut() emits a refresh — bump refreshKey so fetchProfile + TaskList re-run and
+  // discover the missing token, clearing their state.
+  useEffect(() => {
+    return taskEvents.subscribeRefreshRequested(() => {
+      setRefreshKey((k) => k + 1);
+    });
+  }, []);
 
   const filterCounts = useMemo(() => {
     const c: Record<ActiveFilter, number> = { all: 0, pending: 0, in_progress: 0, completed: 0 };

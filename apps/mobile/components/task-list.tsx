@@ -120,7 +120,7 @@ import {
   type TaskDto,
   type TaskFilterParams,
 } from "@wahaha/shared";
-import { tasksApi } from "@/lib/api";
+import { getToken, tasksApi } from "@/lib/api";
 import { taskCache } from "@/lib/task-cache";
 import { taskEvents } from "@/lib/task-events";
 import { ThemedText } from "@/components/themed-text";
@@ -279,6 +279,14 @@ export function TaskList({
 
   const fetchTasks = useCallback(async () => {
     setError(null);
+    // No token = signed out (or never signed in). Wipe local state so a previous user's
+    // tasks don't linger after sign-out and bail before issuing an auth-only request.
+    const tk = await getToken();
+    if (!tk) {
+      setTasks([]);
+      taskCache.clear();
+      return;
+    }
     const res = await tasksApi.getAll({ pageSize: 50, ...filters });
     if (!res.data) {
       setError(res.error ?? "Failed to load tasks.");

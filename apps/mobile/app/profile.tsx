@@ -19,6 +19,7 @@ import { usersApi } from "@/lib/api";
 import { ProfilePictureUpload } from "@/components/profile-picture-upload";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
+import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
 
 // Discord-style extras persisted locally per-user until a backend lands.
 interface ProfileExtras {
@@ -45,6 +46,7 @@ const storageKey = (userId: string) => `wb-profile-extras:${userId}`;
 export default function ProfileScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const avatarsEnabled = useAvatarsEnabled();
   const [me, setMe] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [extras, setExtras] = useState<ProfileExtras>(DEFAULT_EXTRAS);
@@ -319,12 +321,14 @@ export default function ProfileScreen() {
           },
         ]}
       >
-        <FooterTab
-          label="Shop"
-          icon={<ShopIcon color={c.fgMuted} />}
-          onPress={() => router.push("/shop")}
-          c={c}
-        />
+        {avatarsEnabled ? (
+          <FooterTab
+            label="Shop"
+            icon={<ShopIcon color={c.fgMuted} />}
+            onPress={() => router.push("/shop")}
+            c={c}
+          />
+        ) : null}
         <FooterTab
           label="Settings"
           icon={<SettingsIcon color={c.fgMuted} />}

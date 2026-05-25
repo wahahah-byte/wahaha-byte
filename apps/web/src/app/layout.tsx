@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import HeaderNav from "@/components/HeaderNav";
+import HeaderAuthSlot from "@/components/HeaderAuthSlot";
 import MobileEdgeDrawer from "@/components/MobileEdgeDrawer";
 import CalendarStrip from "@/components/CalendarStrip";
 import { PointsProvider } from "@/context/PointsContext";
@@ -73,6 +74,7 @@ export default function RootLayout({
             </div>
           </div>
 
+          <HeaderAuthSlot />
         </header>
         <CalendarStrip />
         <ToastBanner />

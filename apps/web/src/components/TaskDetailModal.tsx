@@ -13,6 +13,7 @@ import { useQuickLog } from "@/hooks/useQuickLog";
 import SlideToCheckIn from "@/components/SlideToCheckIn";
 import DetailPager from "@/components/DetailPager";
 import ChibiAvatar from "@/components/ChibiAvatar";
+import { useAvatarsEnabled } from "@/hooks/useAvatarsEnabled";
 import QuickLogStepper from "@/components/QuickLogStepper";
 import { buildMockEquipped } from "@/lib/mockAvatar";
 import { useEquippedAvatar } from "@/hooks/useEquippedAvatar";
@@ -146,6 +147,7 @@ export default function TaskDetailModal({
   const chibiEquipped = hasToken
     ? (userEquipped ?? [])
     : buildMockEquipped();
+  const avatarsEnabled = useAvatarsEnabled();
 
   function todayMidnight() {
     const d = new Date();
@@ -768,7 +770,7 @@ export default function TaskDetailModal({
                     key: "stage",
                     content: (
                       <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                        <ChibiAvatar equipped={chibiEquipped} height={192} />
+                        {avatarsEnabled && <ChibiAvatar equipped={chibiEquipped} height={192} />}
                         {task.hasCounter && (() => {
                           // Stepper shows when pending + not checked-in today; else read-only sum.
                           const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;

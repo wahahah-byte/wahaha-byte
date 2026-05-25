@@ -19,10 +19,11 @@ import Animated, {
 import Svg, { Circle, Path, Line, Polyline, Rect } from "react-native-svg";
 
 import { REGULAR_CAP, RECURRING_CAP, type UserProfile } from "@wahaha/shared";
-import { clearToken, getToken, usersApi } from "@/lib/api";
+import { getToken, signOut, usersApi } from "@/lib/api";
 import { useTheme } from "@/context/theme-context";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
+import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
 
 const DRAWER_WIDTH = 220;
 // ~55px drag commits open (0.25 of width).
@@ -45,6 +46,7 @@ interface Props {
 export function MobileEdgeDrawer({ children }: Props) {
   const c = useColors();
   const { theme, toggleTheme } = useTheme();
+  const avatarsEnabled = useAvatarsEnabled();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
@@ -248,42 +250,76 @@ export function MobileEdgeDrawer({ children }: Props) {
               );
             })() : null}
 
-            {/* User row — whole row (avatar + username) is the menu trigger. */}
+            {/* User row — whole row (avatar + username) is the menu trigger when authed,
+                or a Sign In CTA when not. Unauthed state shows no avatar so a previously
+                cached pic can't linger after sign-out (also why signOut() clears caches). */}
             <View style={[styles.userRow, { borderTopColor: c.borderSoft }]}>
-              <Pressable
-                onPress={() => setAccountMenuOpen((v) => !v)}
-                style={({ pressed }) => [
-                  styles.userTrigger,
-                  { backgroundColor: pressed ? c.overlayHover : "transparent" },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Account menu"
-              >
-                <View style={[styles.avatarBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBorder }]}>
-                  {me?.profilePictureUrl ? (
-                    <Image
-                      source={{ uri: me.profilePictureUrl }}
-                      style={{ width: 28, height: 28 }}
-                    />
-                  ) : (
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                      <Circle cx={12} cy={8} r={4} fill={c.fgMuted} opacity={0.8} />
-                      <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill={c.fgMuted} opacity={0.5} />
-                    </Svg>
-                  )}
-                </View>
-                <ThemedText
-                  style={{
-                    flex: 1,
-                    color: c.fg,
-                    fontSize: 12,
-                    fontWeight: "500",
-                  }}
-                  numberOfLines={1}
+              {hasToken ? (
+                <Pressable
+                  onPress={() => setAccountMenuOpen((v) => !v)}
+                  style={({ pressed }) => [
+                    styles.userTrigger,
+                    { backgroundColor: pressed ? c.overlayHover : "transparent" },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Account menu"
                 >
-                  {me?.username ?? "Guest"}
-                </ThemedText>
-              </Pressable>
+                  <View style={[styles.avatarBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBorder }]}>
+                    {me?.profilePictureUrl ? (
+                      <Image
+                        source={{ uri: me.profilePictureUrl }}
+                        style={{ width: 28, height: 28 }}
+                      />
+                    ) : (
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                        <Circle cx={12} cy={8} r={4} fill={c.fgMuted} opacity={0.8} />
+                        <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill={c.fgMuted} opacity={0.5} />
+                      </Svg>
+                    )}
+                  </View>
+                  <ThemedText
+                    style={{
+                      flex: 1,
+                      color: c.fg,
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {me?.username ?? ""}
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => goAndClose("/login")}
+                  style={({ pressed }) => [
+                    styles.userTrigger,
+                    {
+                      backgroundColor: pressed ? c.overlayHover : "transparent",
+                      justifyContent: "space-between",
+                    },
+                  ]}
+                  accessibilityRole="link"
+                  accessibilityLabel="Sign in"
+                >
+                  <ThemedText
+                    style={{
+                      color: c.activeHighlight,
+                      fontSize: 11,
+                      fontWeight: "700",
+                      letterSpacing: 2,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Sign In
+                  </ThemedText>
+                  <ThemedText
+                    style={{ color: c.activeHighlight, fontSize: 14, lineHeight: 14 }}
+                  >
+                    →
+                  </ThemedText>
+                </Pressable>
+              )}
 
               {/* Account menu popover — anchored inside userRow for correct bottom:100%.
                   Wrapper Pressable absorbs taps on popover background so they don't
@@ -308,12 +344,14 @@ export function MobileEdgeDrawer({ children }: Props) {
                       {theme === "dark" ? "Dark" : "Light"}
                     </ThemedText>
                   </Pressable>
-                  <Pressable
-                    style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
-                    onPress={() => goAndClose("/avatar")}
-                  >
-                    <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Avatar</ThemedText>
-                  </Pressable>
+                  {avatarsEnabled ? (
+                    <Pressable
+                      style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
+                      onPress={() => goAndClose("/avatar")}
+                    >
+                      <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Avatar</ThemedText>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
                     onPress={() => goAndClose("/profile")}
@@ -332,8 +370,10 @@ export function MobileEdgeDrawer({ children }: Props) {
                       onPress={async () => {
                         setAccountMenuOpen(false);
                         setOpen(false);
-                        await clearToken();
-                        // Stay in-app after sign-out; home tab prompts re-login.
+                        // signOut wipes the token + caches + emits refresh so live screens
+                        // (TaskList, tabs/index) clear their state instead of holding the
+                        // previous user's data after navigation.
+                        await signOut();
                         router.replace("/");
                       }}
                     >

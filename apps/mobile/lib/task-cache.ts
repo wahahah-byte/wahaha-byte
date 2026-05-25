@@ -21,4 +21,8 @@ export const taskCache = {
   remove(id: string): void {
     tasks.delete(id);
   },
+  // Drop every cached row (e.g. on sign-out, so a re-login can't show the previous user's data).
+  clear(): void {
+    tasks.clear();
+  },
 };

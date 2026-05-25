@@ -7,11 +7,16 @@ import { ChibiAvatar } from "@/components/chibi-avatar";
 import { DetailPager } from "@/components/detail-pager";
 import { HeatmapStrip } from "@/components/heatmap-strip";
 import { StreakDisplay } from "@/components/streak-display";
+import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
 import { equippedCache } from "@/lib/equipped-cache";
 
-// Non-recurring tasks show just the chibi avatar (no stats tab).
+// Non-recurring tasks show just the chibi avatar (no stats tab). When avatars are
+// disabled by user preference, render nothing — caller is responsible for any layout
+// shift since the slot just collapses.
 export function AvatarOnlyHero() {
+  const avatarsEnabled = useAvatarsEnabled();
   const equipped = useEquippedAvatar();
+  if (!avatarsEnabled) return null;
   return (
     <View style={{ height: 232, alignItems: "center", justifyContent: "center" }}>
       <ChibiAvatar equipped={equipped} height={168} />
@@ -29,12 +34,17 @@ export function CounterPanel({
   pendingLog: number;
 }) {
   const cycles = task.recentCycles ?? [];
+  const avatarsEnabled = useAvatarsEnabled();
   const equipped = useEquippedAvatar();
   const rule = task.recurrenceRule ?? "";
 
+  // When avatars are disabled, the stage card centers the streak alone so the
+  // pager still has a usable first tab. For non-recurring tasks (no streak) the
+  // stage card just collapses to an empty centred view — better than removing
+  // the pager entirely and breaking the parent's expected height.
   const stageCard = (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
-      <ChibiAvatar equipped={equipped} height={168} />
+      {avatarsEnabled ? <ChibiAvatar equipped={equipped} height={168} /> : null}
       {task.isRecurring ? (
         <View style={{ width: "78%", maxWidth: 320 }}>
           <StreakDisplay

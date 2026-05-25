@@ -8,6 +8,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { REGULAR_CAP, RECURRING_CAP } from "@/lib/constants";
 import ThemeToggle from "@/components/ThemeToggle";
 import Link from "next/link";
+import { useAvatarsEnabled } from "@/hooks/useAvatarsEnabled";
 
 interface Props {
   variant?: "header" | "sidebar";
@@ -20,17 +21,20 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const avatarsEnabled = useAvatarsEnabled();
 
   const {
     balance, username, profilePictureUrl, unsubmittedPoints, recurringSubmittedToday, dailySubmitted,
     setBalance, setUsername, setProfilePictureUrl, setRecurringSubmittedToday, setDailySubmitted,
+    resetUserState,
   } = usePoints();
 
   useEffect(() => {
     setIsMounted(true);
     const token = !!localStorage.getItem("auth_token");
     setHasToken(token);
-    if (!token) return;
+    // No token → wipe any cached per-user fields so a previous user's avatar/name doesn't linger.
+    if (!token) { resetUserState(); return; }
     usersApi.getMe().then(({ data }) => {
       if (data) {
         setBalance(data.currentBalance);
@@ -42,8 +46,61 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
     });
   }, [pathname]);
 
-  // Theme toggle for pre-mount / unauthed; authed uses dropdown.
-  if (!isMounted || !hasToken) return <ThemeToggle />;
+  // Pre-mount: avoid hydration mismatch by rendering nothing until we know token state.
+  if (!isMounted) return <ThemeToggle />;
+
+  // Unauthed: surface a Sign In CTA. Sidebar variant fills the user row; header variant
+  // returns the button alongside the theme toggle.
+  if (!hasToken) {
+    if (variant === "sidebar") {
+      return (
+        <div className="desktop-sidebar-user" style={{ position: "relative" }}>
+          <Link
+            href="/login"
+            className="desktop-sidebar-user-trigger"
+            style={{
+              flex: 1,
+              color: "var(--color-active-highlight)",
+              textDecoration: "none",
+              fontSize: 11,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>Sign In</span>
+            <span aria-hidden style={{ fontSize: 13, lineHeight: 1 }}>→</span>
+          </Link>
+          <ThemeToggle />
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2 shrink-0">
+        <Link
+          href="/login"
+          className="px-3 py-1.5 transition-colors"
+          style={{
+            color: "var(--color-active-highlight)",
+            background: "var(--color-active-highlight-bg)",
+            border: "1px solid var(--color-active-highlight-border)",
+            borderRadius: 3,
+            fontSize: 10,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          Sign In
+        </Link>
+        <ThemeToggle />
+      </div>
+    );
+  }
 
   const balanceChip = balance !== null && (
     <div className="flex items-center gap-1.5 shrink-0" data-coin-target="balance">
@@ -197,16 +254,18 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                     {theme === "dark" ? "Dark" : "Light"}
                   </span>
                 </button>
-                <Link
-                  href="/avatar"
-                  onClick={() => setMenuOpen(false)}
-                  className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
-                  style={{ color: "var(--color-fg-muted)", background: "transparent", textDecoration: "none" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  Avatar
-                </Link>
+                {avatarsEnabled && (
+                  <Link
+                    href="/avatar"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
+                    style={{ color: "var(--color-fg-muted)", background: "transparent", textDecoration: "none" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    Avatar
+                  </Link>
+                )}
                 <Link
                   href="/profile"
                   onClick={() => setMenuOpen(false)}
@@ -231,6 +290,7 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   onClick={() => {
                     setMenuOpen(false);
                     localStorage.removeItem("auth_token");
+                    resetUserState();
                     // router.replace prepends Next's basePath; window.location.replace("/") would
                     // navigate to the host root and exit the app on sub-path deploys (GH Pages).
                     router.replace("/");

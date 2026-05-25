@@ -4,6 +4,8 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  // ISO date string (YYYY-MM-DD). Server enforces minimum age of 13.
+  dateOfBirth: string;
 }
 
 export interface LoginRequest {
