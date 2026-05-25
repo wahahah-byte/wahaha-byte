@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
@@ -24,12 +25,24 @@ function buildDays(): Date[] {
 
 const WEEKDAY_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short" });
 
+// Routes that intentionally suppress the calendar strip. On mobile, /avatar
+// and /profile aren't tab screens so they never see it anyway — Settings is
+// the only tab that needs the explicit hide.
+const HIDDEN_ROUTES = new Set<string>([
+  "/settings",
+  "/avatar",
+  "/profile",
+]);
+
 export function CalendarStrip() {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   // Compute on mount so the date is correct relative to local timezone.
   const [days, setDays] = useState<Date[] | null>(null);
   useEffect(() => { setDays(buildDays()); }, []);
+
+  if (HIDDEN_ROUTES.has(pathname)) return null;
 
   if (!days) {
     // Reserve space so layout doesn't jump on hydration; keeps the safe-area

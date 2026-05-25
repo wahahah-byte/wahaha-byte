@@ -38,13 +38,33 @@ export function CounterPanel({
   const equipped = useEquippedAvatar();
   const rule = task.recurrenceRule ?? "";
 
-  // When avatars are disabled, the stage card centers the streak alone so the
-  // pager still has a usable first tab. For non-recurring tasks (no streak) the
-  // stage card just collapses to an empty centred view — better than removing
-  // the pager entirely and breaking the parent's expected height.
+  // Avatars disabled: drop the pager entirely. For recurring routines, stack the
+  // streak bar on top of the heatmap (no chibi, no "Stage" tab). The streak stays
+  // because it's informational, not gamified chrome.
+  if (!avatarsEnabled) {
+    return (
+      <View style={{ paddingTop: 4, gap: 10 }}>
+        {task.isRecurring ? (
+          <View style={{ alignSelf: "center", width: "78%", maxWidth: 320 }}>
+            <StreakDisplay
+              currentStreakCount={task.currentStreakCount}
+              longestStreakCount={task.longestStreakCount}
+            />
+          </View>
+        ) : null}
+        <HeatmapStrip
+          rule={rule}
+          hasCounter={task.hasCounter ?? false}
+          cycles={cycles}
+          pendingTodayDelta={task.hasCounter ? pendingLog : 0}
+        />
+      </View>
+    );
+  }
+
   const stageCard = (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
-      {avatarsEnabled ? <ChibiAvatar equipped={equipped} height={168} /> : null}
+      <ChibiAvatar equipped={equipped} height={168} />
       {task.isRecurring ? (
         <View style={{ width: "78%", maxWidth: 320 }}>
           <StreakDisplay

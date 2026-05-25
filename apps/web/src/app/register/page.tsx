@@ -229,6 +229,14 @@ export default function RegisterPage() {
               {loading ? "Creating account…" : "Create Account"}
             </button>
           </form>
+
+          <p className="text-[10px] mt-3 text-center" style={{ color: "var(--color-fg-subtle)", lineHeight: 1.5 }}>
+            By creating an account, you agree to our{" "}
+            <Link href="/privacy" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
 
         <p className="text-center text-xs" style={{ color: "var(--color-fg-subtle)" }}>

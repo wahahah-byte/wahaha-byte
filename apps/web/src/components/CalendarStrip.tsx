@@ -22,13 +22,25 @@ function buildDays(): Date[] {
 
 const WEEKDAY_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short" });
 
+// Routes that intentionally suppress the calendar strip — auth flows + account pages.
+const HIDDEN_ROUTES = new Set<string>([
+  "/login",
+  "/register",
+  "/avatar",
+  "/profile",
+  "/settings",
+]);
+
 export default function CalendarStrip() {
   const pathname = usePathname();
   // Compute on the client to avoid SSR mismatches (timezone, midnight rollover).
   const [days, setDays] = useState<Date[] | null>(null);
   useEffect(() => { setDays(buildDays()); }, []);
 
-  if (pathname === "/login" || pathname === "/register") return null;
+  // Hidden on auth flows and on the account/settings pages — the strip is meant
+  // for task-list screens where today's date matters; settings/profile/avatar
+  // don't need that context up top.
+  if (HIDDEN_ROUTES.has(pathname)) return null;
   if (!days) return null;
 
   const todayKey = days[DAYS_BEFORE].toDateString();

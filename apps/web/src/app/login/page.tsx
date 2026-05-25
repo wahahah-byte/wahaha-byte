@@ -111,6 +111,14 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <p className="text-[10px] mt-3 text-center" style={{ color: "var(--color-fg-subtle)", lineHeight: 1.5 }}>
+            By signing in, you agree to our{" "}
+            <Link href="/privacy" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>
+              Privacy Policy
+            </Link>
+            .
+          </p>
+
           <p className="text-sm mt-4" style={{ color: "var(--color-fg-muted)" }}>
             Need an account?{" "}
             <Link href="/register" className="hover:underline" style={{ color: "var(--color-active-highlight)" }}>

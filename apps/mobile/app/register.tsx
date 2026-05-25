@@ -10,7 +10,12 @@ import {
   View,
 } from "react-native";
 import { Link, router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+
+// Opens the deployed web privacy policy in the device's in-app browser. Single
+// source of truth lives in the Next.js static export.
+const PRIVACY_URL = "https://wahahah-byte.github.io/wahaha-byte/privacy";
 
 import { authApi, saveToken } from "@/lib/api";
 import { ThemedText } from "@/components/themed-text";
@@ -319,6 +324,18 @@ export default function RegisterScreen() {
                 }}
               >
                 {loading ? "Creating account…" : "Create Account"}
+              </ThemedText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}
+              style={{ alignSelf: "center", paddingVertical: 4, marginTop: 6 }}
+              accessibilityRole="link"
+            >
+              <ThemedText style={{ color: c.fgSubtle, fontSize: 10, textAlign: "center", lineHeight: 14 }}>
+                By creating an account, you agree to our{" "}
+                <ThemedText style={{ color: c.activeHighlight, fontSize: 10 }}>Privacy Policy</ThemedText>
+                .
               </ThemedText>
             </Pressable>
           </View>

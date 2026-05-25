@@ -761,52 +761,75 @@ export default function TaskDetailModal({
               </p>
             )}
 
-            {task.isRecurring && (
-              <DetailPager
-                height={236}
-                labels={(task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") ? ["Stage", "Stats"] : ["Stage"]}
-                cards={[
-                  {
-                    key: "stage",
-                    content: (
-                      <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                        {avatarsEnabled && <ChibiAvatar equipped={chibiEquipped} height={192} />}
-                        {task.hasCounter && (() => {
-                          // Stepper shows when pending + not checked-in today; else read-only sum.
-                          const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;
-                          const showStepper = !!onFlushQuickLog && task.status === "pending" && !checkedInToday;
-                          return (
-                            <QuickLogStepper
-                              cycleSum={cycleSumToday}
-                              pendingLog={pendingLog}
-                              showStepper={showStepper}
-                              counterUnit={task.counterUnit}
-                              counterGoal={task.counterGoal}
-                              capAtGoal={task.capLogAtGoal}
-                              onIncrement={handleStepperIncrement}
-                              onDecrement={handleStepperDecrement}
-                            />
-                          );
-                        })()}
-                      </div>
-                    ),
-                  },
-                  ...((task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays") ? [{
-                    key: "stats",
-                    content: (
-                      <div className="flex flex-col gap-3" style={{ overflowY: "auto", flex: 1 }}>
-                        <HeatmapStrip
-                          rule={task.recurrenceRule}
-                          hasCounter={task.hasCounter ?? false}
-                          cycles={heatmapCycles}
-                          pendingTodayDelta={task.hasCounter ? pendingLog : 0}
-                        />
-                      </div>
-                    ),
-                  }] : []),
-                ]}
-              />
-            )}
+            {task.isRecurring && (() => {
+              // Narrow the recurrenceRule down to the heatmap-capable cadences once
+              // so TS keeps the string type through both render paths below.
+              const heatmapRule: "daily" | "weekdays" | null =
+                task.recurrenceRule === "daily" || task.recurrenceRule === "weekdays"
+                  ? task.recurrenceRule
+                  : null;
+              // Avatars disabled: collapse the pager. Routines with a heatmap render just
+              // the HeatmapStrip; other cadences render nothing in this slot.
+              if (!avatarsEnabled) {
+                if (heatmapRule == null) return null;
+                return (
+                  <div className="flex flex-col gap-3">
+                    <HeatmapStrip
+                      rule={heatmapRule}
+                      hasCounter={task.hasCounter ?? false}
+                      cycles={heatmapCycles}
+                      pendingTodayDelta={task.hasCounter ? pendingLog : 0}
+                    />
+                  </div>
+                );
+              }
+              return (
+                <DetailPager
+                  height={236}
+                  labels={heatmapRule ? ["Stage", "Stats"] : ["Stage"]}
+                  cards={[
+                    {
+                      key: "stage",
+                      content: (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                          <ChibiAvatar equipped={chibiEquipped} height={192} />
+                          {task.hasCounter && (() => {
+                            // Stepper shows when pending + not checked-in today; else read-only sum.
+                            const checkedInToday = (task.lastCheckInDate ?? "").split("T")[0] === todayKey;
+                            const showStepper = !!onFlushQuickLog && task.status === "pending" && !checkedInToday;
+                            return (
+                              <QuickLogStepper
+                                cycleSum={cycleSumToday}
+                                pendingLog={pendingLog}
+                                showStepper={showStepper}
+                                counterUnit={task.counterUnit}
+                                counterGoal={task.counterGoal}
+                                capAtGoal={task.capLogAtGoal}
+                                onIncrement={handleStepperIncrement}
+                                onDecrement={handleStepperDecrement}
+                              />
+                            );
+                          })()}
+                        </div>
+                      ),
+                    },
+                    ...(heatmapRule ? [{
+                      key: "stats",
+                      content: (
+                        <div className="flex flex-col gap-3" style={{ overflowY: "auto", flex: 1 }}>
+                          <HeatmapStrip
+                            rule={heatmapRule}
+                            hasCounter={task.hasCounter ?? false}
+                            cycles={heatmapCycles}
+                            pendingTodayDelta={task.hasCounter ? pendingLog : 0}
+                          />
+                        </div>
+                      ),
+                    }] : []),
+                  ]}
+                />
+              );
+            })()}
 
             {isMobile && !inline ? (
               // Self-scrolling subtasks panel on the mobile sheet — long

@@ -9,8 +9,15 @@ import {
   View,
 } from "react-native";
 import { Link, router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 
 import { authApi, saveToken } from "@/lib/api";
+
+// Opens the deployed web privacy policy in the device's in-app browser. Mobile
+// doesn't bundle the policy itself (it's Termly-generated HTML that lives in the
+// Next.js static export); hosting it once on the web and linking from here keeps
+// it editable in one place.
+const PRIVACY_URL = "https://wahahah-byte.github.io/wahaha-byte/privacy";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
@@ -146,6 +153,18 @@ export default function LoginScreen() {
               }}
             >
               {loading ? "Signing in…" : "Log In"}
+            </ThemedText>
+          </Pressable>
+
+          <Pressable
+            onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}
+            style={{ alignSelf: "center", paddingVertical: 4 }}
+            accessibilityRole="link"
+          >
+            <ThemedText style={{ color: c.fgSubtle, fontSize: 10, textAlign: "center", lineHeight: 14 }}>
+              By signing in, you agree to our{" "}
+              <ThemedText style={{ color: c.activeHighlight, fontSize: 10 }}>Privacy Policy</ThemedText>
+              .
             </ThemedText>
           </Pressable>
         </View>
