@@ -14,7 +14,8 @@ interface Props {
   size?: number;
 }
 
-// Mobile profile picture uploader via expo-image-picker → FormData upload.
+// Tap-the-image-to-change profile picture uploader. Borderless circle with an
+// optional Remove action stacked beneath when a picture exists.
 export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }: Props) {
   const c = useColors();
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,6 @@ export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }:
   async function pickAndUpload() {
     if (busy) return;
     setError(null);
-    // Picker prompts on native first time; no-op on web.
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       setError("Photo library access denied.");
@@ -62,19 +62,20 @@ export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }:
   }
 
   return (
-    <View style={styles.row}>
+    <View style={styles.col}>
       <Pressable
         onPress={pickAndUpload}
         disabled={busy}
         accessibilityLabel={profilePictureUrl ? "Change profile picture" : "Upload profile picture"}
         style={({ pressed }) => [
-          styles.avatar,
           {
             width: size,
             height: size,
             borderRadius: size / 2,
-            borderColor: c.borderHairline,
-            backgroundColor: c.input,
+            backgroundColor: profilePictureUrl ? "transparent" : c.input,
+            overflow: "hidden",
+            alignItems: "center",
+            justifyContent: "center",
             opacity: busy ? 0.5 : pressed ? 0.8 : 1,
           },
         ]}
@@ -85,25 +86,17 @@ export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }:
             style={{ width: size, height: size, borderRadius: size / 2 }}
           />
         ) : (
-          <ThemedText
-            style={{ fontSize: size * 0.32, color: c.fgSubtle }}
-          >
+          <ThemedText style={{ fontSize: size * 0.32, color: c.fgSubtle }}>
             +
           </ThemedText>
         )}
       </Pressable>
 
-      <View style={{ gap: 8, alignItems: "flex-start" }}>
+      {profilePictureUrl ? (
         <Pressable
-          onPress={pickAndUpload}
+          onPress={handleRemove}
           disabled={busy}
-          style={({ pressed }) => [
-            styles.btn,
-            {
-              borderColor: c.borderHairline,
-              opacity: busy ? 0.4 : pressed ? 0.7 : 1,
-            },
-          ]}
+          style={({ pressed }) => [{ opacity: busy ? 0.4 : pressed ? 0.6 : 1, paddingVertical: 2, paddingHorizontal: 6 }]}
         >
           <ThemedText
             style={{
@@ -111,56 +104,24 @@ export function ProfilePictureUpload({ profilePictureUrl, onChange, size = 88 }:
               letterSpacing: 1.4,
               textTransform: "uppercase",
               fontWeight: "600",
-              color: c.fgSubtle,
+              color: c.danger,
             }}
           >
-            {busy ? "Uploading…" : profilePictureUrl ? "Change" : "Upload"}
+            {busy ? "…" : "Remove"}
           </ThemedText>
         </Pressable>
-        {profilePictureUrl ? (
-          <Pressable
-            onPress={handleRemove}
-            disabled={busy}
-            style={({ pressed }) => [{ opacity: busy ? 0.4 : pressed ? 0.6 : 1 }]}
-          >
-            <ThemedText
-              style={{
-                fontSize: 10,
-                letterSpacing: 1.4,
-                textTransform: "uppercase",
-                fontWeight: "600",
-                color: c.danger,
-              }}
-            >
-              Remove
-            </ThemedText>
-          </Pressable>
-        ) : null}
-        {error ? (
-          <ThemedText style={{ fontSize: 10, color: c.danger }}>{error}</ThemedText>
-        ) : null}
-      </View>
+      ) : null}
+
+      {error ? (
+        <ThemedText style={{ fontSize: 10, color: c.danger }}>{error}</ThemedText>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
+  col: {
     alignItems: "center",
-    gap: 14,
-  },
-  avatar: {
-    borderWidth: 2,
-    borderStyle: "dashed",
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
+    gap: 6,
   },
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 type Filter = { label: string; shortLabel: string; value: string };
 
@@ -226,7 +225,10 @@ export default function FilterTray({
 
   if (typeof document === "undefined") return null;
 
-  return createPortal(
+  // Rendered inline (not portal'd) so it sits inside the MobileEdgeDrawer's
+  // sliding wrapper — the tray and handle translate with the page when the
+  // nav drawer is revealed, instead of staying glued to the viewport.
+  return (
     <>
       <button
         ref={handleRef}
@@ -385,7 +387,6 @@ export default function FilterTray({
           })}
         </div>
       </div>
-    </>,
-    document.body
+    </>
   );
 }

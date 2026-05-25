@@ -806,7 +806,33 @@ export default function TaskDetailModal({
               />
             )}
 
-            <SubtasksSection task={task} onChange={onSubtasksChange} />
+            {isMobile && !inline ? (
+              // Self-scrolling subtasks panel on the mobile sheet — long
+              // subtask lists no longer push the actions row off-screen.
+              // `--color-surface-deep` has contrast against the modal's
+              // `--color-panel` in both light and dark themes, and a soft
+              // border + inset shadow give it the "nested panel" feel.
+              <div
+                style={{
+                  maxHeight: "38vh",
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                  border: "1px solid var(--color-border-soft)",
+                  borderRadius: 6,
+                  padding: "10px 12px",
+                  background: "var(--color-surface-deep)",
+                  boxShadow: "inset 0 1px 0 rgba(0,0,0,0.06)",
+                }}
+                // Block the sheet-drag handler so swiping inside this panel
+                // scrolls instead of dismissing the sheet.
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+              >
+                <SubtasksSection task={task} onChange={onSubtasksChange} />
+              </div>
+            ) : (
+              <SubtasksSection task={task} onChange={onSubtasksChange} />
+            )}
           </div>
         )}
 

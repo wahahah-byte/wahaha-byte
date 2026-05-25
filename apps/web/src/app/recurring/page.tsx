@@ -10,7 +10,7 @@ import { useLogCounter } from "@/hooks/useLogCounter";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
-import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
+import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
 import { canCheckInNow, isOverdue, sumTodayCycleCounter } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
@@ -464,7 +464,6 @@ function Recurring() {
         ]}
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive /> },
-          ...(!isAuthenticated ? [{ href: "/avatar", label: "Avatar", icon: <NavIconAvatar /> }] : []),
         ]}
         filterGroups={buildSidebarFilterGroups({
           statusTitle: "View",

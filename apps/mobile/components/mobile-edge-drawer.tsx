@@ -32,12 +32,10 @@ const COMMIT_VELOCITY = 600;
 // Bottom region excluded so filter-strip/action-bar gestures aren't hijacked.
 const BOTTOM_EXCLUSION_PX = 96;
 
-const ITEMS: { route: "/" | "/recurring" | "/shop" | "/archive" | "/settings"; label: string }[] = [
+const ITEMS: { route: "/" | "/recurring" | "/archive"; label: string }[] = [
   { route: "/", label: "To Do" },
   { route: "/recurring", label: "Routines" },
-  { route: "/shop", label: "Shop" },
   { route: "/archive", label: "Archive" },
-  { route: "/settings", label: "Settings" },
 ];
 
 interface Props {
@@ -182,18 +180,16 @@ export function MobileEdgeDrawer({ children }: Props) {
             },
           ]}
         >
-          <View style={{ marginTop: "auto" }}>
-            {/* Avatar link only when not signed in. */}
-            {!hasToken ? (
-              <NavRow
-                label="Avatar"
-                active={pathname === "/avatar"}
-                onPress={() => goAndClose("/avatar")}
-                icon={<AvatarIcon color={pathname === "/avatar" ? c.activeHighlight : c.fgMuted} />}
-                c={c}
-              />
-            ) : null}
-
+          {/* Outer Pressable closes the account menu when a tap lands on an
+              empty area of the drawer (e.g. caps block). Nav rows + user
+              trigger + popover items have their own Pressables, so they
+              handle their taps directly without bubbling up. */}
+          <Pressable
+            onPress={() => {
+              if (accountMenuOpen) setAccountMenuOpen(false);
+            }}
+            style={{ marginTop: "auto" }}
+          >
             {ITEMS.map((item) => {
               const active = pathname === item.route;
               return (
@@ -205,9 +201,7 @@ export function MobileEdgeDrawer({ children }: Props) {
                   icon={
                     item.label === "To Do" ? <TasksIcon color={active ? c.activeHighlight : c.fgMuted} />
                     : item.label === "Routines" ? <RecurringIcon color={active ? c.activeHighlight : c.fgMuted} />
-                    : item.label === "Shop" ? <ShopIcon color={active ? c.activeHighlight : c.fgMuted} />
-                    : item.label === "Archive" ? <ArchiveIcon color={active ? c.activeHighlight : c.fgMuted} />
-                    : <SettingsIcon color={active ? c.activeHighlight : c.fgMuted} />
+                    : <ArchiveIcon color={active ? c.activeHighlight : c.fgMuted} />
                   }
                   c={c}
                 />
@@ -254,46 +248,49 @@ export function MobileEdgeDrawer({ children }: Props) {
               );
             })() : null}
 
-            {/* User row */}
+            {/* User row — whole row (avatar + username) is the menu trigger. */}
             <View style={[styles.userRow, { borderTopColor: c.borderSoft }]}>
               <Pressable
                 onPress={() => setAccountMenuOpen((v) => !v)}
-                style={[styles.avatarBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBorder }]}
+                style={({ pressed }) => [
+                  styles.userTrigger,
+                  { backgroundColor: pressed ? c.overlayHover : "transparent" },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Account menu"
               >
-                {me?.profilePictureUrl ? (
-                  <Image
-                    source={{ uri: me.profilePictureUrl }}
-                    style={{ width: 28, height: 28 }}
-                  />
-                ) : (
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Circle cx={12} cy={8} r={4} fill={c.fgMuted} opacity={0.8} />
-                    <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill={c.fgMuted} opacity={0.5} />
-                  </Svg>
-                )}
-              </Pressable>
-              <ThemedText
-                style={{
-                  flex: 1,
-                  color: c.fg,
-                  fontSize: 12,
-                  fontWeight: "500",
-                }}
-                numberOfLines={1}
-              >
-                {me?.username ?? "Guest"}
-              </ThemedText>
-              <Pressable
-                onPress={() => goAndClose("/settings")}
-                hitSlop={8}
-                style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
-              >
-                <SettingsIcon color={c.fgMuted} />
+                <View style={[styles.avatarBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBorder }]}>
+                  {me?.profilePictureUrl ? (
+                    <Image
+                      source={{ uri: me.profilePictureUrl }}
+                      style={{ width: 28, height: 28 }}
+                    />
+                  ) : (
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                      <Circle cx={12} cy={8} r={4} fill={c.fgMuted} opacity={0.8} />
+                      <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill={c.fgMuted} opacity={0.5} />
+                    </Svg>
+                  )}
+                </View>
+                <ThemedText
+                  style={{
+                    flex: 1,
+                    color: c.fg,
+                    fontSize: 12,
+                    fontWeight: "500",
+                  }}
+                  numberOfLines={1}
+                >
+                  {me?.username ?? "Guest"}
+                </ThemedText>
               </Pressable>
 
-              {/* Account menu popover — anchored inside userRow for correct bottom:100%. */}
+              {/* Account menu popover — anchored inside userRow for correct bottom:100%.
+                  Wrapper Pressable absorbs taps on popover background so they don't
+                  bubble to the drawer-level dismiss handler. */}
               {accountMenuOpen ? (
-                <View
+                <Pressable
+                  onPress={() => {}}
                   style={[
                     styles.popover,
                     {
@@ -317,6 +314,18 @@ export function MobileEdgeDrawer({ children }: Props) {
                   >
                     <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Avatar</ThemedText>
                   </Pressable>
+                  <Pressable
+                    style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
+                    onPress={() => goAndClose("/profile")}
+                  >
+                    <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Profile</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
+                    onPress={() => goAndClose("/settings")}
+                  >
+                    <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Settings</ThemedText>
+                  </Pressable>
                   {hasToken ? (
                     <Pressable
                       style={[styles.popoverItem, { borderTopColor: c.borderSoft, borderTopWidth: 1 }]}
@@ -331,10 +340,10 @@ export function MobileEdgeDrawer({ children }: Props) {
                       <ThemedText style={[styles.popoverLabel, { color: c.fgMuted }]}>Sign Out</ThemedText>
                     </Pressable>
                   ) : null}
-                </View>
+                </Pressable>
               ) : null}
             </View>
-          </View>
+          </Pressable>
         </View>
 
         {/* Content layer — slides right to reveal panel beneath. */}
@@ -463,28 +472,12 @@ function RecurringIcon({ color }: { color: string }) {
     </Svg>
   );
 }
-function ShopIcon({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M5 8h14l-1 12H6L5 8Z" />
-      <Path d="M9 8V6a3 3 0 0 1 6 0v2" />
-    </Svg>
-  );
-}
 function ArchiveIcon({ color }: { color: string }) {
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
       <Rect x={3} y={4} width={18} height={4} rx={1} />
       <Path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <Line x1={10} y1={12} x2={14} y2={12} />
-    </Svg>
-  );
-}
-function AvatarIcon({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <Circle cx={12} cy={8} r={4} />
-      <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </Svg>
   );
 }
@@ -531,12 +524,19 @@ const styles = StyleSheet.create({
   capTrack: { width: "100%", height: 3, borderRadius: 999, overflow: "hidden" },
   userRow: {
     position: "relative",
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+  },
+  // Whole-row trigger that opens the account menu — tap anywhere on avatar
+  // or username collapses to a single tap target.
+  userTrigger: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   avatarBtn: {
     width: 28,

@@ -12,7 +12,8 @@ interface Props {
   size?: number;
 }
 
-// Click-or-drop profile picture uploader.
+// Tap-the-image-to-change profile picture uploader. Borderless circle with an
+// optional Remove action stacked beneath when a picture exists.
 export default function ProfilePictureUpload({ profilePictureUrl, onChange, size = 96 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -43,7 +44,7 @@ export default function ProfilePictureUpload({ profilePictureUrl, onChange, size
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -62,13 +63,15 @@ export default function ProfilePictureUpload({ profilePictureUrl, onChange, size
           height: size,
           borderRadius: "50%",
           padding: 0,
-          border: `2px dashed ${dragOver ? "var(--color-active-highlight)" : "var(--color-border-hairline)"}`,
-          background: "var(--color-input)",
+          border: "none",
+          // Subtle accent ring only while a file is being dragged over.
+          outline: dragOver ? "2px solid var(--color-active-highlight)" : "none",
+          outlineOffset: 1,
+          background: profilePictureUrl ? "transparent" : "var(--color-input)",
           overflow: "hidden",
           cursor: busy ? "wait" : "pointer",
           opacity: busy ? 0.5 : 1,
-          position: "relative",
-          transition: "border-color 0.15s",
+          transition: "outline-color 0.15s",
         }}
       >
         {profilePictureUrl ? (
@@ -96,43 +99,25 @@ export default function ProfilePictureUpload({ profilePictureUrl, onChange, size
         )}
       </button>
 
-      <div className="flex flex-col gap-1">
+      {profilePictureUrl && (
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={handleRemove}
           disabled={busy}
           className="text-[10px] tracking-widest uppercase font-semibold cursor-pointer disabled:opacity-40"
           style={{
-            color: "var(--color-fg-subtle)",
+            color: "var(--color-danger)",
             background: "transparent",
-            border: "1px solid var(--color-border-hairline)",
-            borderRadius: 999,
-            padding: "4px 10px",
+            border: "none",
+            padding: "2px 6px",
           }}
         >
-          {busy ? "Uploading…" : profilePictureUrl ? "Change" : "Upload"}
+          {busy ? "…" : "Remove"}
         </button>
-        {profilePictureUrl && (
-          <button
-            type="button"
-            onClick={handleRemove}
-            disabled={busy}
-            className="text-[10px] tracking-widest uppercase font-semibold cursor-pointer disabled:opacity-40"
-            style={{
-              color: "var(--color-danger)",
-              background: "transparent",
-              border: "none",
-              padding: "2px 0",
-              textAlign: "left",
-            }}
-          >
-            Remove
-          </button>
-        )}
-        {error && (
-          <span style={{ color: "var(--color-danger)", fontSize: 10 }}>{error}</span>
-        )}
-      </div>
+      )}
+      {error && (
+        <span style={{ color: "var(--color-danger)", fontSize: 10 }}>{error}</span>
+      )}
 
       <input
         ref={inputRef}

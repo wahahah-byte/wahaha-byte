@@ -160,6 +160,7 @@ function NavigationChrome() {
           />
           <Stack.Screen name="avatar" options={{ title: 'Avatar' }} />
           <Stack.Screen name="shop" options={{ headerShown: false }} />
+          <Stack.Screen name="profile" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
       </MobileEdgeDrawer>

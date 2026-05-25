@@ -20,7 +20,7 @@ const DRAWER_WIDTH = 220;      // wide enough for icon + uppercase label side-by
 const COMMIT_FRACTION = 0.5;   // drag must cross this fraction of DRAWER_WIDTH to commit
 const AXIS_DEADZONE = 8;
 
-export default function MobileEdgeDrawer() {
+export default function MobileEdgeDrawer({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {
     username, profilePictureUrl, balance, unsubmittedPoints, dailySubmitted, recurringSubmittedToday,
@@ -216,39 +216,64 @@ export default function MobileEdgeDrawer() {
     }
   }, [dragX]);
 
-  if (!mounted) return null;
-  // Desktop replaces this with DesktopSidebar.
-  if (isDesktop) return null;
-  if (pathname === "/login" || pathname === "/register") return null;
+  // Render children directly (no drawer chrome) until we know we're on mobile.
+  // Avoids slider/portal mounting during SSR/hydration before matchMedia resolves.
+  if (!mounted || isDesktop || pathname === "/login" || pathname === "/register") {
+    return <>{children}</>;
+  }
 
-  // Drawer left-edge position; interpolated during drag.
+  // Drawer is stationary at left:0 (always behind the slider). The slider's
+  // translateX is what reveals it. drawerX is interpolated during drag.
   const drawerX = dragX !== null ? dragX : (open ? 0 : -DRAWER_WIDTH);
-  const visibleFraction = (drawerX + DRAWER_WIDTH) / DRAWER_WIDTH;
+  // 0 (closed) → DRAWER_WIDTH (open). Drives the page-content slider.
+  const sliderX = drawerX + DRAWER_WIDTH;
+  const visibleFraction = sliderX / DRAWER_WIDTH;
   const isActive = open || dragX !== null;
 
-  return createPortal(
+  return (
     <>
-      {/* Backdrop; tap or swipe-left closes */}
-      {isActive && (
-        <div
-          aria-hidden
-          className="sm:hidden"
-          onClick={() => setOpen(false)}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onTouchCancel={onTouchEnd}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: `rgba(0, 0, 0, ${0.4 * visibleFraction})`,
-            transition: dragX !== null ? "none" : "background 0.22s",
-            zIndex: 39,
-          }}
-        />
-      )}
+      {/* Page content slider — translates right to reveal the drawer beneath.
+          Background is opaque so the drawer doesn't show through transparent
+          parts of the page. */}
+      <div
+        style={{
+          transform: `translateX(${sliderX}px)`,
+          transition: dragX !== null ? "none" : "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
+          minHeight: "100dvh",
+          position: "relative",
+          background: "var(--color-bg)",
+          boxShadow: isActive ? "-2px 0 14px rgba(0, 0, 0, 0.25)" : "none",
+          zIndex: 20,
+          willChange: "transform",
+        }}
+      >
+        {children}
 
-      {/* Drawer panel; footer pinned to bottom via marginTop:auto */}
+        {/* Backdrop inside slider so it slides with the page. Captures taps
+            and the close-by-swipe gesture without covering the drawer area. */}
+        {isActive && (
+          <div
+            aria-hidden
+            onClick={() => setOpen(false)}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={onTouchEnd}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: `rgba(0, 0, 0, ${0.4 * visibleFraction})`,
+              transition: dragX !== null ? "none" : "background 0.22s",
+              zIndex: 100,
+            }}
+          />
+        )}
+      </div>
+
+      {/* Drawer panel rendered via portal so it sits at body level (immune
+          to ancestor transforms) and stays at left:0 regardless of the
+          slider's translateX. */}
+      {createPortal(
       <nav
         aria-label="Page navigation"
         className="sm:hidden"
@@ -260,10 +285,7 @@ export default function MobileEdgeDrawer() {
           width: DRAWER_WIDTH,
           background: "var(--color-header)",
           borderRight: "1px solid var(--color-border-soft)",
-          boxShadow: isActive ? "2px 0 14px rgba(0, 0, 0, 0.25)" : "none",
-          transform: `translateX(${drawerX}px)`,
-          transition: dragX !== null ? "none" : "transform 0.22s cubic-bezier(0.2, 0, 0, 1)",
-          zIndex: 40,
+          zIndex: 10,
           display: "flex",
           flexDirection: "column",
           paddingTop: `calc(12px + env(safe-area-inset-top, 0px))`,
@@ -277,34 +299,6 @@ export default function MobileEdgeDrawer() {
       >
         {/* Footer: nav + points + caps + user identity */}
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column" }}>
-          {!hasToken && (() => {
-            const active = pathname === "/avatar";
-            return (
-              <Link
-                href="/avatar"
-                onClick={() => setOpen(false)}
-                className="flex items-center"
-                style={{
-                  height: 44,
-                  gap: 12,
-                  padding: "0 16px",
-                  color: active ? "var(--color-active-highlight)" : "var(--color-fg-muted)",
-                  background: active ? "var(--color-active-highlight-bg)" : "transparent",
-                  borderLeft: `2px solid ${active ? "var(--color-active-highlight)" : "transparent"}`,
-                  textDecoration: "none",
-                  lineHeight: 1,
-                  transition: "background 0.18s, color 0.18s",
-                }}
-              >
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
-                  <AvatarIcon />
-                </span>
-                <span style={{ fontSize: "11px", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: active ? 600 : 500 }}>
-                  Avatar
-                </span>
-              </Link>
-            );
-          })()}
           {ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -503,6 +497,44 @@ export default function MobileEdgeDrawer() {
                   >
                     Avatar
                   </Link>
+                  <Link
+                    href="/profile"
+                    role="menuitem"
+                    onClick={() => { setAccountMenuOpen(false); setOpen(false); }}
+                    style={{
+                      width: "100%",
+                      display: "block",
+                      padding: "10px 14px",
+                      borderTop: "1px solid var(--color-border-soft)",
+                      color: "var(--color-fg-muted)",
+                      fontSize: 11,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Profile
+                  </Link>
+                  <Link
+                    href="/settings"
+                    role="menuitem"
+                    onClick={() => { setAccountMenuOpen(false); setOpen(false); }}
+                    style={{
+                      width: "100%",
+                      display: "block",
+                      padding: "10px 14px",
+                      borderTop: "1px solid var(--color-border-soft)",
+                      color: "var(--color-fg-muted)",
+                      fontSize: 11,
+                      letterSpacing: "0.18em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Settings
+                  </Link>
                   {hasToken && (
                     <button
                       type="button"
@@ -538,9 +570,10 @@ export default function MobileEdgeDrawer() {
             )}
           </div>
         </div>
-      </nav>
-    </>,
-    document.body
+      </nav>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -570,14 +603,6 @@ function ArchiveIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  );
-}
-function AvatarIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   );
 }

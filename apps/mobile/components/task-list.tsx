@@ -21,7 +21,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
-import { ArchiveIcon, CheckIcon, DeleteIcon, PauseIcon, StartIcon, UnarchiveIcon } from "@/components/action-icons";
+import { ArchiveIcon, CheckIcon, DeleteIcon, PauseIcon, StartIcon, UnarchiveIcon, UndoIcon } from "@/components/action-icons";
 import { BankBurstEffect } from "@/components/bank-burst-effect";
 import { CheckInBurstEffect } from "@/components/checkin-burst-effect";
 import { SLASH_MS, SlashingRow } from "@/components/slashing-row";
@@ -687,6 +687,35 @@ export function TaskList({
     }
   }
 
+  // completed (not submitted/awarded) → in_progress. Mirrors task detail screen.
+  async function handleUndoComplete(task: TaskDto) {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === task.taskId
+          ? { ...t, status: "in_progress", completedAt: undefined }
+          : t
+      )
+    );
+    const res = await tasksApi.update(task.taskId, {
+      taskId: task.taskId,
+      title: task.title,
+      description: task.description ?? undefined,
+      category: task.category,
+      priority: task.priority,
+      status: "in_progress",
+      pointValue: task.pointValue,
+      dueDate: task.dueDate ?? undefined,
+      completedAt: undefined,
+      isRecurring: task.isRecurring,
+      recurrenceRule: task.recurrenceRule ?? undefined,
+      submitted: task.submitted,
+    });
+    if (res.error) {
+      setError(res.error);
+      await fetchTasks();
+    }
+  }
+
   async function handleDelete(task: TaskDto) {
     // No confirm — swipe commitment is enough intent. Snapshot first so undo can restore.
     const snapshot = task;
@@ -870,7 +899,9 @@ export function TaskList({
               onPause={handlePause}
               onArchive={handleArchive}
               onUndoCheckIn={handleUndoCheckIn}
+              onUndoComplete={handleUndoComplete}
               onDelete={handleDelete}
+              submittedTaskIds={submittedTaskIds}
               canActNow={canActNow}
               tryNavigate={tryNavigate}
               refreshTick={refreshTick}
@@ -905,6 +936,8 @@ interface TaskRowProps {
   onArchive: (t: TaskDto) => void;
   onDelete: (t: TaskDto) => void;
   onUndoCheckIn: (t: TaskDto, cycleId: number) => void;
+  onUndoComplete: (t: TaskDto) => void;
+  submittedTaskIds?: Set<string>;
   canActNow: (taskId: string) => boolean;
   tryNavigate: () => boolean;
   refreshTick: number;
@@ -948,6 +981,8 @@ function TaskRowImpl({
   onArchive,
   onDelete,
   onUndoCheckIn,
+  onUndoComplete,
+  submittedTaskIds,
   canActNow,
   tryNavigate,
   refreshTick,
@@ -1059,6 +1094,20 @@ function TaskRowImpl({
   }
   // Archive hidden for recurring; only completed+submitted regulars qualify.
   const isSubmittedForArchive = item.submitted === true || !!item.pointsAwarded;
+  // Undo revert: completed one-off task not yet submitted/awarded.
+  const canUndoComplete =
+    !item.isRecurring &&
+    isCompleted &&
+    !isSubmittedForArchive &&
+    !(submittedTaskIds?.has(item.taskId) ?? false);
+  if (canUndoComplete) {
+    actions.push({
+      key: "undo-complete",
+      icon: <UndoIcon color={c.warning} />,
+      pressBg: c.warningBg,
+      onPress: () => onUndoComplete(item),
+    });
+  }
   if (
     !item.isRecurring &&
     (item.isArchived || (isCompleted && isSubmittedForArchive))

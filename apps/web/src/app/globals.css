@@ -816,6 +816,29 @@ textarea::placeholder {
   flex-shrink: 0;
 }
 
+/* Whole-row trigger that opens the account menu — clicking either the avatar
+   or the username collapses to a single tap target. */
+.desktop-sidebar-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.desktop-sidebar-user-trigger:hover {
+  background: var(--color-overlay-hover, rgba(255, 255, 255, 0.05));
+}
+
 .desktop-sidebar-user-name {
   min-width: 0;
   color: var(--color-fg);

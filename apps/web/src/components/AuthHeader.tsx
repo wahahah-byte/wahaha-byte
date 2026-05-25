@@ -92,37 +92,36 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
     </div>
   );
 
-  const avatarBtn = (
-    <div className="relative shrink-0">
-      <button
-        onClick={() => setMenuOpen((o) => !o)}
-        className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer overflow-hidden"
-        style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd", padding: 0 }}
-        aria-label="Account menu"
-      >
-        {profilePictureUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={profilePictureUrl}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
-          </svg>
-        )}
-      </button>
+  const avatarVisual = (
+    <span
+      className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+      style={{ background: "#3e3f42", border: "1px solid #555659", color: "#ddd" }}
+      aria-hidden
+    >
+      {profilePictureUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={profilePictureUrl}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.8" />
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="currentColor" opacity="0.5" />
+        </svg>
+      )}
+    </span>
+  );
 
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div
-            className={`absolute z-20 min-w-[160px] overflow-hidden ${
-              variant === "sidebar" ? "left-0 bottom-full mb-2" : "right-0 mt-2"
-            }`}
-            style={{
+  const menuPopover = menuOpen && (
+    <>
+      <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+      <div
+        className={`absolute z-20 min-w-[160px] overflow-hidden ${
+          variant === "sidebar" ? "left-0 bottom-full mb-2" : "right-0 mt-2"
+        }`}
+        style={{
                 background: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
                 borderRadius: "4px",
@@ -207,6 +206,16 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
                   Avatar
                 </a>
                 <a
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
+                  style={{ color: "var(--color-fg-muted)", background: "transparent", textDecoration: "none" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Profile
+                </a>
+                <a
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
                   className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase cursor-pointer transition-colors block"
@@ -232,17 +241,41 @@ export default function AuthHeader({ variant = "header" }: Props = {}) {
               </div>
             </div>
           </>
-        )}
+        );
+
+  // Used in the header (top-bar) variant — the avatar circle is the only
+  // trigger and the menu anchors directly under it.
+  const avatarBtn = (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setMenuOpen((o) => !o)}
+        className="cursor-pointer"
+        style={{ background: "transparent", border: "none", padding: 0 }}
+        aria-label="Account menu"
+      >
+        {avatarVisual}
+      </button>
+      {menuPopover}
     </div>
   );
 
   if (variant === "sidebar") {
     return (
-      <div className="desktop-sidebar-user">
-        {avatarBtn}
-        {username && (
-          <span className="desktop-sidebar-user-name">{username}</span>
-        )}
+      <div className="desktop-sidebar-user" style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Account menu"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className="desktop-sidebar-user-trigger"
+        >
+          {avatarVisual}
+          {username && (
+            <span className="desktop-sidebar-user-name">{username}</span>
+          )}
+        </button>
+        {menuPopover}
         {(balanceChip || unsubmittedChip) && (
           <div className="desktop-sidebar-user-points">
             {balanceChip}

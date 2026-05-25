@@ -46,6 +46,7 @@ export default function RootLayout({
         <ThemeProvider>
         <PointsProvider>
         <ToastProvider>
+        <MobileEdgeDrawer>
         <header
           className="flex items-center justify-between px-6"
           style={{
@@ -74,7 +75,7 @@ export default function RootLayout({
         </header>
         <ToastBanner />
         {children}
-        <MobileEdgeDrawer />
+        </MobileEdgeDrawer>
         </ToastProvider>
         </PointsProvider>
         </ThemeProvider>

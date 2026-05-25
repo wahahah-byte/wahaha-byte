@@ -9,7 +9,7 @@ import { MOCK_TASKS } from "@/lib/mockTasks";
 import DesktopShell from "@/components/DesktopShell";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import { useDesktopLayout } from "@/hooks/useDesktopLayout";
-import { NavIconList, NavIconRepeat, NavIconArchive, NavIconAvatar } from "@/components/NavIcons";
+import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 
 const PAGE_SIZE = 25;
 
@@ -247,7 +247,6 @@ export default function ArchivePage() {
         ]}
         footerNavItems={[
           { href: "/archive", label: "Archive", icon: <NavIconArchive />, active: true },
-          ...(!isAuthenticated ? [{ href: "/avatar", label: "Avatar", icon: <NavIconAvatar /> }] : []),
         ]}
       />
     );

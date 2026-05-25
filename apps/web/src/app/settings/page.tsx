@@ -2,30 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usersApi, type UserProfile } from "@/lib/api/users";
-import { useToast } from "@/context/ToastContext";
-import { usePoints } from "@/context/PointsContext";
-import ProfilePictureUpload from "@/components/ProfilePictureUpload";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function SettingsPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { setError } = useToast();
-  const { setProfilePictureUrl } = usePoints();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     setIsMounted(true);
-    const token = !!localStorage.getItem("auth_token");
-    setHasToken(token);
-    if (!token) { setLoading(false); return; }
-    usersApi.getMe().then(({ data, error }) => {
-      setLoading(false);
-      if (error) { setError(error); return; }
-      if (data) setUser(data);
-    });
-  }, [setError]);
+    setHasToken(!!localStorage.getItem("auth_token"));
+  }, []);
 
   if (!isMounted) return null;
 
@@ -72,30 +59,37 @@ export default function SettingsPage() {
           <span style={{ width: 40 }} aria-hidden />
         </header>
 
-        {loading ? (
-          <p style={{ color: "var(--color-fg-subtle)", fontSize: 11 }}>Loading…</p>
-        ) : user ? (
-          <>
-            <Section title="Profile picture">
-              <ProfilePictureUpload
-                profilePictureUrl={user.profilePictureUrl}
-                onChange={(url) => {
-                  setUser((u) => u ? { ...u, profilePictureUrl: url } : u);
-                  // Also push to PointsContext so AuthHeader's avatar updates immediately.
-                  setProfilePictureUrl(url);
-                }}
-                size={96}
-              />
-            </Section>
+        <Section title="Appearance">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center justify-between w-full"
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "var(--color-fg)",
+              fontSize: 12,
+            }}
+          >
+            <span>Theme</span>
+            <span style={{ color: "var(--color-active-highlight)", fontSize: 11, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase" }}>
+              {theme === "dark" ? "Dark" : "Light"}
+            </span>
+          </button>
+        </Section>
 
-            <Section title="Account">
-              <Field label="Username" value={user.username} />
-              <Field label="Email" value={user.email} />
-            </Section>
-          </>
-        ) : (
-          <p style={{ color: "var(--color-danger)", fontSize: 11 }}>Couldn&apos;t load your profile.</p>
-        )}
+        <p style={{ color: "var(--color-fg-subtle)", fontSize: 10, textAlign: "center" }}>
+          Looking for profile customization? Head to{" "}
+          <Link
+            href="/profile"
+            style={{ color: "var(--color-active-highlight)", textDecoration: "underline" }}
+          >
+            your profile
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );
@@ -127,23 +121,5 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {children}
       </div>
     </section>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span
-        style={{
-          color: "var(--color-fg-subtle)",
-          fontSize: 9,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </span>
-      <span style={{ color: "var(--color-fg)", fontSize: 12 }}>{value}</span>
-    </div>
   );
 }
