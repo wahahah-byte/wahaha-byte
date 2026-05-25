@@ -163,19 +163,34 @@ function Recurring() {
     setDetailTask(t);
   }, [beginRestart]);
 
+  // Session-only timestamps of recent check-ins; lets the Checked In section
+  // pin the most-recently-checked-in task to the top BEFORE the server
+  // response lands (when the row is still missing the new cycle in
+  // recentCycles, so latestCheckinTs would otherwise read 0/old).
+  const [recentCheckinTs, setRecentCheckinTs] = useState<Map<string, number>>(new Map());
+  const stampCheckin = useCallback((taskId: string) => {
+    setRecentCheckinTs((prev) => {
+      const next = new Map(prev);
+      next.set(taskId, Date.now());
+      return next;
+    });
+  }, []);
+
   const requestCheckIn = useCallback((t: TaskDto) => {
     if (t.hasCounter) {
       // Skip prompt when goal already met via prior +/- logs.
       const goal = t.counterGoal ?? 0;
       if (goal > 0 && sumTodayCycleCounter(t.recentCycles) >= goal) {
+        stampCheckin(t.taskId);
         handleCheckIn(t);
         return;
       }
       setCounterPromptTask(t);
       return;
     }
+    stampCheckin(t.taskId);
     handleCheckIn(t);
-  }, [handleCheckIn]);
+  }, [handleCheckIn, stampCheckin]);
 
   const { logPromptTask, requestLog, cancelLog, submitLog, flushQuickLog } = useLogCounter({
     isAuthenticated, setTasks, setDetailTask, setError,
@@ -284,11 +299,24 @@ function Recurring() {
         if (isCheckedInThisCycle(t)) checkedIn.push(t);
         else active.push(t);
       }
+      // Most-recently-checked-in tasks pinned to the top of the Checked In
+      // section — the optimistic check-in patch stamps the synthetic cycle
+      // with `createdAt: now`, so freshly-checked tasks bubble up instantly.
+      checkedIn.sort((a, b) => latestCheckinTs(b) - latestCheckinTs(a));
       if (active.length > 0 && checkedIn.length > 0) {
         return [...active, sep("Checked In", "__sep-checked-in"), ...checkedIn];
       }
     }
     return sorted;
+  }
+
+  function latestCheckinTs(t: TaskDto): number {
+    // Session timestamp wins so the row pins to the top instantly, before
+    // the optimistic patch is replaced by the server-returned cycle.
+    const session = recentCheckinTs.get(t.taskId);
+    if (session !== undefined) return session;
+    const latest = t.recentCycles?.find((c) => c.cycleType === "checkin");
+    return latest ? new Date(latest.createdAt).getTime() : 0;
   }
 
   function renderFilterPage(filterValue: string) {
@@ -441,7 +469,7 @@ function Recurring() {
       newTaskInitialRecurring
       counterPromptTask={counterPromptTask}
       onCloseCounterPrompt={() => setCounterPromptTask(null)}
-      onSubmitCounterCheckIn={(t, value) => { setCounterPromptTask(null); handleCheckIn(t, value); }}
+      onSubmitCounterCheckIn={(t, value) => { setCounterPromptTask(null); stampCheckin(t.taskId); handleCheckIn(t, value); }}
       logPromptTask={logPromptTask}
       onCancelLog={cancelLog}
       onSubmitLog={submitLog}

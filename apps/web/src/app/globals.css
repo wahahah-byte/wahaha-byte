@@ -183,12 +183,16 @@ body:has(.desktop-shell) {
 }
 
 /* Constrains the task pages so only the task list scrolls. Shell extends full
-   viewport (minus the 50px auth header) on both viewports — on mobile the bottom
-   UI stack (nav + action bar + filter strip) overlays the shell, and
-   `.has-mobile-bottom-pad` reserves 128px+safe-area of padding-bottom inside the
-   content so the last task row can scroll to just above the strip. */
+   viewport (minus the 50px auth header + 50px calendar strip) on both
+   viewports — on mobile the bottom UI stack (nav + action bar + filter strip)
+   overlays the shell, and `.has-mobile-bottom-pad` reserves 128px+safe-area
+   of padding-bottom inside the content so the last task row can scroll to
+   just above the strip. */
+:root {
+  --calendar-strip-h: 50px;
+}
 .task-page-shell {
-  height: calc(100dvh - 50px);
+  height: calc(100dvh - 50px - var(--calendar-strip-h));
 }
 
 body {
@@ -474,9 +478,10 @@ textarea::placeholder {
        past the fold). minmax(0,1fr) is the standard fix for "make grid items
        respect their inner flex/overflow constraints". */
     grid-template-rows: minmax(0, 1fr);
-    /* Subtract the 50px global <header> in layout.tsx so the bottom-pinned
-       sidebar user strip stays inside the viewport. Mirrors .task-page-shell. */
-    height: calc(100dvh - 50px);
+    /* Subtract the 50px global <header> + calendar strip in layout.tsx so the
+       bottom-pinned sidebar user strip stays inside the viewport. Mirrors
+       .task-page-shell. */
+    height: calc(100dvh - 50px - var(--calendar-strip-h));
     overflow: hidden;
     background: var(--color-bg);
   }

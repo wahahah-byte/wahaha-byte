@@ -150,6 +150,17 @@ export interface SellInventoryResponse {
   newBalance: number;
 }
 
+// Shop purchase wire types. Body is just { autoEquip } — the user being
+// purchased-for is always the caller (resolved from JWT server-side).
+export interface PurchaseAvatarItemInput {
+  autoEquip?: boolean;
+}
+
+export interface PurchaseAvatarItemResponse {
+  inventory: UserInventoryDto;
+  newBalance: number;
+}
+
 // JSON body for register-by-url endpoint — items whose PNG already lives in blob storage.
 export interface AvatarItemRegisterByUrlInput extends AvatarItemRenderHintsInput {
   name: string;
@@ -193,6 +204,15 @@ export const avatarApi = {
     authedGet<PagedResult<UserInventoryDto>>(`/api/UserInventory?pageNumber=${pageNumber}&pageSize=${pageSize}`),
   acquire: (itemId: number, isEquipped = false) =>
     authedPost<UserInventoryDto>(`/api/UserInventory`, { itemId, isEquipped }),
+  // Shop purchase — debits CurrentBalance by item.cost, creates a SPEND
+  // PointTransaction with SourceType=shop_item, and adds the inventory
+  // row (optionally auto-equipping). Server enforces no-duplicates so a
+  // stale client can't double-buy.
+  purchase: (itemId: number, input: PurchaseAvatarItemInput = {}) =>
+    authedPost<PurchaseAvatarItemResponse>(
+      `/api/AvatarItems/${itemId}/purchase`,
+      { autoEquip: input.autoEquip ?? false },
+    ),
   equip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/equip`),
   unequip: (inventoryId: number) => authedPatch<void>(`/api/UserInventory/${inventoryId}/unequip`),
   setPosition: (

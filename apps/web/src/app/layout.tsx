@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import HeaderNav from "@/components/HeaderNav";
 import MobileEdgeDrawer from "@/components/MobileEdgeDrawer";
+import CalendarStrip from "@/components/CalendarStrip";
 import { PointsProvider } from "@/context/PointsContext";
 import { ToastProvider, ToastBanner } from "@/context/ToastContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -73,6 +74,7 @@ export default function RootLayout({
           </div>
 
         </header>
+        <CalendarStrip />
         <ToastBanner />
         {children}
         </MobileEdgeDrawer>

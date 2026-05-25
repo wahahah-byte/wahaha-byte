@@ -56,6 +56,10 @@ export function useTaskActions({
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [pausing, setPausing] = useState<string | null>(null);
   const [slashingId, setSlashingId] = useState<string | null>(null);
+  // Cycle IDs with an undo POST currently in flight — guards against rapid
+  // double-taps that would otherwise fire a second DELETE for an
+  // already-deleted cycle and surface a "cycle not found" error.
+  const undoingCyclesRef = useRef<Set<number>>(new Set());
 
   // 5s undo window after auth-mode check-in; cleared on dismiss/expiry.
   const [undoableCheckIn, setUndoableCheckIn] = useState<{ taskId: string; cycleId: number; taskTitle: string } | null>(null);
@@ -322,6 +326,15 @@ export function useTaskActions({
   });
 
   const handleUndoCheckIn = useEvent(async function handleUndoCheckIn(task: TaskDto, cycleId: number): Promise<UndoCheckInResponse | null> {
+    // In-flight guard — a rapid second tap on the same cycle would otherwise
+    // race and fire a duplicate DELETE that the server rejects with
+    // "cycle not found".
+    if (undoingCyclesRef.current.has(cycleId)) return null;
+    // Snapshot the task BEFORE the optimistic patch so we can roll back if
+    // the server rejects (or any later step throws). We need the original
+    // recentCycles, streak counts, dueDate, lastCheckInDate to restore.
+    const original = tasks.find((t) => t.taskId === task.taskId);
+
     // Demo / unauthenticated: best-effort local rollback without server history.
     if (!isAuthenticated) {
       setTasks((prev) => prev.map((t) => {
@@ -338,37 +351,67 @@ export function useTaskActions({
       }));
       return null;
     }
-    // Optimistic streak decrement; server reconciles below.
-    setTasks((prev) => prev.map((t) => t.taskId === task.taskId
-      ? { ...t, currentStreakCount: Math.max(0, (t.currentStreakCount ?? 0) - 1) }
-      : t));
-    const { data, error } = await tasksApi.undoCheckIn(task.taskId, cycleId);
-    if (error) { setError(error); return null; }
-    setBalance(data!.newBalance);
-    setRecurringSubmittedToday(data!.recurringDailyTotal);
-    if (data!.pointsRefunded > 0) {
-      setDailySubmitted((prev) => Math.max(0, prev - data!.pointsRefunded));
-    }
+
+    undoingCyclesRef.current.add(cycleId);
+    // Optimistic full rollback so the row visually flips out of the
+    // "checked in" state immediately. Removing the cycle from recentCycles
+    // also flips `undoableCycle` to null in TaskRow, so a second tap can't
+    // re-fire the undo.
     setTasks((prev) => prev.map((t) => {
       if (t.taskId !== task.taskId) return t;
       const cycles = (t.recentCycles ?? []).filter((c) => c.cycleId !== cycleId);
-      // Empty string from server = "no prior check-in"; clear local lastCheckInDate.
+      const restoredDueDate = t.dueDate && t.recurrenceRule
+        ? dateKey(getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule))
+        : t.dueDate;
+      return {
+        ...t,
+        recentCycles: cycles,
+        currentStreakCount: Math.max(0, (t.currentStreakCount ?? 0) - 1),
+        dueDate: restoredDueDate,
+        // Best-effort — server's `previousLastCheckInDate` is more accurate
+        // and replaces this once the response lands.
+        lastCheckInDate: null,
+      };
+    }));
+
+    let data: UndoCheckInResponse | null = null;
+    try {
+      const res = await tasksApi.undoCheckIn(task.taskId, cycleId);
+      if (res.error || !res.data) {
+        // Roll the optimistic patch back to the pre-undo snapshot.
+        if (original) setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? original : t));
+        setError(res.error ?? "Undo failed.");
+        return null;
+      }
+      data = res.data;
+    } finally {
+      undoingCyclesRef.current.delete(cycleId);
+    }
+
+    setBalance(data.newBalance);
+    setRecurringSubmittedToday(data.recurringDailyTotal);
+    if (data.pointsRefunded > 0) {
+      setDailySubmitted((prev) => Math.max(0, prev - data.pointsRefunded));
+    }
+    // Reconcile with the server's authoritative numbers + restored
+    // dueDate / lastCheckInDate. Cycle is already removed from the
+    // optimistic patch; just refine the rest.
+    setTasks((prev) => prev.map((t) => {
+      if (t.taskId !== task.taskId) return t;
       const restoredLastCheckIn = data!.previousLastCheckInDate || null;
-      // No PreviousDueDate snapshot? Roll t.dueDate back one period as fallback.
       const restoredDueDate = data!.previousDueDate
         || (t.dueDate && t.recurrenceRule
           ? dateKey(getPrevPeriodStart(parseLocalDate(t.dueDate), t.recurrenceRule))
           : t.dueDate);
       return {
         ...t,
-        recentCycles: cycles,
         currentStreakCount: data!.streakCount,
         longestStreakCount: data!.longestCount,
         dueDate: restoredDueDate,
         lastCheckInDate: restoredLastCheckIn,
       };
     }));
-    return data!;
+    return data;
   });
 
   const handleDeleteLogCycle = useEvent(async function handleDeleteLogCycle(task: TaskDto, cycleId: number) {
