@@ -61,6 +61,8 @@ export function CustomLogModal({
       visible={visible}
       animationType="fade"
       onRequestClose={onCancel}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <KeyboardAvoidingView
