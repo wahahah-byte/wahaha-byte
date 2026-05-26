@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Keyboard, Modal, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
@@ -28,6 +28,7 @@ export function CustomLogModal({
 }: Props) {
   const c = useColors();
   const [text, setText] = useState("");
+  const [kbHeight, setKbHeight] = useState(0);
   const inputRef = useRef<TextInput>(null);
   // Snapshot current total at open time so live updates from background flushes don't clobber the user's input.
   const currentTotalRef = useRef(0);
@@ -40,6 +41,20 @@ export function CustomLogModal({
       return () => clearTimeout(t);
     }
   }, [visible]);
+
+  // Manual keyboard tracking: RN's KeyboardAvoidingView is unreliable inside Modal on Android
+  // because the Modal renders in a separate Dialog window whose softInputMode is independent of
+  // the host activity, so frame measurements don't reflect the resize.
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const digits = text.replace(/[^0-9]/g, "").slice(0, MAX_DIGITS);
   const amount = digits === "" ? 0 : parseInt(digits, 10);
@@ -65,10 +80,7 @@ export function CustomLogModal({
       navigationBarTranslucent
     >
       <Pressable style={styles.backdrop} onPress={onCancel}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.kbWrap}
-        >
+        <View style={[styles.kbWrap, { paddingBottom: 16 + kbHeight }]}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%" }}>
             <View
               style={[
@@ -194,7 +206,7 @@ export function CustomLogModal({
             </View>
             </View>
           </Pressable>
-        </KeyboardAvoidingView>
+        </View>
       </Pressable>
     </Modal>
   );
