@@ -1,0 +1,96 @@
+# Publish Expo OTA updates for the mobile app (apps/mobile) via EAS Update.
+#
+# Triggers:
+# - push to main         → channel `preview`   (everyday JS changes flow here)
+# - push of a v* tag     → channel `production`(release; cut by tagging)
+# - manual workflow_dispatch with a channel input (escape hatch / hotfix)
+#
+# OTA only: this does not run `eas build`. Anything that needs a fresh native
+# binary (new native module, version bump, etc.) still needs a manual
+# `eas build` + store submission. JS/asset changes within the current
+# runtimeVersion ride out automatically.
+#
+# Required secret: EXPO_TOKEN (Settings → Secrets and variables → Actions),
+# generated at https://expo.dev/accounts/wahahah/settings/access-tokens.
+
+name: Publish Expo OTA update
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+    # Only fire on commits that actually affect the mobile bundle —
+    # avoids burning an update on web-only or top-level doc commits.
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/mobile-update.yml"
+
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "EAS Update channel to publish to"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - production
+          - development
+
+# Per-ref serialization: a newer main push supersedes an in-flight one, but
+# tag pushes (releases) are never cancelled mid-publish.
+concurrency:
+  group: mobile-update-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # EAS Update embeds the git commit metadata in the published
+          # update. A shallow clone (the default) makes that lookup fail.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # Workspace-aware caching — key off the root lockfile that npm
+          # workspaces actually use. Matches nextjs.yml.
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve channel
+        id: channel
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "name=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=preview" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish EAS Update
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # EXPO_PUBLIC_* vars are inlined into the JS bundle at update
+          # time. The env blocks in eas.json only apply to `eas build`, not
+          # `eas update`, so the API URL has to be set here. Not a secret —
+          # it ships inside the public JS bundle anyway.
+          EXPO_PUBLIC_API_URL: https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net
+        run: |
+          npx eas-cli@latest update \
+            --non-interactive \
+            --channel "${{ steps.channel.outputs.name }}" \
+            --message "${GITHUB_SHA::7}: $(git log -1 --pretty=%s)"
