@@ -84,13 +84,11 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          # EXPO_PUBLIC_* vars are inlined into the JS bundle at update
-          # time. The env blocks in eas.json only apply to `eas build`, not
-          # `eas update`, so the API URL has to be set here. Not a secret —
-          # it ships inside the public JS bundle anyway.
           EXPO_PUBLIC_API_URL: https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net
         run: |
+          MSG="$(git log -1 --pretty=%s)"
           npx eas-cli@latest update \
             --non-interactive \
             --channel "${{ steps.channel.outputs.name }}" \
-            --message "${GITHUB_SHA::7}: $(git log -1 --pretty=%s)"
+            --message "${GITHUB_SHA::7}: ${MSG}"
+                
