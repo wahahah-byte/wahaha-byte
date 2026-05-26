@@ -7,21 +7,24 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-       "env": {
-          "EXPO_PUBLIC_API_URL": "http://192.168.5.219:5086"
-        }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.5.219:5086"
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "env": {
-          "EXPO_PUBLIC_API_URL": "https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net"
-        }
+        "EXPO_PUBLIC_API_URL": "https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net"
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
-       "env": {
-          "EXPO_PUBLIC_API_URL": "https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net"
-        }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://wahaha-api-bucze3dcfqc7ekab.eastus-01.azurewebsites.net"
+      },
+      "channel": "production"
     }
   },
   "submit": {

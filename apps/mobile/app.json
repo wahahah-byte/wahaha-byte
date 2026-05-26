@@ -56,6 +56,12 @@
         "projectId": "d0fbe5f6-38e6-46bf-ba50-e2f850183b18"
       }
     },
-    "owner": "wahahah"
+    "owner": "wahahah",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d0fbe5f6-38e6-46bf-ba50-e2f850183b18"
+    }
   }
 }
