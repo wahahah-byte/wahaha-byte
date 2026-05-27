@@ -140,6 +140,18 @@ export default function NewTaskScreen() {
   }, [pointOptions, pointValue, isRecurring]);
 
   const titleRef = useRef<TextInput>(null);
+  // While the date picker is opening / open / closing, force-disable the soft
+  // keyboard on every TextInput so RN's auto-restore on Modal unmount can't
+  // produce a visible keyboard flash. We bring it back via an explicit focus
+  // after the suppression window ends (see useEffect below).
+  const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
+  const refocusAfterPickerRef = useRef(false);
+  useEffect(() => {
+    if (!keyboardSuppressed && refocusAfterPickerRef.current) {
+      refocusAfterPickerRef.current = false;
+      titleRef.current?.focus();
+    }
+  }, [keyboardSuppressed]);
 
   // Shared values: kbHeight, slideOff (1=hidden, 0=open), dim, barOpacity.
   const kbHeight = useSharedValue(0);
@@ -281,6 +293,7 @@ export default function NewTaskScreen() {
             onFocus={() => setOpenChip(null)}
             returnKeyType="done"
             blurOnSubmit={false}
+            showSoftInputOnFocus={!keyboardSuppressed}
             style={[styles.titleInput, { color: c.fg }]}
           />
           <Pressable
@@ -315,6 +328,7 @@ export default function NewTaskScreen() {
           placeholderTextColor={c.fgSubtle}
           multiline
           onFocus={() => setOpenChip(null)}
+          showSoftInputOnFocus={!keyboardSuppressed}
           style={[styles.descInput, { color: c.fgMuted }]}
         />
 
@@ -351,14 +365,21 @@ export default function NewTaskScreen() {
                 duration: open ? 140 : 220,
               });
               if (open) {
-                // Force-blur the title so RN can't auto-restore focus on
-                // Modal unmount — that auto-restore was producing the
-                // up-down-up keyboard flicker. With nothing to restore, the
-                // explicit refocus below is the only motion.
+                // Suppression covers the entire picker lifetime. The
+                // showSoftInputOnFocus={false} gate means RN's auto-restore
+                // on Modal unmount can't make any keyboard visible — only
+                // the explicit refocus (queued by refocusAfterPickerRef +
+                // the useEffect that watches keyboardSuppressed) brings it
+                // back, in a single UP motion with no flicker.
+                setKeyboardSuppressed(true);
                 titleRef.current?.blur();
               } else {
-                // Single UP motion once the modal has fully unmounted.
-                setTimeout(() => titleRef.current?.focus(), 80);
+                refocusAfterPickerRef.current = true;
+                // Hold the suppression past Modal unmount so any phantom
+                // focus during unmount is silent. Then drop it — useEffect
+                // re-renders the input with showSoftInputOnFocus=true and
+                // immediately calls focus, producing one clean keyboard rise.
+                setTimeout(() => setKeyboardSuppressed(false), 220);
               }
             }}
           />

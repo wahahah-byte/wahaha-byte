@@ -95,8 +95,11 @@ export function TaskForm({
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
   const [showDescription, setShowDescription] = useState(!!initial.description);
-  const [showDetails, setShowDetails] = useState(initial.isRecurring);
   const [category, setCategory] = useState(initial.category);
+  // Disable soft keyboard on every TextInput while the date picker is
+  // open / closing, so RN's auto-restore on Modal unmount can't make any
+  // keyboard visible.
+  const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
   const [priority, setPriority] = useState<PriorityKey>(initial.priority.toLowerCase() as PriorityKey);
   const [pointValue, setPointValue] = useState(initial.pointValue);
   const [isRecurring, setIsRecurring] = useState(initial.isRecurring);
@@ -191,6 +194,7 @@ export function TaskForm({
           placeholder="What needs to be done?"
           placeholderTextColor={c.fgSubtle}
           onSubmitEditing={handleSubmit}
+          showSoftInputOnFocus={!keyboardSuppressed}
           style={[styles.titleInput, { color: c.fg }]}
         />
 
@@ -201,6 +205,7 @@ export function TaskForm({
             placeholder="Description"
             placeholderTextColor={c.fgSubtle}
             multiline
+            showSoftInputOnFocus={!keyboardSuppressed}
             style={[styles.descInput, { color: c.fgMuted }]}
           />
         ) : (
@@ -242,19 +247,22 @@ export function TaskForm({
           })}
         </View>
 
-        {!showDetails ? (
-          <Pressable onPress={() => setShowDetails(true)}>
-            <ThemedText style={{ color: c.fgSubtle, fontSize: 11, letterSpacing: 0.5, marginTop: 14, marginBottom: 12 }}>
-              More details ▾
-            </ThemedText>
-          </Pressable>
-        ) : (
-          <View style={{ gap: 14, marginTop: 14, marginBottom: 12 }}>
+        <View style={{ gap: 14, marginTop: 14, marginBottom: 12 }}>
             <Field label={isRecurring ? "First Due" : "Due"} c={c}>
               <DatePicker
                 value={dueDate}
                 onChange={setDueDate}
                 suppressKeyboardAfterClose
+                onOpenChange={(open) => {
+                  if (open) {
+                    setKeyboardSuppressed(true);
+                  } else {
+                    // Hold suppression past Modal unmount so any phantom
+                    // focus during unmount is silent. No explicit refocus —
+                    // the form intentionally leaves the keyboard down.
+                    setTimeout(() => setKeyboardSuppressed(false), 500);
+                  }
+                }}
               />
             </Field>
 
@@ -386,7 +394,6 @@ export function TaskForm({
               </Field>
             ) : null}
           </View>
-        )}
 
         {error ? (
           <ThemedText style={{ color: c.danger, fontSize: 12, marginBottom: 8 }}>{error}</ThemedText>
