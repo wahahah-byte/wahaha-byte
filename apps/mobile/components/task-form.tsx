@@ -251,7 +251,11 @@ export function TaskForm({
         ) : (
           <View style={{ gap: 14, marginTop: 14, marginBottom: 12 }}>
             <Field label={isRecurring ? "First Due" : "Due"} c={c}>
-              <DatePicker value={dueDate} onChange={setDueDate} />
+              <DatePicker
+                value={dueDate}
+                onChange={setDueDate}
+                suppressKeyboardAfterClose
+              />
             </Field>
 
             <Field label="Category" c={c}>

@@ -350,11 +350,15 @@ export default function NewTaskScreen() {
                 // Fast fade-out, slow fade-in for keyboard rise.
                 duration: open ? 140 : 220,
               });
-              // Refocus AFTER modal unmount + DatePicker's own Keyboard.dismiss
-              // have settled; otherwise the focus races and the keyboard flicks
-              // down again. 220ms aligns with the fade-in duration.
-              if (!open) {
-                setTimeout(() => titleRef.current?.focus(), 220);
+              if (open) {
+                // Force-blur the title so RN can't auto-restore focus on
+                // Modal unmount — that auto-restore was producing the
+                // up-down-up keyboard flicker. With nothing to restore, the
+                // explicit refocus below is the only motion.
+                titleRef.current?.blur();
+              } else {
+                // Single UP motion once the modal has fully unmounted.
+                setTimeout(() => titleRef.current?.focus(), 80);
               }
             }}
           />

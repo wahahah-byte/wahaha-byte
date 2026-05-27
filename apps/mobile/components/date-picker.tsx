@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -45,6 +46,11 @@ interface Props {
   placeholder?: string;
   // Fires on open/close so host can fade its UI for smooth handoff.
   onOpenChange?: (open: boolean) => void;
+  // When true, actively suppress any keyboard that tries to appear after the
+  // picker closes (RN's Modal unmount can briefly restore focus to the
+  // previously focused TextInput). Use for hosts that never want the keyboard
+  // back — e.g. the edit-task modal.
+  suppressKeyboardAfterClose?: boolean;
 }
 
 interface MonthData {
@@ -75,7 +81,7 @@ function buildMonth(month: number, year: number): MonthData {
 // Sheet padding; derives strip width from screenW for first-commit render.
 const SHEET_H_PADDING = 12;
 
-export function DatePicker({ value, onChange, compact, triggerLabel, placeholder, onOpenChange }: Props) {
+export function DatePicker({ value, onChange, compact, triggerLabel, placeholder, onOpenChange, suppressKeyboardAfterClose }: Props) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -176,11 +182,22 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     setOpen(false);
     setShowYearSelect(false);
     sheetY.value = screenH;
-    // Belt-and-suspenders: kill any phantom keyboard RN tries to restore when
-    // the Modal unmounts. Hosts that want the keyboard back (e.g. new-task)
-    // refocus from onOpenChange(false).
-    Keyboard.dismiss();
-  }, [screenH, sheetY]);
+    // Opt-in keyboard suppression for hosts that never want it back (edit
+    // modal). Listen on BOTH willShow (iOS — fires before keyboard is
+    // visible, so we preempt the visible flash) and didShow (Android — no
+    // willShow event exists). Whichever fires first, immediately dismiss.
+    if (suppressKeyboardAfterClose) {
+      const dismiss = () => Keyboard.dismiss();
+      const willSub = Keyboard.addListener("keyboardWillShow", dismiss);
+      const didSub = Keyboard.addListener("keyboardDidShow", dismiss);
+      // Short grace window: long enough to catch RN's restore, short enough
+      // that the user can re-tap a TextInput shortly after without losing it.
+      setTimeout(() => {
+        willSub.remove();
+        didSub.remove();
+      }, 500);
+    }
+  }, [screenH, sheetY, suppressKeyboardAfterClose]);
 
   const closeWithCommit = useCallback(() => {
     onChange(pendingValue);
@@ -302,6 +319,20 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
 
   // Dismiss keyboard first, then open modal for clean slide-in.
   const handleTriggerPress = useCallback(() => {
+    // Aggressively blur whatever TextInput is focused. Keyboard.dismiss alone
+    // doesn't fully clear RN's internal "last focused" state, so the Modal
+    // can auto-restore focus on unmount and briefly show the keyboard. Calling
+    // blurTextInput on the focused handle clears that state.
+    const state = (TextInput as unknown as { State?: {
+      currentlyFocusedInput?: () => unknown;
+      currentlyFocusedField?: () => unknown;
+      blurTextInput?: (h: unknown) => void;
+    } }).State;
+    const focused = state?.currentlyFocusedInput?.() ?? state?.currentlyFocusedField?.();
+    if (focused && state?.blurTextInput) {
+      state.blurTextInput(focused);
+    }
+
     if (!Keyboard.isVisible()) {
       setOpen(true);
       return;
