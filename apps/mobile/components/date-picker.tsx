@@ -176,6 +176,10 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     setOpen(false);
     setShowYearSelect(false);
     sheetY.value = screenH;
+    // Belt-and-suspenders: kill any phantom keyboard RN tries to restore when
+    // the Modal unmounts. Hosts that want the keyboard back (e.g. new-task)
+    // refocus from onOpenChange(false).
+    Keyboard.dismiss();
   }, [screenH, sheetY]);
 
   const closeWithCommit = useCallback(() => {

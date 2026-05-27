@@ -344,15 +344,18 @@ export default function NewTaskScreen() {
             value={dueDate}
             compact
             triggerLabel={dateChipLabel(dueDate)}
-            onChange={(d) => {
-              setDueDate(d);
-              setTimeout(() => titleRef.current?.focus(), 60);
-            }}
+            onChange={setDueDate}
             onOpenChange={(open) => {
               barOpacity.value = withTiming(open ? 0 : 1, {
                 // Fast fade-out, slow fade-in for keyboard rise.
                 duration: open ? 140 : 220,
               });
+              // Refocus AFTER modal unmount + DatePicker's own Keyboard.dismiss
+              // have settled; otherwise the focus races and the keyboard flicks
+              // down again. 220ms aligns with the fade-in duration.
+              if (!open) {
+                setTimeout(() => titleRef.current?.focus(), 220);
+              }
             }}
           />
 
