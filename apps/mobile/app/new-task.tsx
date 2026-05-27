@@ -282,20 +282,39 @@ export default function NewTaskScreen() {
         }}
       >
         <View style={styles.titleRow}>
-          <TextInput
-            ref={titleRef}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="New task"
-            placeholderTextColor={c.fgSubtle}
-            onSubmitEditing={handleSubmit}
-            // Focus collapses open dropdown; keyboard stays up.
-            onFocus={() => setOpenChip(null)}
-            returnKeyType="done"
-            blurOnSubmit={false}
-            showSoftInputOnFocus={!keyboardSuppressed}
-            style={[styles.titleInput, { color: c.fg }]}
-          />
+          {keyboardSuppressed ? (
+            // While the date picker is open / closing, render a styled View
+            // in place of the TextInput. With no TextInput in the tree, RN
+            // physically cannot focus anything and no keyboard can appear —
+            // eliminating the brief flash that showSoftInputOnFocus alone
+            // doesn't reliably prevent under Fabric.
+            <View style={[styles.titleInput, { justifyContent: "center" }]}>
+              <ThemedText
+                style={{
+                  color: title ? c.fg : c.fgSubtle,
+                  fontSize: 16,
+                  fontWeight: "500",
+                  letterSpacing: 0.2,
+                }}
+              >
+                {title || "New task"}
+              </ThemedText>
+            </View>
+          ) : (
+            <TextInput
+              ref={titleRef}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="New task"
+              placeholderTextColor={c.fgSubtle}
+              onSubmitEditing={handleSubmit}
+              // Focus collapses open dropdown; keyboard stays up.
+              onFocus={() => setOpenChip(null)}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              style={[styles.titleInput, { color: c.fg }]}
+            />
+          )}
           <Pressable
             onPress={() => { setOpenChip(null); handleSubmit(); }}
             disabled={!canSubmit}
@@ -321,16 +340,29 @@ export default function NewTaskScreen() {
         </View>
 
         {/* Notes/description — small, borderless, auto-grow ~4 lines. */}
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Notes (optional)"
-          placeholderTextColor={c.fgSubtle}
-          multiline
-          onFocus={() => setOpenChip(null)}
-          showSoftInputOnFocus={!keyboardSuppressed}
-          style={[styles.descInput, { color: c.fgMuted }]}
-        />
+        {keyboardSuppressed ? (
+          <View style={[styles.descInput, { minHeight: 22 }]}>
+            <ThemedText
+              style={{
+                color: description ? c.fgMuted : c.fgSubtle,
+                fontSize: 13,
+                lineHeight: 18,
+              }}
+            >
+              {description || "Notes (optional)"}
+            </ThemedText>
+          </View>
+        ) : (
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Notes (optional)"
+            placeholderTextColor={c.fgSubtle}
+            multiline
+            onFocus={() => setOpenChip(null)}
+            style={[styles.descInput, { color: c.fgMuted }]}
+          />
+        )}
 
         <View
           style={styles.chipRow}
