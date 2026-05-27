@@ -171,14 +171,19 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     setContainerW(Math.max(0, screenW - SHEET_H_PADDING * 2));
   }, [screenW]);
 
-  // Notify host on open/close; ref-stored so identity change doesn't refire.
+  // Ref-stored so identity change doesn't refire. We fire this synchronously
+  // from handleTriggerPress and finishClose (NOT via useEffect on `open`) so
+  // hosts can pre-emptively view-swap their TextInputs BEFORE Modal mounts —
+  // otherwise RN captures the focused TextInput as "previous responder" and
+  // briefly tries to restore it on Modal unmount, producing the keyboard
+  // flicker.
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
-  useEffect(() => {
-    onOpenChangeRef.current?.(open);
-  }, [open]);
 
   const finishClose = useCallback(() => {
+    // Notify host BEFORE Modal unmounts, so the host's suppression grace
+    // (view-swap window) starts in sync with the Modal close transition.
+    onOpenChangeRef.current?.(false);
     setOpen(false);
     setShowYearSelect(false);
     sheetY.value = screenH;
@@ -319,6 +324,12 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
 
   // Dismiss keyboard first, then open modal for clean slide-in.
   const handleTriggerPress = useCallback(() => {
+    // Synchronously notify host BEFORE Modal mounts. Hosts that view-swap
+    // their TextInputs need this to happen first; otherwise the Modal
+    // captures the focused TextInput as previous-responder and tries to
+    // restore it on unmount, causing the keyboard flicker.
+    onOpenChangeRef.current?.(true);
+
     // Aggressively blur whatever TextInput is focused. Keyboard.dismiss alone
     // doesn't fully clear RN's internal "last focused" state, so the Modal
     // can auto-restore focus on unmount and briefly show the keyboard. Calling
