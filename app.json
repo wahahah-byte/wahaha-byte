@@ -11,7 +11,9 @@
     "updates": {
       "url": "https://u.expo.dev/11b72e52-b7cb-49d8-91ca-ea5dd4451ff1"
     },
-    "android": {},
+    "android": {
+      "package": "com.wahahah.mobile"
+    },
     "ios": {}
   }
 }
