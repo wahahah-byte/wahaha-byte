@@ -140,18 +140,6 @@ export default function NewTaskScreen() {
   }, [pointOptions, pointValue, isRecurring]);
 
   const titleRef = useRef<TextInput>(null);
-  // While the date picker is opening / open / closing, force-disable the soft
-  // keyboard on every TextInput so RN's auto-restore on Modal unmount can't
-  // produce a visible keyboard flash. We bring it back via an explicit focus
-  // after the suppression window ends (see useEffect below).
-  const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
-  const refocusAfterPickerRef = useRef(false);
-  useEffect(() => {
-    if (!keyboardSuppressed && refocusAfterPickerRef.current) {
-      refocusAfterPickerRef.current = false;
-      titleRef.current?.focus();
-    }
-  }, [keyboardSuppressed]);
 
   // Shared values: kbHeight, slideOff (1=hidden, 0=open), dim, barOpacity.
   const kbHeight = useSharedValue(0);
@@ -282,39 +270,19 @@ export default function NewTaskScreen() {
         }}
       >
         <View style={styles.titleRow}>
-          {keyboardSuppressed ? (
-            // While the date picker is open / closing, render a styled View
-            // in place of the TextInput. With no TextInput in the tree, RN
-            // physically cannot focus anything and no keyboard can appear —
-            // eliminating the brief flash that showSoftInputOnFocus alone
-            // doesn't reliably prevent under Fabric.
-            <View style={[styles.titleInput, { justifyContent: "center" }]}>
-              <ThemedText
-                style={{
-                  color: title ? c.fg : c.fgSubtle,
-                  fontSize: 16,
-                  fontWeight: "500",
-                  letterSpacing: 0.2,
-                }}
-              >
-                {title || "New task"}
-              </ThemedText>
-            </View>
-          ) : (
-            <TextInput
-              ref={titleRef}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="New task"
-              placeholderTextColor={c.fgSubtle}
-              onSubmitEditing={handleSubmit}
-              // Focus collapses open dropdown; keyboard stays up.
-              onFocus={() => setOpenChip(null)}
-              returnKeyType="done"
-              blurOnSubmit={false}
-              style={[styles.titleInput, { color: c.fg }]}
-            />
-          )}
+          <TextInput
+            ref={titleRef}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="New task"
+            placeholderTextColor={c.fgSubtle}
+            onSubmitEditing={handleSubmit}
+            // Focus collapses open dropdown; keyboard stays up.
+            onFocus={() => setOpenChip(null)}
+            returnKeyType="done"
+            blurOnSubmit={false}
+            style={[styles.titleInput, { color: c.fg }]}
+          />
           <Pressable
             onPress={() => { setOpenChip(null); handleSubmit(); }}
             disabled={!canSubmit}
@@ -340,29 +308,15 @@ export default function NewTaskScreen() {
         </View>
 
         {/* Notes/description — small, borderless, auto-grow ~4 lines. */}
-        {keyboardSuppressed ? (
-          <View style={[styles.descInput, { minHeight: 22 }]}>
-            <ThemedText
-              style={{
-                color: description ? c.fgMuted : c.fgSubtle,
-                fontSize: 13,
-                lineHeight: 18,
-              }}
-            >
-              {description || "Notes (optional)"}
-            </ThemedText>
-          </View>
-        ) : (
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Notes (optional)"
-            placeholderTextColor={c.fgSubtle}
-            multiline
-            onFocus={() => setOpenChip(null)}
-            style={[styles.descInput, { color: c.fgMuted }]}
-          />
-        )}
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Notes (optional)"
+          placeholderTextColor={c.fgSubtle}
+          multiline
+          onFocus={() => setOpenChip(null)}
+          style={[styles.descInput, { color: c.fgMuted }]}
+        />
 
         <View
           style={styles.chipRow}
@@ -396,23 +350,6 @@ export default function NewTaskScreen() {
                 // Fast fade-out, slow fade-in for keyboard rise.
                 duration: open ? 140 : 220,
               });
-              if (open) {
-                // Suppression covers the entire picker lifetime. The
-                // showSoftInputOnFocus={false} gate means RN's auto-restore
-                // on Modal unmount can't make any keyboard visible — only
-                // the explicit refocus (queued by refocusAfterPickerRef +
-                // the useEffect that watches keyboardSuppressed) brings it
-                // back, in a single UP motion with no flicker.
-                setKeyboardSuppressed(true);
-                titleRef.current?.blur();
-              } else {
-                refocusAfterPickerRef.current = true;
-                // Hold the suppression past Modal unmount so any phantom
-                // focus during unmount is silent. Then drop it — useEffect
-                // re-renders the input with showSoftInputOnFocus=true and
-                // immediately calls focus, producing one clean keyboard rise.
-                setTimeout(() => setKeyboardSuppressed(false), 220);
-              }
             }}
           />
 

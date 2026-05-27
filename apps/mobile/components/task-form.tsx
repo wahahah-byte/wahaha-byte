@@ -96,10 +96,6 @@ export function TaskForm({
   const [description, setDescription] = useState(initial.description);
   const [showDescription, setShowDescription] = useState(!!initial.description);
   const [category, setCategory] = useState(initial.category);
-  // Disable soft keyboard on every TextInput while the date picker is
-  // open / closing, so RN's auto-restore on Modal unmount can't make any
-  // keyboard visible.
-  const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
   const [priority, setPriority] = useState<PriorityKey>(initial.priority.toLowerCase() as PriorityKey);
   const [pointValue, setPointValue] = useState(initial.pointValue);
   const [isRecurring, setIsRecurring] = useState(initial.isRecurring);
@@ -188,57 +184,24 @@ export function TaskForm({
           </View>
         ) : null}
 
-        {/* While the date picker is open / closing, swap the TextInput for a
-            styled View. No TextInput in the tree means RN can't focus
-            anything and no keyboard appears — eliminating the flash that
-            showSoftInputOnFocus alone doesn't reliably prevent. */}
-        {keyboardSuppressed ? (
-          <View style={[styles.titleInput, { justifyContent: "center" }]}>
-            <ThemedText
-              style={{
-                color: title ? c.fg : c.fgSubtle,
-                fontSize: 16,
-                fontWeight: "600",
-                letterSpacing: 0.2,
-              }}
-            >
-              {title || "What needs to be done?"}
-            </ThemedText>
-          </View>
-        ) : (
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="What needs to be done?"
-            placeholderTextColor={c.fgSubtle}
-            onSubmitEditing={handleSubmit}
-            style={[styles.titleInput, { color: c.fg }]}
-          />
-        )}
+        <TextInput
+          value={title}
+          onChangeText={setTitle}
+          placeholder="What needs to be done?"
+          placeholderTextColor={c.fgSubtle}
+          onSubmitEditing={handleSubmit}
+          style={[styles.titleInput, { color: c.fg }]}
+        />
 
         {showDescription || description ? (
-          keyboardSuppressed ? (
-            <View style={[styles.descInput, { minHeight: 36 }]}>
-              <ThemedText
-                style={{
-                  color: description ? c.fgMuted : c.fgSubtle,
-                  fontSize: 12,
-                  lineHeight: 18,
-                }}
-              >
-                {description || "Description"}
-              </ThemedText>
-            </View>
-          ) : (
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Description"
-              placeholderTextColor={c.fgSubtle}
-              multiline
-              style={[styles.descInput, { color: c.fgMuted }]}
-            />
-          )
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Description"
+            placeholderTextColor={c.fgSubtle}
+            multiline
+            style={[styles.descInput, { color: c.fgMuted }]}
+          />
         ) : (
           <Pressable onPress={() => setShowDescription(true)}>
             <ThemedText style={{ color: c.fgSubtle, fontSize: 11, letterSpacing: 0.5, marginBottom: 12 }}>
@@ -284,16 +247,6 @@ export function TaskForm({
                 value={dueDate}
                 onChange={setDueDate}
                 suppressKeyboardAfterClose
-                onOpenChange={(open) => {
-                  if (open) {
-                    setKeyboardSuppressed(true);
-                  } else {
-                    // Hold suppression past Modal unmount so any phantom
-                    // focus during unmount is silent. No explicit refocus —
-                    // the form intentionally leaves the keyboard down.
-                    setTimeout(() => setKeyboardSuppressed(false), 500);
-                  }
-                }}
               />
             </Field>
 

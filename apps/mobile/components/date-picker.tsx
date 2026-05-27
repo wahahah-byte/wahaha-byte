@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   Keyboard,
-  Modal,
   Pressable,
   StyleSheet,
   TextInput,
@@ -18,6 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Portal } from "@/components/portal-host";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
@@ -222,6 +223,17 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     [closeWithCommit, finishClose, screenH, sheetY],
   );
 
+  // Android back button — Portal replaces Modal, so we wire BackHandler
+  // manually to match Modal's onRequestClose behavior.
+  useEffect(() => {
+    if (!open) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      animateClose(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, animateClose]);
+
   // Arrow-tap helpers — animate trioX, bump centerOffset on completion.
   const goTo = useCallback((newIdx: number) => {
     const w = containerWShared.value;
@@ -393,13 +405,9 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
         </ThemedText>
       </Pressable>
 
-      <Modal
-        transparent
-        animationType="none"
-        visible={open}
-        onRequestClose={() => animateClose(true)}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
+      {open ? (
+        <Portal>
+          <GestureHandlerRootView style={StyleSheet.absoluteFillObject}>
           <Animated.View
             style={[
               StyleSheet.absoluteFillObject,
@@ -629,8 +637,9 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
               </Pressable>
             </View>
           </Animated.View>
-        </GestureHandlerRootView>
-      </Modal>
+          </GestureHandlerRootView>
+        </Portal>
+      ) : null}
     </View>
   );
 }

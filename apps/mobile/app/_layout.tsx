@@ -12,6 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/context/theme-context';
 import { UndoProvider } from '@/context/undo-context';
 import { MobileEdgeDrawer } from '@/components/mobile-edge-drawer';
+import { PortalHost } from '@/components/portal-host';
 import { SignInTab } from '@/components/sign-in-tab';
 import { useColors } from '@/hooks/use-colors';
 
@@ -105,9 +106,11 @@ function ThemedRoot() {
   }, [c.bg]);
   return (
     <UndoProvider>
-      <View style={{ flex: 1, backgroundColor: c.bg }}>
-        <NavigationChrome />
-      </View>
+      <PortalHost>
+        <View style={{ flex: 1, backgroundColor: c.bg }}>
+          <NavigationChrome />
+        </View>
+      </PortalHost>
     </UndoProvider>
   );
 }
