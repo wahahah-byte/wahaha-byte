@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -96,6 +97,11 @@ export function TaskForm({
   const [description, setDescription] = useState(initial.description);
   const [showDescription, setShowDescription] = useState(!!initial.description);
   const [category, setCategory] = useState(initial.category);
+  // Refs so we can aggressively blur every TextInput when the date picker
+  // opens. The form intentionally never wants the keyboard back through the
+  // date picker flow.
+  const titleRef = useRef<TextInput>(null);
+  const descriptionRef = useRef<TextInput>(null);
   const [priority, setPriority] = useState<PriorityKey>(initial.priority.toLowerCase() as PriorityKey);
   const [pointValue, setPointValue] = useState(initial.pointValue);
   const [isRecurring, setIsRecurring] = useState(initial.isRecurring);
@@ -185,6 +191,7 @@ export function TaskForm({
         ) : null}
 
         <TextInput
+          ref={titleRef}
           value={title}
           onChangeText={setTitle}
           placeholder="What needs to be done?"
@@ -195,6 +202,7 @@ export function TaskForm({
 
         {showDescription || description ? (
           <TextInput
+            ref={descriptionRef}
             value={description}
             onChangeText={setDescription}
             placeholder="Description"
@@ -247,6 +255,25 @@ export function TaskForm({
                 value={dueDate}
                 onChange={setDueDate}
                 suppressKeyboardAfterClose
+                onOpenChange={(open) => {
+                  if (open) {
+                    // Hard-blur every TextInput in the form. Even after the
+                    // date picker closes the form intentionally never wants
+                    // the keyboard back, so we kill any focus before the
+                    // picker even shows.
+                    titleRef.current?.blur();
+                    descriptionRef.current?.blur();
+                    Keyboard.dismiss();
+                  } else {
+                    // Belt-and-suspenders on top of the DatePicker's own
+                    // keyboardWillShow/DidShow guard: dismiss again as soon
+                    // as we hear the picker closed, in case anything tries
+                    // to reassert focus.
+                    titleRef.current?.blur();
+                    descriptionRef.current?.blur();
+                    Keyboard.dismiss();
+                  }
+                }}
               />
             </Field>
 

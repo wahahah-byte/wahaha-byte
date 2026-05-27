@@ -189,19 +189,36 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     setShowYearSelect(false);
     sheetY.value = screenH;
     // Opt-in keyboard suppression for hosts that never want it back (edit
-    // modal). Listen on BOTH willShow (iOS — fires before keyboard is
-    // visible, so we preempt the visible flash) and didShow (Android — no
-    // willShow event exists). Whichever fires first, immediately dismiss.
+    // modal). Even without RN's Modal, something can occasionally re-assert
+    // focus on a TextInput after close — be aggressive about killing it:
+    //   1. Dismiss immediately and via TextInput.State.blurTextInput.
+    //   2. Listen for keyboardWillShow/keyboardDidShow and dismiss on either.
+    //   3. Run a short interval that re-dismisses every 50ms.
+    // After the suppression window all hooks tear down so future taps on
+    // TextInputs work normally.
     if (suppressKeyboardAfterClose) {
-      const dismiss = () => Keyboard.dismiss();
-      const willSub = Keyboard.addListener("keyboardWillShow", dismiss);
-      const didSub = Keyboard.addListener("keyboardDidShow", dismiss);
-      // Short grace window: long enough to catch RN's restore, short enough
-      // that the user can re-tap a TextInput shortly after without losing it.
+      const aggressiveDismiss = () => {
+        Keyboard.dismiss();
+        const tiState = (TextInput as unknown as {
+          State?: {
+            currentlyFocusedInput?: () => unknown;
+            blurTextInput?: (h: unknown) => void;
+          };
+        }).State;
+        const focused = tiState?.currentlyFocusedInput?.();
+        if (focused && tiState?.blurTextInput) {
+          tiState.blurTextInput(focused);
+        }
+      };
+      aggressiveDismiss();
+      const willSub = Keyboard.addListener("keyboardWillShow", aggressiveDismiss);
+      const didSub = Keyboard.addListener("keyboardDidShow", aggressiveDismiss);
+      const interval = setInterval(aggressiveDismiss, 50);
       setTimeout(() => {
         willSub.remove();
         didSub.remove();
-      }, 500);
+        clearInterval(interval);
+      }, 1500);
     }
   }, [screenH, sheetY, suppressKeyboardAfterClose]);
 
@@ -343,15 +360,13 @@ export function DatePicker({ value, onChange, compact, triggerLabel, placeholder
     onOpenChangeRef.current?.(true);
 
     // Aggressively blur whatever TextInput is focused. Keyboard.dismiss alone
-    // doesn't fully clear RN's internal "last focused" state, so the Modal
-    // can auto-restore focus on unmount and briefly show the keyboard. Calling
+    // doesn't fully clear RN's internal "last focused" state, so calling
     // blurTextInput on the focused handle clears that state.
     const state = (TextInput as unknown as { State?: {
       currentlyFocusedInput?: () => unknown;
-      currentlyFocusedField?: () => unknown;
       blurTextInput?: (h: unknown) => void;
     } }).State;
-    const focused = state?.currentlyFocusedInput?.() ?? state?.currentlyFocusedField?.();
+    const focused = state?.currentlyFocusedInput?.();
     if (focused && state?.blurTextInput) {
       state.blurTextInput(focused);
     }

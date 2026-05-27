@@ -350,6 +350,14 @@ export default function NewTaskScreen() {
                 // Fast fade-out, slow fade-in for keyboard rise.
                 duration: open ? 140 : 220,
               });
+              if (!open) {
+                // Bring the keyboard back after the picker closes. Safe to do
+                // here because the DatePicker no longer uses a <Modal> (it
+                // renders via Portal), so there's no first-responder
+                // restoration racing this focus call. TaskForm (edit modal)
+                // doesn't pass onOpenChange, so this only runs on new-task.
+                setTimeout(() => titleRef.current?.focus(), 120);
+              }
             }}
           />
 
