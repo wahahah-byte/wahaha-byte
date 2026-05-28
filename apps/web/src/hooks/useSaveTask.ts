@@ -40,6 +40,9 @@ export function useSaveTask({
       return null;
     }
 
+    // Type can be switched in edit mode; recurrence + counter fields only
+    // apply while recurring, so clear them when converting to a one-off.
+    const nowRecurring = fields.isRecurring ?? detailTask.isRecurring;
     const req: UpdateTaskRequest = {
       taskId: detailTask.taskId,
       title: fields.title,
@@ -50,16 +53,30 @@ export function useSaveTask({
       pointValue: fields.pointValue ?? detailTask.pointValue,
       dueDate: fields.dueDate ?? undefined,
       completedAt: detailTask.completedAt ?? undefined,
-      isRecurring: detailTask.isRecurring,
-      recurrenceRule: detailTask.recurrenceRule ?? undefined,
+      isRecurring: nowRecurring,
+      recurrenceRule: nowRecurring
+        ? (fields.recurrenceRule ?? detailTask.recurrenceRule ?? undefined)
+        : undefined,
       submitted: detailTask.submitted,
-      hasCounter: fields.hasCounter ?? detailTask.hasCounter ?? false,
-      counterUnit: fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null),
-      counterGoal: fields.counterGoal !== undefined ? fields.counterGoal : (detailTask.counterGoal ?? null),
+      hasCounter: nowRecurring ? (fields.hasCounter ?? detailTask.hasCounter ?? false) : false,
+      counterUnit: nowRecurring
+        ? (fields.counterUnit !== undefined ? fields.counterUnit : (detailTask.counterUnit ?? null))
+        : null,
+      counterGoal: nowRecurring
+        ? (fields.counterGoal !== undefined ? fields.counterGoal : (detailTask.counterGoal ?? null))
+        : null,
     };
     const { error } = await tasksApi.update(detailTask.taskId, req);
     if (error) return error;
-    finalize({ ...detailTask, ...fields });
+    finalize({
+      ...detailTask,
+      ...fields,
+      isRecurring: nowRecurring,
+      recurrenceRule: req.recurrenceRule ?? null,
+      hasCounter: req.hasCounter,
+      counterUnit: req.counterUnit,
+      counterGoal: req.counterGoal,
+    });
     return null;
   }, [detailTask, setDetailTask, setTasks, isAuthenticated, isRestart, onAfterRestart, clearRestart]);
 }

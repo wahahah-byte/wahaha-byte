@@ -142,9 +142,11 @@ export function TaskForm({
     if (!isRecurring && hasCounter) setHasCounter(false);
   }, [isRecurring, hasCounter]);
 
-  // Drop to 1pt on recurring; cap non-recurring by category.
+  // Routines cap at 5pt; clamp to the cap (not all the way to 1) so as much
+  // of the chosen value is preserved as the cap allows. Non-recurring is
+  // capped by category below.
   useEffect(() => {
-    if (isRecurring) setPointValue((v) => (v > 5 ? 1 : v));
+    if (isRecurring) setPointValue((v) => (v > 5 ? 5 : v));
   }, [isRecurring]);
 
   useEffect(() => {
@@ -331,6 +333,14 @@ export function TaskForm({
                 </Field>
               </View>
             </View>
+
+            {/* Converting an existing task to a routine forces its points down to
+                the routine cap (5). Surface that instead of silently changing it. */}
+            {isRecurring && !initial.isRecurring && initial.pointValue > 5 ? (
+              <ThemedText style={{ color: c.fgSubtle, fontSize: 11, lineHeight: 15 }}>
+                Routines are capped at 5 pts — points lowered from {initial.pointValue}.
+              </ThemedText>
+            ) : null}
 
             {/* Counter — recurring-only. Label itself is the expand toggle:
                 tapping it sets hasCounter, which replaces the old On/Off

@@ -31,6 +31,15 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   completed:   { label: "Completed",   color: "var(--color-success)" },
 };
 
+const REPEAT_OPTIONS: { label: string; rule: string | null }[] = [
+  { label: "Once",    rule: null },
+  { label: "Daily",   rule: "daily" },
+  { label: "Weekdays", rule: "weekdays" },
+  { label: "Weekly",  rule: "weekly" },
+  { label: "Biweekly", rule: "biweekly" },
+  { label: "Monthly", rule: "monthly" },
+];
+
 export interface EditableTaskFields {
   title: string;
   description: string | null;
@@ -38,6 +47,8 @@ export interface EditableTaskFields {
   priority: string;
   pointValue?: number;
   dueDate: string | null;
+  isRecurring?: boolean;
+  recurrenceRule?: string | null;
   hasCounter?: boolean;
   counterUnit?: string | null;
   counterGoal?: number | null;
@@ -174,6 +185,8 @@ export default function TaskDetailModal({
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editCategory, setEditCategory] = useState(task.category);
   const [editPointValue, setEditPointValue] = useState<number>(task.pointValue);
+  const [editIsRecurring, setEditIsRecurring] = useState<boolean>(task.isRecurring);
+  const [editRecurrenceRule, setEditRecurrenceRule] = useState<string>(task.recurrenceRule ?? "daily");
   const [editDueDate, setEditDueDate] = useState<Date | null>(
     mustReschedule
       ? rescheduleDefault()
@@ -184,6 +197,13 @@ export default function TaskDetailModal({
   const [editCounterGoal, setEditCounterGoal] = useState<string>(task.counterGoal != null ? String(task.counterGoal) : "");
   const [showEditDescription, setShowEditDescription] = useState(!!editDescription);
 
+  // Routines cap at 5pt; one-offs cap by category. Clamp the edited value when
+  // the type or category changes so the dropdown selection stays valid.
+  useEffect(() => {
+    if (editIsRecurring) setEditPointValue((v) => (v > 5 ? 5 : v));
+    else setEditPointValue((v) => Math.min(v, maxPointsFor(editCategory)));
+  }, [editIsRecurring, editCategory]);
+
   function startEdit() {
     setEditTitle(task.title);
     setEditDescription(task.description ?? "");
@@ -191,6 +211,8 @@ export default function TaskDetailModal({
     setEditPriority(task.priority);
     setEditCategory(task.category);
     setEditPointValue(task.pointValue);
+    setEditIsRecurring(task.isRecurring);
+    setEditRecurrenceRule(task.recurrenceRule ?? "daily");
     setEditDueDate(mustReschedule ? rescheduleDefault() : (task.dueDate ? parseDateOnly(task.dueDate) : null));
     setEditHasCounter(!!task.hasCounter);
     setEditCounterUnit(task.counterUnit ?? "");
@@ -218,9 +240,11 @@ export default function TaskDetailModal({
       priority: editPriority,
       pointValue: editPointValue,
       dueDate: editDueDate ? dateKey(editDueDate) : null,
-      hasCounter: task.isRecurring ? editHasCounter : undefined,
-      counterUnit: task.isRecurring ? (editHasCounter && editCounterUnit ? editCounterUnit : null) : undefined,
-      counterGoal: task.isRecurring
+      isRecurring: editIsRecurring,
+      recurrenceRule: editIsRecurring ? editRecurrenceRule : null,
+      hasCounter: editIsRecurring ? editHasCounter : undefined,
+      counterUnit: editIsRecurring ? (editHasCounter && editCounterUnit ? editCounterUnit : null) : undefined,
+      counterGoal: editIsRecurring
         ? (editHasCounter && editCounterGoal.trim() && Number(editCounterGoal) > 0 ? Number(editCounterGoal) : null)
         : undefined,
     });
@@ -584,11 +608,38 @@ export default function TaskDetailModal({
             )}
 
             {/* Metadata fields */}
-            {(!task.isRecurring || mustReschedule) && (
-              <Field label="Due">
+            {(!editIsRecurring || mustReschedule) && (
+              <Field label={editIsRecurring ? "First Due" : "Due"}>
                 <DatePicker value={editDueDate} onChange={setEditDueDate} />
               </Field>
             )}
+
+            {/* Repeat — switching type changes the point ceiling (routines cap at 5). */}
+            <Field label="Repeat">
+              <div className="relative">
+                <select
+                  value={editIsRecurring ? editRecurrenceRule : "once"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "once") setEditIsRecurring(false);
+                    else { setEditIsRecurring(true); setEditRecurrenceRule(v); }
+                  }}
+                  className="w-full px-2 py-1.5 text-xs appearance-none outline-none cursor-pointer"
+                  style={{
+                    background: "var(--color-input)",
+                    color: "var(--color-input-fg)",
+                    border: "1px solid var(--color-border-hairline)",
+                    borderRadius: "3px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {REPEAT_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.rule ?? "once"} style={{ background: "var(--color-input)", fontWeight: 400 }}>{o.label}</option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: "var(--color-fg-subtle)" }}>▾</span>
+              </div>
+            </Field>
 
             <div className="flex gap-3">
               <Field label="Category" className="flex-1 min-w-0">
@@ -625,7 +676,7 @@ export default function TaskDetailModal({
                       borderRadius: "3px",
                     }}
                   >
-                    {(task.isRecurring
+                    {(editIsRecurring
                       ? [1, 2, 3, 4, 5]
                       : [5, 10, 15, 20, 25].filter((v) => v <= maxPointsFor(editCategory))
                     ).map((v) => (
@@ -636,6 +687,14 @@ export default function TaskDetailModal({
                 </div>
               </Field>
             </div>
+
+            {/* Converting an existing task to a routine forces its points down to
+                the routine cap (5). Surface that instead of silently changing it. */}
+            {editIsRecurring && !task.isRecurring && task.pointValue > 5 && (
+              <p className="text-[11px]" style={{ color: "var(--color-fg-subtle)", lineHeight: 1.4 }}>
+                Routines are capped at 5 pts — points lowered from {task.pointValue}.
+              </p>
+            )}
 
             <Field label="Priority">
               <div className="flex flex-wrap gap-1.5">
@@ -662,7 +721,7 @@ export default function TaskDetailModal({
               </div>
             </Field>
 
-            {task.isRecurring && (
+            {editIsRecurring && (
               <Field label="Counter">
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
@@ -708,7 +767,7 @@ export default function TaskDetailModal({
                       <GoalStepper value={editCounterGoal} onChange={setEditCounterGoal} />
                       {editCounterUnit && editCounterGoal.trim() && (
                         <span style={{ color: "var(--color-fg-subtle)", fontSize: "10px" }}>
-                          {editCounterUnit} / {task.recurrenceRule === "weekly" ? "wk" : task.recurrenceRule === "monthly" ? "mo" : "day"}
+                          {editCounterUnit} / {editRecurrenceRule === "weekly" ? "wk" : editRecurrenceRule === "monthly" ? "mo" : "day"}
                         </span>
                       )}
                     </div>
