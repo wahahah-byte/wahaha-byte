@@ -185,8 +185,37 @@ export default function TaskDetailScreen() {
   const flushQuickLog = useCallback(
     async (taskId: string, delta: number): Promise<CheckInCycleDto | null> => {
       if (delta === 0) return null;
+      // Optimistic cache stub before the network round-trip: a reopen that
+      // lands during an in-flight flush (typical "close modal before debounce
+      // settles, immediately reopen") would otherwise read the pre-log
+      // cycleSum and snap to the real value only after the GET finishes.
+      const todayIso = new Date().toISOString().split("T")[0];
+      const stubCycleId = -Math.floor(Math.random() * 1_000_000_000) - 1;
+      const stubCycle: CheckInCycleDto = {
+        cycleId: stubCycleId,
+        taskId,
+        checkInDate: todayIso,
+        counterValue: delta,
+        createdAt: new Date().toISOString(),
+        cycleType: "log",
+      };
+      const beforeCached = taskCache.read(taskId);
+      if (beforeCached) {
+        taskCache.set({
+          ...beforeCached,
+          recentCycles: [stubCycle, ...(beforeCached.recentCycles ?? [])],
+        });
+      }
       const res = await tasksApi.logCounter(taskId, delta);
       if (res.error) {
+        // Roll back the stub on failure so cycleSum doesn't carry phantom logs.
+        const rb = taskCache.read(taskId);
+        if (rb) {
+          taskCache.set({
+            ...rb,
+            recentCycles: (rb.recentCycles ?? []).filter((c) => c.cycleId !== stubCycleId),
+          });
+        }
         if (res.status === 404) return null;
         if (res.status === 400 && /already checked in/i.test(res.error)) return null;
         const signed = `${delta > 0 ? "+" : ""}${delta}`;
@@ -194,13 +223,16 @@ export default function TaskDetailScreen() {
         return null;
       }
       if (!res.data) return null;
-      // Write the new cycle straight into the module cache so the next modal mount
-      // sees it even if our local setTask ran on an unmounted component (unmount-flush path).
-      const cached = taskCache.read(taskId);
-      if (cached) {
+      // Swap the stub for the authoritative cycle from the server response so
+      // the next modal mount sees the real cycleId.
+      const afterCached = taskCache.read(taskId);
+      if (afterCached) {
         taskCache.set({
-          ...cached,
-          recentCycles: [res.data, ...(cached.recentCycles ?? [])],
+          ...afterCached,
+          recentCycles: [
+            res.data,
+            ...(afterCached.recentCycles ?? []).filter((c) => c.cycleId !== stubCycleId),
+          ],
         });
       }
       appendCycle(res.data);
@@ -658,6 +690,8 @@ export default function TaskDetailScreen() {
               submitLabel="Save"
               onSubmit={handleEditSubmit}
               onCancel={() => setIsEditing(false)}
+              hideAvatar
+              ScrollComponent={BottomSheetScrollView}
             />
           </View>
         </EditPaneSwipeWrapper>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -83,6 +83,15 @@ interface Props {
   submitLabel?: string;
   onSubmit: (values: TaskFormValues) => Promise<string | null>;
   onCancel?: () => void;
+  // Edit-from-detail-sheet hides the avatar hero to leave more vertical
+  // room for fields inside the constrained sheet height.
+  hideAvatar?: boolean;
+  // When rendered inside @gorhom/bottom-sheet, the host must inject
+  // BottomSheetScrollView — regular RN ScrollView's gestures don't reach
+  // the sheet's gesture context and the form can't be scrolled. Typed as
+  // any-prop ComponentType so the bottom-sheet variant (slightly different
+  // prop surface) plugs in without casts at the call site.
+  ScrollComponent?: ComponentType<any>;
 }
 
 export function TaskForm({
@@ -90,6 +99,8 @@ export function TaskForm({
   submitLabel = "Create",
   onSubmit,
   onCancel,
+  hideAvatar = false,
+  ScrollComponent = ScrollView,
 }: Props) {
   const c = useColors();
 
@@ -178,13 +189,13 @@ export function TaskForm({
   }
 
   const scrollView = (
-    <ScrollView
+    <ScrollComponent
       style={{ flex: 1 }}
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="always"
       {...(Platform.OS === "ios" ? { automaticallyAdjustKeyboardInsets: true } : {})}
     >
-        {avatarsEnabled ? (
+        {avatarsEnabled && !hideAvatar ? (
           <View style={styles.avatarHero}>
             <ChibiAvatar equipped={equipped} height={140} />
           </View>
@@ -250,40 +261,45 @@ export function TaskForm({
         </View>
 
         <View style={{ gap: 14, marginTop: 14, marginBottom: 12 }}>
-            <Field label={isRecurring ? "First Due" : "Due"} c={c}>
-              <DatePicker
-                value={dueDate}
-                onChange={setDueDate}
-                suppressKeyboardAfterClose
-                onOpenChange={(open) => {
-                  if (open) {
-                    // Hard-blur every TextInput in the form. Even after the
-                    // date picker closes the form intentionally never wants
-                    // the keyboard back, so we kill any focus before the
-                    // picker even shows.
-                    titleRef.current?.blur();
-                    descriptionRef.current?.blur();
-                    Keyboard.dismiss();
-                  } else {
-                    // Belt-and-suspenders on top of the DatePicker's own
-                    // keyboardWillShow/DidShow guard: dismiss again as soon
-                    // as we hear the picker closed, in case anything tries
-                    // to reassert focus.
-                    titleRef.current?.blur();
-                    descriptionRef.current?.blur();
-                    Keyboard.dismiss();
-                  }
-                }}
-              />
-            </Field>
-
-            <Field label="Category" c={c}>
-              <CompactSelect
-                value={category}
-                onChange={setCategory}
-                options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
-              />
-            </Field>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Field label={isRecurring ? "First Due" : "Due"} c={c}>
+                  <DatePicker
+                    value={dueDate}
+                    onChange={setDueDate}
+                    suppressKeyboardAfterClose
+                    onOpenChange={(open) => {
+                      if (open) {
+                        // Hard-blur every TextInput in the form. Even after the
+                        // date picker closes the form intentionally never wants
+                        // the keyboard back, so we kill any focus before the
+                        // picker even shows.
+                        titleRef.current?.blur();
+                        descriptionRef.current?.blur();
+                        Keyboard.dismiss();
+                      } else {
+                        // Belt-and-suspenders on top of the DatePicker's own
+                        // keyboardWillShow/DidShow guard: dismiss again as soon
+                        // as we hear the picker closed, in case anything tries
+                        // to reassert focus.
+                        titleRef.current?.blur();
+                        descriptionRef.current?.blur();
+                        Keyboard.dismiss();
+                      }
+                    }}
+                  />
+                </Field>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Field label="Category" c={c}>
+                  <CompactSelect
+                    value={category}
+                    onChange={setCategory}
+                    options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                  />
+                </Field>
+              </View>
+            </View>
 
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -316,34 +332,42 @@ export function TaskForm({
               </View>
             </View>
 
-            {/* Counter — recurring-only flex-wrap row. */}
+            {/* Counter — recurring-only. Label itself is the expand toggle:
+                tapping it sets hasCounter, which replaces the old On/Off
+                pill and frees the row for unit + goal + cap-at-goal inline. */}
             {isRecurring ? (
-              <Field label="Counter" c={c}>
-                <View style={styles.counterRow}>
-                  <Pressable
-                    onPress={() => setHasCounter((v) => !v)}
-                    style={[
-                      styles.pillCompact,
-                      {
-                        backgroundColor: hasCounter ? c.activeHighlightBg : "transparent",
-                        borderColor: hasCounter ? c.activeHighlightBorder : c.borderHairline,
-                      },
-                    ]}
+              <View style={{ gap: 6 }}>
+                <Pressable
+                  onPress={() => setHasCounter((v) => !v)}
+                  hitSlop={6}
+                  style={styles.counterDisclosure}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: hasCounter }}
+                  accessibilityLabel={hasCounter ? "Hide counter settings" : "Show counter settings"}
+                >
+                  <ThemedText
+                    style={{
+                      color: c.fgMuted,
+                      fontSize: 9,
+                      fontWeight: "600",
+                      letterSpacing: 1.8,
+                      textTransform: "uppercase",
+                    }}
                   >
-                    <ThemedText
-                      style={{
-                        fontSize: 10,
-                        color: hasCounter ? c.activeHighlight : c.fgSubtle,
-                        fontWeight: hasCounter ? "600" : "400",
-                        letterSpacing: 1.5,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {hasCounter ? "On" : "Off"}
-                    </ThemedText>
-                  </Pressable>
-
-                  {hasCounter ? (
+                    Counter
+                  </ThemedText>
+                  <ThemedText
+                    style={{
+                      color: c.fgSubtle,
+                      fontSize: 9,
+                      lineHeight: 11,
+                    }}
+                  >
+                    {hasCounter ? "▾" : "▸"}
+                  </ThemedText>
+                </Pressable>
+                {hasCounter ? (
+                  <View style={styles.counterRow}>
                     <View style={{ width: 140 }}>
                       <CompactSelect
                         value={counterUnit}
@@ -354,9 +378,6 @@ export function TaskForm({
                         ]}
                       />
                     </View>
-                  ) : null}
-
-                  {hasCounter ? (
                     <View style={styles.goalCluster}>
                       <ThemedText
                         style={{
@@ -369,47 +390,60 @@ export function TaskForm({
                         Goal
                       </ThemedText>
                       <GoalStepper value={counterGoal} onChange={setCounterGoal} />
+                      {counterGoal.trim() !== "" && Number(counterGoal) > 0 ? (
+                        <Pressable
+                          onPress={() => setCapLogAtGoal((v) => !v)}
+                          hitSlop={6}
+                          style={[
+                            styles.capChip,
+                            {
+                              backgroundColor: capLogAtGoal ? c.activeHighlightBg : "transparent",
+                              borderColor: capLogAtGoal ? c.activeHighlightBorder : c.borderHairline,
+                            },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: capLogAtGoal }}
+                          accessibilityLabel="Cap logs at goal"
+                        >
+                          <ThemedText
+                            style={{
+                              fontSize: 11,
+                              lineHeight: 12,
+                              color: capLogAtGoal ? c.activeHighlight : c.fgSubtle,
+                              fontWeight: "700",
+                            }}
+                          >
+                            ≤
+                          </ThemedText>
+                          <ThemedText
+                            style={{
+                              fontSize: 9,
+                              color: capLogAtGoal ? c.activeHighlight : c.fgSubtle,
+                              fontWeight: capLogAtGoal ? "600" : "400",
+                              letterSpacing: 1,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            Cap
+                          </ThemedText>
+                        </Pressable>
+                      ) : null}
                       {counterUnit && counterGoal.trim() !== "" ? (
                         <ThemedText style={{ fontSize: 10, color: c.fgSubtle }}>
                           {counterUnit} / {recurrenceRule === "weekly" ? "wk" : recurrenceRule === "monthly" ? "mo" : "day"}
                         </ThemedText>
                       ) : null}
                     </View>
-                  ) : null}
-
-                  {hasCounter && counterGoal.trim() !== "" && Number(counterGoal) > 0 ? (
-                    <Pressable
-                      onPress={() => setCapLogAtGoal((v) => !v)}
-                      style={[
-                        styles.pillCompact,
-                        {
-                          backgroundColor: capLogAtGoal ? c.activeHighlightBg : "transparent",
-                          borderColor: capLogAtGoal ? c.activeHighlightBorder : c.borderHairline,
-                        },
-                      ]}
-                    >
-                      <ThemedText
-                        style={{
-                          fontSize: 10,
-                          color: capLogAtGoal ? c.activeHighlight : c.fgSubtle,
-                          fontWeight: capLogAtGoal ? "600" : "400",
-                          letterSpacing: 1.5,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Cap at goal
-                      </ThemedText>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </Field>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
           </View>
 
         {error ? (
           <ThemedText style={{ color: c.danger, fontSize: 12, marginBottom: 8 }}>{error}</ThemedText>
         ) : null}
-    </ScrollView>
+    </ScrollComponent>
   );
 
   // Pinned bottom footer with Cancel/Save pill buttons.
@@ -558,6 +592,21 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
+  },
+  counterDisclosure: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+  },
+  capChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   goalCluster: {
     flexDirection: "row",
