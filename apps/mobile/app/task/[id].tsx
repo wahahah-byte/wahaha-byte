@@ -8,7 +8,9 @@ import {
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import BottomSheet, {
+  BottomSheetBackdrop,
   BottomSheetScrollView,
+  type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Polyline } from "react-native-svg";
@@ -39,7 +41,7 @@ import { TapSlideCheckIn } from "@/components/tap-slide-check-in";
 import { TaskForm, type TaskFormValues, emptyTaskForm } from "@/components/task-form";
 import { AvatarOnlyHero, CounterPanel } from "@/components/task-detail/avatar-hero";
 import { EditPaneSwipeWrapper } from "@/components/task-detail/edit-pane-swipe";
-import { IconActionBtn, MetaChip } from "@/components/task-detail/meta-chip";
+import { MetaChip } from "@/components/task-detail/meta-chip";
 import { PageHeader } from "@/components/task-detail/page-header";
 import { SubtaskAddBar } from "@/components/task-detail/subtask-add-bar";
 import { ThemedText } from "@/components/themed-text";
@@ -80,11 +82,43 @@ export default function TaskDetailScreen() {
   // Custom-log modal (opened by tapping the counter widget).
   const [customLogOpen, setCustomLogOpen] = useState(false);
 
-  // BottomSheet ref + single full-screen snap.
+  // BottomSheet ref + partial snap. 70% balances "anchored to the bottom"
+  // with enough vertical room for hero + chips + a non-trivial subtasks
+  // list. The hero/heatmap were independently shrunk so this height
+  // actually translates into roomy subtasks.
   const sheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["100%"], []);
-  const SheetHandle = useMemo(() => makeSheetHandle(c, insets.top), [c, insets.top]);
+  const snapPoints = useMemo(() => ["70%"], []);
+  // Rounded top corners on the sheet container itself (with overflow:hidden
+  // so the inner content clips), mirroring web mobile's
+  // borderTopLeftRadius: 16 / borderTopRightRadius: 16 on the sheet wrapper.
+  const sheetStyle = useMemo(
+    () => ({
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      overflow: "hidden" as const,
+    }),
+    [],
+  );
+  // No topInset needed — the sheet's top edge sits below the status bar.
+  const SheetHandle = useMemo(() => makeSheetHandle(c, 0), [c]);
   const SheetBackground = useMemo(() => makeSheetBackground(c.bg), [c.bg]);
+  // Dimmed backdrop above the underlying transparentModal route, mirroring
+  // the web mobile sheet's --color-modal-overlay scrim. While the add-subtask
+  // bar is open, disable the backdrop's close-on-press — the floating bar's
+  // own overlay handles dismissing it; we don't want both the bar and the
+  // sheet to close together.
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.5}
+        pressBehavior={addingSubtaskOpen ? "none" : "close"}
+      />
+    ),
+    [addingSubtaskOpen],
+  );
 
   const handleSheetChange = useCallback((index: number) => {
     // Pop route on close (-1) so route stays alive during slide-down.
@@ -341,15 +375,22 @@ export default function TaskDetailScreen() {
   function handleCustomLogSubmit(amount: number) {
     if (!task || amount < 0) return;
     setCustomLogOpen(false);
+    // Defense-in-depth: even though the modal already clamps, hard-cap the
+    // amount here when capLogAtGoal is on so no codepath can write more than
+    // the goal into the cycle.
+    const clamped =
+      task.capLogAtGoal && task.counterGoal != null && amount > task.counterGoal
+        ? task.counterGoal
+        : amount;
     const wouldOvershoot =
-      task.counterGoal != null && amount >= task.counterGoal;
+      task.counterGoal != null && clamped >= task.counterGoal;
     if (wouldOvershoot) {
       // Drain any buffered pending; the entered amount is the new absolute total committed to the cycle.
       quickLog.consumePending();
-      handleCheckInWithCounter(amount);
+      handleCheckInWithCounter(clamped);
       return;
     }
-    quickLog.setPending(amount);
+    quickLog.setPending(clamped);
   }
 
   async function handleStart() {
@@ -483,6 +524,8 @@ export default function TaskDetailScreen() {
         onChange={handleSheetChange}
         handleComponent={SheetHandle}
         backgroundComponent={SheetBackground}
+        backdropComponent={renderBackdrop}
+        style={sheetStyle}
       >
         <View style={styles.page}>
           <PageHeader c={c} onBack={closeSheet} />
@@ -505,6 +548,8 @@ export default function TaskDetailScreen() {
         onChange={handleSheetChange}
         handleComponent={SheetHandle}
         backgroundComponent={SheetBackground}
+        backdropComponent={renderBackdrop}
+        style={sheetStyle}
       >
         <View style={styles.page}>
           <PageHeader c={c} onBack={closeSheet} />
@@ -557,6 +602,8 @@ export default function TaskDetailScreen() {
         onChange={handleSheetChange}
         handleComponent={SheetHandle}
         backgroundComponent={SheetBackground}
+        backdropComponent={renderBackdrop}
+        style={sheetStyle}
       >
         <EditPaneSwipeWrapper onDismiss={() => setIsEditing(false)}>
           <View style={styles.page}>
@@ -590,6 +637,20 @@ export default function TaskDetailScreen() {
   const showArchive =
     !task.isRecurring &&
     (task.isArchived || (task.status === "completed" && isSubmittedForArchive));
+  // Vertical-dot management menu trigger. Lives inline beside whatever the
+  // current primary action is (slider for recurring, CTA for non-recurring),
+  // so it stays at the lower right without taking its own row.
+  const overflowTrigger = (
+    <Pressable
+      onPress={() => setMenuOpen((v) => !v)}
+      hitSlop={8}
+      style={styles.overflowBtn}
+      accessibilityLabel="Task actions"
+    >
+      <ThemedText style={{ fontSize: 20, lineHeight: 20, color: c.fgMuted, fontWeight: "700" }}>⋮</ThemedText>
+    </Pressable>
+  );
+
   const pageFooter = (
     <View
       style={[
@@ -614,53 +675,120 @@ export default function TaskDetailScreen() {
               onIncrement={quickLog.handleStepperIncrement}
               onDecrement={quickLog.handleStepperDecrement}
               onPress={() => setCustomLogOpen(true)}
-            />
-            <LogCheckinButton
-              cycleSum={quickLog.cycleSumToday}
-              pendingLog={quickLog.pendingLog}
-              counterGoal={task.counterGoal ?? null}
-              pointValue={task.pointValue}
               disabled={checkingIn || !canCheckIn}
-              onLog={quickLog.handleStepperIncrement}
-              onCheckInWithCounter={handleCheckInWithCounter}
             />
+            <View style={styles.actionRow}>
+              <View style={{ flex: 1 }}>
+                <LogCheckinButton
+                  // Re-key by check-in date so the slider's internal `committed`
+                  // state can never outlive the cycle it committed.
+                  key={task.lastCheckInDate ?? "open"}
+                  cycleSum={quickLog.cycleSumToday}
+                  pendingLog={quickLog.pendingLog}
+                  counterGoal={task.counterGoal ?? null}
+                  pointValue={task.pointValue}
+                  disabled={checkingIn || !canCheckIn}
+                  onLog={quickLog.handleStepperIncrement}
+                  onCheckInWithCounter={handleCheckInWithCounter}
+                />
+              </View>
+              {overflowTrigger}
+            </View>
           </View>
         ) : (
-          <TapSlideCheckIn pointValue={task.pointValue} onCommit={() => handleCheckIn()} />
+          <View style={styles.actionRow}>
+            <View style={{ flex: 1 }}>
+              <TapSlideCheckIn
+                key={task.lastCheckInDate ?? "open"}
+                pointValue={task.pointValue}
+                onCommit={() => handleCheckIn()}
+                disabled={checkingIn || !canCheckIn}
+              />
+            </View>
+            {overflowTrigger}
+          </View>
         )
-      ) : null}
-      <View style={styles.bottomActionRow}>
-        {showEdit ? (
+      ) : task.status === "pending" && !task.isRecurring ? (
+        <View style={styles.actionRow}>
           <Pressable
-            onPress={() => setIsEditing(true)}
+            onPress={handleStart}
             style={({ pressed }) => [
-              styles.bottomActionBtn,
+              styles.primaryCta,
               {
-                borderColor: c.borderHairline,
-                backgroundColor: pressed ? c.overlayHover : "transparent",
+                flex: 1,
+                backgroundColor: pressed ? c.activeHighlightBg : c.activeHighlight,
+                borderColor: c.activeHighlight,
               },
             ]}
           >
-            <ThemedText style={[styles.bottomActionLabel, { color: c.activeHighlight }]}>
-              Edit
+            <StartIcon color={c.onActiveHighlight} />
+            <ThemedText style={[styles.primaryCtaLabel, { color: c.onActiveHighlight }]}>
+              Start
             </ThemedText>
           </Pressable>
-        ) : null}
-        <Pressable
-          onPress={handleDelete}
-          style={({ pressed }) => [
-            styles.bottomActionBtn,
-            {
-              borderColor: c.borderHairline,
-              backgroundColor: pressed ? c.overlayHover : "transparent",
-            },
-          ]}
-        >
-          <ThemedText style={[styles.bottomActionLabel, { color: c.danger }]}>
-            Delete
-          </ThemedText>
-        </Pressable>
-      </View>
+          {overflowTrigger}
+        </View>
+      ) : task.status === "in_progress" ? (
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={handleComplete}
+            style={({ pressed }) => [
+              styles.primaryCta,
+              {
+                flex: 2,
+                backgroundColor: pressed ? c.successBg : c.success,
+                borderColor: c.success,
+              },
+            ]}
+          >
+            <CheckIcon color={c.bg} />
+            <ThemedText style={[styles.primaryCtaLabel, { color: c.bg }]}>
+              Complete
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={handlePause}
+            style={({ pressed }) => [
+              styles.secondaryCta,
+              {
+                flex: 1,
+                backgroundColor: pressed ? c.warningBg : "transparent",
+                borderColor: c.warning,
+              },
+            ]}
+          >
+            <PauseIcon color={c.warning} />
+            <ThemedText style={[styles.primaryCtaLabel, { color: c.warning }]}>
+              Pause
+            </ThemedText>
+          </Pressable>
+          {overflowTrigger}
+        </View>
+      ) : canUndo && !task.isRecurring ? (
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={handleUndoComplete}
+            style={({ pressed }) => [
+              styles.primaryCta,
+              {
+                flex: 1,
+                backgroundColor: pressed ? c.warningBg : c.warning,
+                borderColor: c.warning,
+              },
+            ]}
+          >
+            <UndoIcon color={c.bg} />
+            <ThemedText style={[styles.primaryCtaLabel, { color: c.bg }]}>
+              Undo
+            </ThemedText>
+          </Pressable>
+          {overflowTrigger}
+        </View>
+      ) : (
+        // No primary action available (e.g. completed + submitted/awarded);
+        // ⋮ alone, right-aligned.
+        <View style={{ alignItems: "flex-end" }}>{overflowTrigger}</View>
+      )}
     </View>
   );
 
@@ -676,6 +804,8 @@ export default function TaskDetailScreen() {
       onChange={handleSheetChange}
       handleComponent={SheetHandle}
       backgroundComponent={SheetBackground}
+      backdropComponent={renderBackdrop}
+      style={sheetStyle}
       // "extend" shrinks content above keyboard so footer rides up.
       keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
@@ -692,17 +822,6 @@ export default function TaskDetailScreen() {
           <PageHeader
             c={c}
             onBack={closeSheet}
-            right={
-              showArchive ? (
-                <Pressable
-                  onPress={() => setMenuOpen((v) => !v)}
-                  hitSlop={8}
-                  style={styles.overflowBtn}
-                >
-                  <ThemedText style={{ fontSize: 18, lineHeight: 18, color: c.fgMuted }}>⋯</ThemedText>
-                </Pressable>
-              ) : null
-            }
           />
         </View>
         {/* Body absolute-positioned between header + footer for bounded height. */}
@@ -757,44 +876,9 @@ export default function TaskDetailScreen() {
                 </ThemedText>
               ) : null}
 
-              {(task.status === "pending" && !task.isRecurring)
-              || task.status === "in_progress"
-              || (canUndo && !task.isRecurring) ? (
-                <View style={styles.actionRow}>
-                  {task.status === "pending" && !task.isRecurring ? (
-                    <IconActionBtn
-                      color={c.activeHighlight}
-                      bg={c.activeHighlightBg}
-                      onPress={handleStart}
-                      icon={<StartIcon color={c.activeHighlight} />}
-                    />
-                  ) : null}
-                  {task.status === "in_progress" ? (
-                    <>
-                      <IconActionBtn
-                        color={c.success}
-                        bg={c.successBg}
-                        onPress={handleComplete}
-                        icon={<CheckIcon color={c.success} />}
-                      />
-                      <IconActionBtn
-                        color={c.warning}
-                        bg={c.warningBg}
-                        onPress={handlePause}
-                        icon={<PauseIcon color={c.warning} />}
-                      />
-                    </>
-                  ) : null}
-                  {canUndo && !task.isRecurring ? (
-                    <IconActionBtn
-                      color={c.warning}
-                      bg={c.warningBg}
-                      onPress={handleUndoComplete}
-                      icon={<UndoIcon color={c.warning} />}
-                    />
-                  ) : null}
-                </View>
-              ) : null}
+              {/* Start/Complete/Pause/Undo moved to the primary CTA in the
+                  footer so they read as "the action" rather than yet another
+                  tinted pill alongside the meta chips. */}
             </View>
 
           {/* Subtasks panel — flex:1 + minHeight:0 so it scrolls internally. */}
@@ -864,7 +948,7 @@ export default function TaskDetailScreen() {
                         ) : null}
                       </View>
                       <ThemedText
-                        numberOfLines={1}
+                        numberOfLines={2}
                         style={[
                           { flex: 1, fontSize: 12, color: sub.completed ? c.fgMuted : c.fg },
                           sub.completed ? { textDecorationLine: "line-through" } : null,
@@ -930,8 +1014,8 @@ export default function TaskDetailScreen() {
           {pageFooter}
         </View>
 
-        {/* Overflow popover — Archive only; absolute within sheet content. */}
-        {menuOpen && showArchive ? (
+        {/* Overflow popover — Edit / Archive / Delete management actions. */}
+        {menuOpen ? (
           <>
             <Pressable
               style={StyleSheet.absoluteFillObject}
@@ -940,18 +1024,51 @@ export default function TaskDetailScreen() {
             <View
               style={[
                 styles.overflowMenu,
-                { backgroundColor: c.surface, borderColor: c.border },
+                {
+                  backgroundColor: c.surface,
+                  borderColor: c.border,
+                  // Sit just above the floating ⋮ trigger; the trigger lives
+                  // inside the footer with paddingBottom = 12 + insets.bottom,
+                  // and is ~36px tall + a 12px gap = ~60px above the safe area.
+                  bottom: insets.bottom + 60,
+                },
               ]}
             >
+              {showEdit ? (
+                <Pressable
+                  onPress={() => { setMenuOpen(false); setIsEditing(true); }}
+                  style={({ pressed }) => [
+                    styles.overflowMenuItem,
+                    { backgroundColor: pressed ? c.overlayHover : "transparent" },
+                  ]}
+                >
+                  <ThemedText style={[styles.overflowMenuLabel, { color: c.fgMuted }]}>
+                    Edit
+                  </ThemedText>
+                </Pressable>
+              ) : null}
+              {showArchive ? (
+                <Pressable
+                  onPress={() => { setMenuOpen(false); handleArchive(); }}
+                  style={({ pressed }) => [
+                    styles.overflowMenuItem,
+                    { backgroundColor: pressed ? c.overlayHover : "transparent" },
+                  ]}
+                >
+                  <ThemedText style={[styles.overflowMenuLabel, { color: c.fgMuted }]}>
+                    {task.isArchived ? "Unarchive" : "Archive"}
+                  </ThemedText>
+                </Pressable>
+              ) : null}
               <Pressable
-                onPress={() => { setMenuOpen(false); handleArchive(); }}
+                onPress={() => { setMenuOpen(false); handleDelete(); }}
                 style={({ pressed }) => [
                   styles.overflowMenuItem,
                   { backgroundColor: pressed ? c.overlayHover : "transparent" },
                 ]}
               >
-                <ThemedText style={[styles.overflowMenuLabel, { color: c.fgMuted }]}>
-                  {task.isArchived ? "Unarchive" : "Archive"}
+                <ThemedText style={[styles.overflowMenuLabel, { color: c.danger }]}>
+                  Delete
                 </ThemedText>
               </Pressable>
             </View>
@@ -966,6 +1083,7 @@ export default function TaskDetailScreen() {
         pendingLog={quickLog.pendingLog}
         counterGoal={task.counterGoal ?? null}
         counterUnit={task.counterUnit ?? null}
+        capLogAtGoal={task.capLogAtGoal ?? false}
         onCancel={() => setCustomLogOpen(false)}
         onSubmit={handleCustomLogSubmit}
       />
@@ -1022,8 +1140,11 @@ const styles = StyleSheet.create({
   },
   overflowMenu: {
     position: "absolute",
-    top: 48,
-    right: 14,
+    // Anchored to the lower-right; `bottom` set inline so it can include
+    // insets.bottom + footer trigger height for the correct upward offset.
+    // right matches footerStack's paddingHorizontal so the menu's right
+    // edge aligns with the ⋮ trigger.
+    right: 16,
     minWidth: 140,
     borderWidth: 1,
     borderRadius: 4,
@@ -1088,45 +1209,59 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  bottomActionRow: {
+  // Horizontal row that holds the primary action (slider / CTA buttons) on
+  // the left and the ⋮ overflow trigger on the right. alignItems:center keeps
+  // the trigger vertically centered against the taller CTA / slider.
+  actionRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  bottomActionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 6,
-    borderWidth: 1,
+  // Primary CTA — filled fill, icon + label. Solid bg is unique in the
+  // modal so it reads unambiguously as the action. Secondary CTA (Pause
+  // beside Complete) keeps the outlined variant to demote it to a "less
+  // common" action without losing recognizability.
+  primaryCta: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  bottomActionLabel: {
-    fontSize: 11,
-    letterSpacing: 1.8,
+  secondaryCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  primaryCtaLabel: {
+    fontSize: 12,
+    letterSpacing: 1.6,
     textTransform: "uppercase",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   // Compact pill row sized to label. (chip + iconActionBtn moved to
   // components/task-detail/meta-chip.tsx with MetaChip/IconActionBtn.)
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  // Status-action row holds 1–2 IconActionBtns (start/complete/pause/undo).
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
   subRow: {
     flexDirection: "row",
     alignItems: "center",
-    height: 28,
+    // minHeight (not fixed height) so a wrapped 2-line subtask title doesn't
+    // get clipped against the row's box.
+    minHeight: 28,
     gap: 8,
   },
   // Subtask row padding inside SwipeableRow for breathing room.
   subRowPadded: {
     paddingHorizontal: 12,
     paddingVertical: 4,
-    height: 36,
+    minHeight: 36,
   },
   subCheckbox: {
     width: 14,

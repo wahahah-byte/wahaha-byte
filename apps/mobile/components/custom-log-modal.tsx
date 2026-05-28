@@ -10,6 +10,9 @@ interface Props {
   pendingLog: number;
   counterGoal: number | null;
   counterUnit: string | null;
+  // When true, the entered amount is hard-clamped to counterGoal as the user
+  // types — matches the "cap log at goal" flag on the task.
+  capLogAtGoal?: boolean;
   onCancel: () => void;
   // Submit the new absolute total for today (>= 0); parent diffs against the current value.
   onSubmit: (amount: number) => void;
@@ -23,6 +26,7 @@ export function CustomLogModal({
   pendingLog,
   counterGoal,
   counterUnit,
+  capLogAtGoal,
   onCancel,
   onSubmit,
 }: Props) {
@@ -56,8 +60,14 @@ export function CustomLogModal({
     };
   }, []);
 
-  const digits = text.replace(/[^0-9]/g, "").slice(0, MAX_DIGITS);
-  const amount = digits === "" ? 0 : parseInt(digits, 10);
+  const rawDigits = text.replace(/[^0-9]/g, "").slice(0, MAX_DIGITS);
+  const rawAmount = rawDigits === "" ? 0 : parseInt(rawDigits, 10);
+  // Cap-at-goal: clamp the entered amount to counterGoal. The user simply
+  // can't log more than the goal in a single cycle.
+  const capActive = !!capLogAtGoal && counterGoal != null;
+  const amount = capActive && rawAmount > counterGoal! ? counterGoal! : rawAmount;
+  const digits = amount === rawAmount ? rawDigits : String(amount);
+  const cappedHit = capActive && rawAmount > counterGoal!;
   const currentTotal = cycleSum + pendingLog;
   const changed = digits !== "" && amount !== currentTotal;
   const canSubmit = changed;
@@ -158,6 +168,11 @@ export function CustomLogModal({
               {willCheckIn ? (
                 <ThemedText style={{ color: c.success, fontSize: 12, fontWeight: "600" }}>
                   Goal reached — will check in.
+                </ThemedText>
+              ) : null}
+              {cappedHit ? (
+                <ThemedText style={{ color: c.warning, fontSize: 11 }}>
+                  Capped at goal ({counterGoal!.toLocaleString()}{unit}).
                 </ThemedText>
               ) : null}
             </View>

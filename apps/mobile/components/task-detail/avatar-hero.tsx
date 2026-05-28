@@ -18,8 +18,8 @@ export function AvatarOnlyHero() {
   const equipped = useEquippedAvatar();
   if (!avatarsEnabled) return null;
   return (
-    <View style={{ height: 232, alignItems: "center", justifyContent: "center" }}>
-      <ChibiAvatar equipped={equipped} height={168} />
+    <View style={{ height: 140, alignItems: "center", justifyContent: "center" }}>
+      <ChibiAvatar equipped={equipped} height={110} />
     </View>
   );
 }
@@ -63,8 +63,8 @@ export function CounterPanel({
   }
 
   const stageCard = (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
-      <ChibiAvatar equipped={equipped} height={168} />
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 6 }}>
+      <ChibiAvatar equipped={equipped} height={100} />
       {task.isRecurring ? (
         <View style={{ width: "78%", maxWidth: 320 }}>
           <StreakDisplay
@@ -89,7 +89,7 @@ export function CounterPanel({
 
   return (
     <DetailPager
-      height={232}
+      height={150}
       labels={["Stage", "Stats"]}
       cards={[
         { key: "stage", content: stageCard },

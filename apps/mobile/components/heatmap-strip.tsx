@@ -7,9 +7,11 @@ import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 
 const HEATMAP_WEEKS = 12;
-const CELL_SIZE = 14;
-const CELL_GAP = 3;
-const LABEL_COL = 22;
+// Cells trimmed from 14/3 → 12/2 so the strip fits a 180px hero card with
+// header + legend without clipping. Visually similar density.
+const CELL_SIZE = 12;
+const CELL_GAP = 2;
+const LABEL_COL = 20;
 const TOP_LABEL_ROW = 10;
 const LEVEL_OPACITY = [0, 0.30, 0.55, 0.80, 1.0];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];

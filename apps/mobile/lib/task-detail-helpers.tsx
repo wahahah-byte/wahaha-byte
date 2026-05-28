@@ -38,10 +38,25 @@ export function makeSheetHandle(c: ReturnType<typeof useColors>, topInset: numbe
   };
 }
 
-// Solid sheet bg — opaque against the transparent-modal route's underlying screen.
+// Solid sheet bg — opaque against the transparent-modal route's underlying
+// screen. Rounded top corners + shadow above mirror the web mobile sheet
+// (apps/web/src/components/TaskDetailModal.tsx — borderRadius 16 + -8px shadow).
 export function makeSheetBackground(bg: string) {
   return function SheetBackground({ style }: BottomSheetBackgroundProps) {
-    return <View style={[style, { backgroundColor: bg }]} />;
+    return (
+      <View
+        style={[
+          style,
+          {
+            backgroundColor: bg,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            boxShadow: "0px -8px 32px rgba(0, 0, 0, 0.4)",
+            elevation: 18,
+          },
+        ]}
+      />
+    );
   };
 }
 

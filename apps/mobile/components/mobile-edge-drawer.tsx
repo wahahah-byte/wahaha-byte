@@ -182,15 +182,17 @@ export function MobileEdgeDrawer({ children }: Props) {
             },
           ]}
         >
-          {/* Outer Pressable closes the account menu when a tap lands on an
-              empty area of the drawer (e.g. caps block). Nav rows + user
-              trigger + popover items have their own Pressables, so they
-              handle their taps directly without bubbling up. */}
+          {/* Outer Pressable fills the entire panel so taps anywhere inside
+              the drawer — including the empty space above the nav rows —
+              close the account menu. Nav rows + user trigger + popover items
+              have their own Pressables, so they handle their taps directly
+              without bubbling up. Content is bottom-aligned via
+              justifyContent so the original layout is preserved. */}
           <Pressable
             onPress={() => {
               if (accountMenuOpen) setAccountMenuOpen(false);
             }}
-            style={{ marginTop: "auto" }}
+            style={{ flex: 1, justifyContent: "flex-end" }}
           >
             {ITEMS.map((item) => {
               const active = pathname === item.route;
@@ -592,7 +594,8 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     bottom: "100%",
-    marginBottom: 4,
+    // Lifted off the user row so the popover doesn't hug it.
+    marginBottom: 12,
     borderWidth: 1,
     borderRadius: 4,
     overflow: "hidden",

@@ -15,6 +15,10 @@ interface Props {
   onDecrement: () => void;
   // When supplied, wraps the widget in a bordered Pressable that opens a custom-log modal.
   onPress?: () => void;
+  // When true, the inc/dec buttons and the tappable wrapper are all blocked
+  // — used after a successful check-in so the user can't log more into a
+  // closed cycle.
+  disabled?: boolean;
 }
 
 // Mobile QuickLogStepper — inline +/- chip with running total, optional progress bar.
@@ -28,6 +32,7 @@ export function QuickLogStepper({
   onIncrement,
   onDecrement,
   onPress,
+  disabled,
 }: Props) {
   const c = useColors();
   const sum = cycleSum + pendingLog;
@@ -42,8 +47,8 @@ export function QuickLogStepper({
     ? `${sum.toLocaleString()} / ${goal.toLocaleString()}${unit}`
     : `${sum.toLocaleString()}${unit}`;
 
-  const decDisabled = sum <= 0;
-  const incDisabled = capped;
+  const decDisabled = disabled || sum <= 0;
+  const incDisabled = disabled || capped;
 
   const chip = showStepper ? (
     <View style={[styles.chip, { borderColor: c.borderHairline, backgroundColor: c.input }]}>
@@ -105,11 +110,13 @@ export function QuickLogStepper({
     return (
       <Pressable
         onPress={onPress}
+        disabled={disabled}
         style={({ pressed }) => [
           styles.tappable,
           {
             borderColor: c.borderHairline,
-            backgroundColor: pressed ? c.overlayHover : c.input,
+            backgroundColor: pressed && !disabled ? c.overlayHover : c.input,
+            opacity: disabled ? 0.4 : 1,
           },
         ]}
         accessibilityRole="button"
