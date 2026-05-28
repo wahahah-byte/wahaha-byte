@@ -1135,11 +1135,17 @@ function TaskRowImpl({
   });
 
   const rowBg = isGreyed ? c.rowGreyed : isCompleted ? c.bg : c.surface;
-  // Completed-tab selection gate (mirrors web's !isSubmitted).
+  // Completed-tab selection gate. Three layers: the persisted server flag
+  // (item.submitted), the legacy pointsAwarded hint, and the in-session
+  // submittedTaskIds set — needed because the post-submit refetch is deferred
+  // ~1.9s for the bank-burst animation, and without the session set the
+  // checkbox would remain tappable (and resubmittable) during that window.
   const isSelectable =
     activeFilter === "completed" &&
     isCompleted &&
+    !item.submitted &&
     !item.pointsAwarded &&
+    !(submittedTaskIds?.has(item.taskId) ?? false) &&
     !!onToggleSelect;
 
   return (

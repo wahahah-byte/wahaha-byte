@@ -25,20 +25,32 @@ export function chunkListItems(items: (TaskDto | Sep)[]): Chunk[] {
 }
 
 export const completedSort =
-  (submittedTaskIds: Set<string>) =>
-  (a: TaskDto, b: TaskDto) => {
-    const tier = (t: TaskDto): 0 | 1 | 2 => {
-      if (submittedTaskIds.has(t.taskId)) return 2;
-      if (t.submitted === true || !!t.pointsAwarded) return 1;
+  (submittedTaskIds: Set<string>) => {
+    // Insertion-ordered snapshot of the session set: doSubmit appends new ids
+    // via `new Set([...prev, ...succeeded])`, so the most recent submission is
+    // last. Indexing here lets us land it at the top of the submitted bucket
+    // (mirroring the routines tab's recent-check-in pinning).
+    const recentOrder = [...submittedTaskIds];
+    return (a: TaskDto, b: TaskDto) => {
+      // 0 = not yet submitted (top), 1 = submitted this session (just below),
+      // 2 = submitted before this session (bottom).
+      const tier = (t: TaskDto): 0 | 1 | 2 => {
+        if (submittedTaskIds.has(t.taskId)) return 1;
+        if (t.submitted === true || !!t.pointsAwarded) return 2;
+        return 0;
+      };
+      const aTier = tier(a);
+      const bTier = tier(b);
+      if (aTier !== bTier) return aTier - bTier;
+      if (aTier === 1) {
+        // Within the session-submitted band, latest insertion goes first.
+        return recentOrder.indexOf(b.taskId) - recentOrder.indexOf(a.taskId);
+      }
+      if (a.completedAt && b.completedAt) return b.completedAt.localeCompare(a.completedAt);
+      if (a.completedAt) return -1;
+      if (b.completedAt) return 1;
       return 0;
     };
-    const aTier = tier(a);
-    const bTier = tier(b);
-    if (aTier !== bTier) return aTier - bTier;
-    if (a.completedAt && b.completedAt) return b.completedAt.localeCompare(a.completedAt);
-    if (a.completedAt) return -1;
-    if (b.completedAt) return 1;
-    return 0;
   };
 
 const byDueDate = (a: TaskDto, b: TaskDto) => {
