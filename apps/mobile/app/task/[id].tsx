@@ -330,15 +330,37 @@ export default function TaskDetailScreen() {
       currentStreakCount: predictedStreak,
       longestStreakCount: predictedLongest,
     });
-    // Optimistic local patch so canCheckIn flips immediately.
+    // Optimistic local patch so canCheckIn flips immediately. When the
+    // check-in carries an absolute counterValue, also splice today's log
+    // cycles out of recentCycles and insert a stub checkin cycle so the
+    // displayed daily total snaps to the committed value — otherwise
+    // consumePending() drops pendingLog to 0 first and the user briefly
+    // sees the old preserved-from-undo value until load() returns.
+    const stubCycleId = -Math.floor(Math.random() * 1_000_000_000) - 1;
     setTask((prev) => {
       if (!prev) return prev;
+      const patchedCycles = counterValue !== undefined
+        ? [
+            {
+              cycleId: stubCycleId,
+              taskId: prev.taskId,
+              checkInDate: todayIso,
+              counterValue,
+              createdAt: new Date().toISOString(),
+              cycleType: "checkin" as const,
+            },
+            ...(prev.recentCycles ?? []).filter(
+              (c) => c.checkInDate.split("T")[0] !== todayIso,
+            ),
+          ]
+        : prev.recentCycles;
       return {
         ...prev,
         lastCheckInDate: todayIso,
         dueDate: nextDueIso ?? prev.dueDate,
         currentStreakCount: predictedStreak,
         longestStreakCount: predictedLongest,
+        recentCycles: patchedCycles,
       };
     });
     try {
@@ -362,12 +384,29 @@ export default function TaskDetailScreen() {
     }
   }
 
-  // Counter-task check-in: drains pending buffered logs into the final cycle's counterValue.
+  // Counter-task check-in. When the user has signalled a counter intent in
+  // this session (tap-buffered, slide tap-absorption, or a custom-log Set
+  // that lowered pendingLog below zero), commit the absolute today-total so
+  // the new cycle represents "today equals X". The server consolidates any
+  // existing log cycles for the day, so the preserved value from a prior
+  // undo can't double-count. With no user signal we pass undefined and the
+  // server leaves existing log cycles intact (the silent "just slide to
+  // confirm what's already there" path).
   async function handleCheckInWithCounter(touchValue: number) {
     if (!task) return;
     const buffered = quickLog.consumePending();
-    const total = touchValue + buffered;
-    await handleCheckIn(total > 0 ? total : undefined);
+    const hasUserSignal = buffered !== 0 || touchValue !== 0;
+    if (!hasUserSignal) {
+      await handleCheckIn(undefined);
+      return;
+    }
+    let absolute = Math.max(0, quickLog.cycleSumToday + buffered + touchValue);
+    // Cap-at-goal: post-undo path can carry an already-at-goal cycleSumToday
+    // plus the slide's absorbed +1, which would otherwise overshoot.
+    if (task.capLogAtGoal && task.counterGoal != null && absolute > task.counterGoal) {
+      absolute = task.counterGoal;
+    }
+    await handleCheckIn(absolute);
   }
 
   // Custom-log modal submit: edit semantics — `amount` is the new absolute total for today.
@@ -385,9 +424,11 @@ export default function TaskDetailScreen() {
     const wouldOvershoot =
       task.counterGoal != null && clamped >= task.counterGoal;
     if (wouldOvershoot) {
-      // Drain any buffered pending; the entered amount is the new absolute total committed to the cycle.
+      // The entered amount IS the absolute total. Bypass the slide wrapper
+      // (which would add cycleSumToday + buffered on top) and commit
+      // directly so the new checkin cycle replaces today's running total.
       quickLog.consumePending();
-      handleCheckInWithCounter(clamped);
+      void handleCheckIn(clamped);
       return;
     }
     quickLog.setPending(clamped);

@@ -172,8 +172,12 @@ export function useQuickLog({ task, heatmapCycles, onFlushQuickLog, onDelete }: 
     setPendingLog((p) => p + amount);
   }, []);
 
+  // Signed: after setPending lowers pendingLog below zero (revoking an
+  // undo-preserved log cycle), the negative remainder must reach the caller
+  // so an immediate check-in can fold it into the absolute target rather
+  // than silently dropping it and double-counting the preserved value.
   const consumePending = useCallback(() => {
-    const remainder = Math.max(0, pendingLogRef.current - inFlightSentRef.current);
+    const remainder = pendingLogRef.current - inFlightSentRef.current;
     pendingLogRef.current = 0;
     inFlightSentRef.current = 0;
     setPendingLog(0);
