@@ -41,8 +41,8 @@ export const RECURRING_FILTERS = [
 
 export const REGULAR_CAP = 200;
 export const RECURRING_CAP = 200;
-export const PER_CATEGORY_REGULAR_DAILY_CAP = 50;
-export const PER_CATEGORY_RECURRING_DAILY_CAP = 50;
+export const PER_CATEGORY_REGULAR_DAILY_CAP = 150;
+export const PER_CATEGORY_RECURRING_DAILY_CAP = 150;
 
 export const PER_TASK_VALUE_CAP: Record<string, number> = {
   Career:       25,
