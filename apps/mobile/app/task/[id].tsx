@@ -733,7 +733,7 @@ export default function TaskDetailScreen() {
         {
           borderColor: c.borderHairline,
           backgroundColor: c.bg,
-          paddingBottom: 12 + insets.bottom,
+          paddingBottom: 68 + insets.bottom,
         },
       ]}
     >
@@ -772,13 +772,15 @@ export default function TaskDetailScreen() {
           </View>
         ) : (
           <View style={styles.actionRow}>
-            <View style={{ flex: 1 }}>
-              <TapSlideCheckIn
-                key={task.lastCheckInDate ?? "open"}
-                pointValue={task.pointValue}
-                onCommit={() => handleCheckIn()}
-                disabled={checkingIn || !canCheckIn}
-              />
+            <View style={styles.sliderHost}>
+              <View style={styles.sliderWrap}>
+                <TapSlideCheckIn
+                  key={task.lastCheckInDate ?? "open"}
+                  pointValue={task.pointValue}
+                  onCommit={() => handleCheckIn()}
+                  disabled={checkingIn || !canCheckIn}
+                />
+              </View>
             </View>
             {overflowTrigger}
           </View>
@@ -1103,9 +1105,9 @@ export default function TaskDetailScreen() {
                   backgroundColor: c.surface,
                   borderColor: c.border,
                   // Sit just above the floating ⋮ trigger; the trigger lives
-                  // inside the footer with paddingBottom = 12 + insets.bottom,
-                  // and is ~36px tall + a 12px gap = ~60px above the safe area.
-                  bottom: insets.bottom + 60,
+                  // inside the footer with paddingBottom = 68 + insets.bottom,
+                  // and is ~36px tall + a 12px gap = ~116px above the safe area.
+                  bottom: insets.bottom + 116,
                 },
               ]}
             >
@@ -1243,7 +1245,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 4,
     gap: 14,
   },
   // Header anchor — onLayout feeds height back to body's `top`.
@@ -1291,6 +1293,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  // Non-counter slider host — caps + centers the slider to the same width as
+  // the counter task's LogCheckinButton (maxWidth 280).
+  sliderHost: {
+    flex: 1,
+    alignItems: "center",
+  },
+  sliderWrap: {
+    width: "100%",
+    maxWidth: 280,
   },
   // Primary CTA — filled fill, icon + label. Solid bg is unique in the
   // modal so it reads unambiguously as the action. Secondary CTA (Pause

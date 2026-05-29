@@ -14,7 +14,7 @@ interface Props {
 // detail sheet (and the edit-mode variant inside the same screen).
 export function PageHeader({ c, onBack, backLabel, right }: Props) {
   return (
-    <View style={[styles.pageHeader, { borderColor: c.borderHairline }]}>
+    <View style={styles.pageHeader}>
       <Pressable
         onPress={onBack}
         hitSlop={10}
@@ -36,19 +36,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 0,
+    minHeight: 26,
   },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 2,
   },
   backArrow: {
-    fontSize: 28,
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 26,
     fontWeight: "300",
   },
   backLabel: {
