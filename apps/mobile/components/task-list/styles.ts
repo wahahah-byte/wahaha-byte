@@ -1,0 +1,67 @@
+import { StyleSheet } from "react-native";
+
+// Shared row/section styles for TaskList and its extracted sub-components.
+export const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderLeftWidth: 2,
+  },
+  rowLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
+  priorityDot: { width: 6, height: 6, borderRadius: 3, flexShrink: 0 },
+  checkinBox: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  selectBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  titleWrap: { flex: 1, gap: 2, minWidth: 0 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  dateCol: { width: 64, alignItems: "center", justifyContent: "center" },
+  pointsCol: {
+    width: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+  },
+  badge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3, borderWidth: 1 },
+  recurChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
+  categoryPill: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 2, borderWidth: 1 },
+  sectionHeader: { paddingTop: 16, paddingBottom: 6, paddingHorizontal: 4 },
+  activeToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 4,
+    gap: 6,
+  },
+  activeToggleRule: {
+    flex: 1,
+    height: 1,
+    marginLeft: 12,
+  },
+});

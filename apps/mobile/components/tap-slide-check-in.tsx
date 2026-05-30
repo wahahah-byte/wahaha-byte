@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -15,6 +15,7 @@ import Svg, { Line, Polyline } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/themed-text";
+import { PoofBurst } from "@/components/poof-burst";
 import { useColors } from "@/hooks/use-colors";
 
 interface Props {
@@ -34,9 +35,11 @@ const COMMIT_GLIDE_MS = 460;
 const LANDING_PULSE_MS = 220;
 const HOLD_MS = 140;
 const FADE_OUT_MS = 260;
-const COMMIT_FIRE_DELAY = COMMIT_GLIDE_MS + LANDING_PULSE_MS + HOLD_MS + FADE_OUT_MS;
+// When the puff (fade + scale + particle burst) begins, after the landing beat.
+const POOF_START_MS = COMMIT_GLIDE_MS + LANDING_PULSE_MS + HOLD_MS;
+const POOF_MS = 560;
 const THUMB_SIZE = 48;
-const TRACK_HEIGHT = 52;
+export const TRACK_HEIGHT = 52;
 const TRACK_PAD = 2;
 const POPUP_TOTAL_MS = 1100;
 // Small "+1" pop on tap — shorter beat than the commit pts popup.
@@ -54,6 +57,11 @@ export function TapSlideCheckIn({
   const [trackWidth, setTrackWidth] = useState(0);
   const [committed, setCommitted] = useState(false);
   const [committedPointValue, setCommittedPointValue] = useState(0);
+  // Commit-celebration timers — cleared on unmount so a parent that swaps the
+  // slider out mid-commit (e.g. the poof transition) doesn't fire stray haptics
+  // or setState on the unmounted instance.
+  const commitTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { commitTimers.current.forEach(clearTimeout); }, []);
 
   const max = Math.max(0, trackWidth - THUMB_SIZE - TRACK_PAD * 2);
 
@@ -67,6 +75,28 @@ export function TapSlideCheckIn({
   const borderOpacity = useSharedValue(0);
   const slideOpacity = useSharedValue(1);
   const thumbScale = useSharedValue(1);
+  // Puff progress (0 idle → 1 fully poofed); drives host scale + particle burst.
+  const poofP = useSharedValue(0);
+
+  // The slider stays poofed (faded/invisible, height reserved) after a commit.
+  // When the parent re-enables it for a new cycle (disabled true → false), wipe
+  // the commit state so a fresh, slidable slider fades back in.
+  const prevDisabled = useRef(disabled);
+  useEffect(() => {
+    const was = prevDisabled.current;
+    prevDisabled.current = disabled;
+    if (was && !disabled) {
+      commitTimers.current.forEach(clearTimeout);
+      commitTimers.current = [];
+      offset.value = 0;
+      thumbScale.value = 1;
+      armed.value = false;
+      poofP.value = 0;
+      slideOpacity.value = withTiming(1, { duration: 180 });
+      setCommitted(false);
+      setCommittedPointValue(0);
+    }
+  }, [disabled, offset, thumbScale, armed, poofP, slideOpacity]);
   // Tap-log mini popup (+1 rising from thumb).
   const tapPopOpacity = useSharedValue(0);
   const tapPopY = useSharedValue(0);
@@ -145,32 +175,23 @@ export function TapSlideCheckIn({
     playCommitPopup();
     onCommit();
 
-    setTimeout(() => {
+    commitTimers.current.push(setTimeout(() => {
       thumbScale.value = withSequence(
         withTiming(1.08, { duration: LANDING_PULSE_MS / 2, easing: Easing.bezier(0.22, 0.7, 0.4, 1) }),
         withTiming(1, { duration: LANDING_PULSE_MS / 2, easing: Easing.bezier(0.22, 0.7, 0.4, 1) }),
       );
       hapticCommitLanded();
-    }, COMMIT_GLIDE_MS);
+    }, COMMIT_GLIDE_MS));
 
-    setTimeout(() => {
+    // Puff away: fade + scale the slider out and burst the particle ring. We do
+    // NOT reset to visible afterwards — the slider holds invisible (its box still
+    // laid out, so the footer never shifts) until the parent re-enables it for a
+    // new cycle, which the disabled→false effect handles.
+    commitTimers.current.push(setTimeout(() => {
       slideOpacity.value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.linear });
-    }, COMMIT_GLIDE_MS + LANDING_PULSE_MS + HOLD_MS);
-
-    setTimeout(() => {
-      setTimeout(() => {
-        offset.value = withSpring(0, { mass: 1, damping: 18, stiffness: 140 });
-        thumbScale.value = 1;
-        popupY.value = 0;
-        popupScale.value = 0.55;
-        popupOpacity.value = 0;
-        borderOpacity.value = 0;
-        armed.value = false;
-        setCommitted(false);
-        setCommittedPointValue(0);
-        slideOpacity.value = 1;
-      }, 60);
-    }, COMMIT_FIRE_DELAY);
+      poofP.value = 0;
+      poofP.value = withTiming(1, { duration: POOF_MS, easing: Easing.out(Easing.cubic) });
+    }, POOF_START_MS));
   }
 
   // Tap gesture on the thumb. maxDistance gates it from competing with pan.
@@ -219,8 +240,10 @@ export function TapSlideCheckIn({
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value }, { scale: thumbScale.value }],
   }));
-  const hostStyle = useAnimatedStyle(() => ({
+  // Faded content layer: opacity drops + a slight swell on the puff.
+  const contentStyle = useAnimatedStyle(() => ({
     opacity: slideOpacity.value,
+    transform: [{ scale: 1 + 0.14 * poofP.value }],
   }));
   const fillStyle = useAnimatedStyle(() => ({
     width: offset.value + THUMB_SIZE / 2,
@@ -248,7 +271,8 @@ export function TapSlideCheckIn({
   }));
 
   return (
-    <Animated.View style={[styles.host, hostStyle]}>
+    <View style={styles.host}>
+      <Animated.View style={contentStyle}>
       {/* Commit pts popup — center-top of slider. */}
       {committedPointValue > 0 ? (
         <Animated.View pointerEvents="none" style={[styles.popup, popupStyle]}>
@@ -398,7 +422,12 @@ export function TapSlideCheckIn({
           ]}
         />
       </View>
-    </Animated.View>
+      </Animated.View>
+
+      {/* Particle burst — sibling of the fading layer so the puff stays bright
+          as the slider itself fades out. */}
+      <PoofBurst progress={poofP} color={c.activeHighlightAlt} />
+    </View>
   );
 }
 

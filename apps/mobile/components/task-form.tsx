@@ -5,33 +5,23 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View,
 } from "react-native";
 
-import { CATEGORIES, COUNTER_UNITS, maxPointsFor, type UserInventoryDto } from "@wahaha/shared";
+import { CATEGORIES, maxPointsFor, type UserInventoryDto } from "@wahaha/shared";
 
 import { ChibiAvatar } from "@/components/chibi-avatar";
 import { CompactSelect } from "@/components/compact-select";
 import { DatePicker } from "@/components/date-picker";
-import { GoalStepper } from "@/components/goal-stepper";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
 import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
 import { equippedCache } from "@/lib/equipped-cache";
-
-const REPEAT_OPTIONS: { label: string; value: string; rule: string | null }[] = [
-  { label: "Once", value: "once", rule: null },
-  { label: "Daily", value: "daily", rule: "daily" },
-  { label: "Wkdys", value: "weekdays", rule: "weekdays" },
-  { label: "Weekly", value: "weekly", rule: "weekly" },
-  { label: "Biweek", value: "biweekly", rule: "biweekly" },
-  { label: "Monthly", value: "monthly", rule: "monthly" },
-];
-
-type PriorityKey = "low" | "medium" | "high";
+import { REPEAT_OPTIONS, fmtDate, parseDate, type PriorityKey } from "@/lib/task-form-helpers";
+import { CounterSection } from "@/components/task-form/counter-section";
+import { styles } from "@/components/task-form/styles";
 
 export interface TaskFormValues {
   title: string;
@@ -65,18 +55,6 @@ export const emptyTaskForm: TaskFormValues = {
   counterGoal: "",
   capLogAtGoal: false,
 };
-
-function fmtDate(d: Date | null): string | null {
-  if (!d) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function parseDate(s: string | null): Date | null {
-  if (!s) return null;
-  const [y, m, d] = s.split("T")[0].split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
 
 interface Props {
   initial?: TaskFormValues;
@@ -342,111 +320,20 @@ export function TaskForm({
               </ThemedText>
             ) : null}
 
-            {/* Counter — recurring-only. Label itself is the expand toggle:
-                tapping it sets hasCounter, which replaces the old On/Off
-                pill and frees the row for unit + goal + cap-at-goal inline. */}
+            {/* Counter — recurring-only. */}
             {isRecurring ? (
-              <View style={{ gap: 6 }}>
-                <Pressable
-                  onPress={() => setHasCounter((v) => !v)}
-                  hitSlop={6}
-                  style={styles.counterDisclosure}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: hasCounter }}
-                  accessibilityLabel={hasCounter ? "Hide counter settings" : "Show counter settings"}
-                >
-                  <ThemedText
-                    style={{
-                      color: c.fgMuted,
-                      fontSize: 9,
-                      fontWeight: "600",
-                      letterSpacing: 1.8,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Counter
-                  </ThemedText>
-                  <ThemedText
-                    style={{
-                      color: c.fgSubtle,
-                      fontSize: 9,
-                      lineHeight: 11,
-                    }}
-                  >
-                    {hasCounter ? "▾" : "▸"}
-                  </ThemedText>
-                </Pressable>
-                {hasCounter ? (
-                  <View style={styles.counterRow}>
-                    <View style={{ width: 140 }}>
-                      <CompactSelect
-                        value={counterUnit}
-                        onChange={setCounterUnit}
-                        options={[
-                          { value: "", label: "(no unit)" },
-                          ...COUNTER_UNITS.map((u) => ({ value: u, label: u })),
-                        ]}
-                      />
-                    </View>
-                    <View style={styles.goalCluster}>
-                      <ThemedText
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: 1.8,
-                          textTransform: "uppercase",
-                          color: c.fgSubtle,
-                        }}
-                      >
-                        Goal
-                      </ThemedText>
-                      <GoalStepper value={counterGoal} onChange={setCounterGoal} />
-                      {counterGoal.trim() !== "" && Number(counterGoal) > 0 ? (
-                        <Pressable
-                          onPress={() => setCapLogAtGoal((v) => !v)}
-                          hitSlop={6}
-                          style={[
-                            styles.capChip,
-                            {
-                              backgroundColor: capLogAtGoal ? c.activeHighlightBg : "transparent",
-                              borderColor: capLogAtGoal ? c.activeHighlightBorder : c.borderHairline,
-                            },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: capLogAtGoal }}
-                          accessibilityLabel="Cap logs at goal"
-                        >
-                          <ThemedText
-                            style={{
-                              fontSize: 11,
-                              lineHeight: 12,
-                              color: capLogAtGoal ? c.activeHighlight : c.fgSubtle,
-                              fontWeight: "700",
-                            }}
-                          >
-                            ≤
-                          </ThemedText>
-                          <ThemedText
-                            style={{
-                              fontSize: 9,
-                              color: capLogAtGoal ? c.activeHighlight : c.fgSubtle,
-                              fontWeight: capLogAtGoal ? "600" : "400",
-                              letterSpacing: 1,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Cap
-                          </ThemedText>
-                        </Pressable>
-                      ) : null}
-                      {counterUnit && counterGoal.trim() !== "" ? (
-                        <ThemedText style={{ fontSize: 10, color: c.fgSubtle }}>
-                          {counterUnit} / {recurrenceRule === "weekly" ? "wk" : recurrenceRule === "monthly" ? "mo" : "day"}
-                        </ThemedText>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-              </View>
+              <CounterSection
+                hasCounter={hasCounter}
+                setHasCounter={setHasCounter}
+                counterUnit={counterUnit}
+                setCounterUnit={setCounterUnit}
+                counterGoal={counterGoal}
+                setCounterGoal={setCounterGoal}
+                capLogAtGoal={capLogAtGoal}
+                setCapLogAtGoal={setCapLogAtGoal}
+                recurrenceRule={recurrenceRule}
+                c={c}
+              />
             ) : null}
           </View>
 
@@ -530,97 +417,3 @@ function Field({ label, c, children }: { label: string; c: ReturnType<typeof use
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { padding: 20 },
-  avatarHero: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  titleInput: {
-    fontSize: 16,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-    padding: 0,
-    marginBottom: 8,
-  },
-  descInput: {
-    fontSize: 12,
-    lineHeight: 18,
-    padding: 0,
-    marginBottom: 12,
-    minHeight: 36,
-    textAlignVertical: "top",
-  },
-  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  pillCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  // Matches detail-screen footer pill row.
-  footerStack: {
-    gap: 10,
-    paddingTop: 14,
-    marginTop: 4,
-  },
-  pinnedFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  bottomActionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  bottomActionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bottomActionLabel: {
-    fontSize: 11,
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
-    fontWeight: "600",
-  },
-  counterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
-  },
-  counterDisclosure: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-  },
-  capChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  goalCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-});

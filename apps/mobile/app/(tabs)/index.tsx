@@ -11,6 +11,7 @@ import {
 } from "@wahaha/shared";
 
 import { getToken, usersApi } from "@/lib/api";
+import { profileCache } from "@/lib/profile-cache";
 import { taskEvents } from "@/lib/task-events";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { CapWarningModal } from "@/components/cap-warning-modal";
@@ -39,8 +40,10 @@ export default function TasksScreen() {
     getToken().then((t) => setHasToken(!!t));
   }, [refreshKey]);
 
-  // Submit/bank flow — selection only on Completed tab.
-  const [me, setMe] = useState<UserProfile | null>(null);
+  // Submit/bank flow — selection only on Completed tab. Shared cache seeds the
+  // first frame and keeps the drawer's identity/caps in sync with this screen.
+  const [me, setMe] = useState<UserProfile | null>(() => profileCache.read());
+  useEffect(() => profileCache.subscribe(setMe), []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submittedTaskIds, setSubmittedTaskIds] = useState<Set<string>>(new Set());
   // Just-banked IDs — play BankBurstEffect for ~2s before cleared.
@@ -67,14 +70,9 @@ export default function TasksScreen() {
   const capped = selectedPts > remaining;
   const limitReached = remaining <= 0;
 
-  const fetchProfile = useCallback(async () => {
-    const tk = await getToken();
-    if (!tk) { setMe(null); return; }
-    const res = await usersApi.getMe();
-    if (res.data) setMe(res.data);
-  }, []);
-
-  useEffect(() => { fetchProfile(); }, [fetchProfile, refreshKey]);
+  // Revalidate through the shared cache; the subscription above applies the
+  // result (and a token-absent revalidate clears `me`).
+  useEffect(() => { profileCache.revalidate(); }, [refreshKey]);
 
   // signOut() emits a refresh — bump refreshKey so fetchProfile + TaskList re-run and
   // discover the missing token, clearing their state.
@@ -143,16 +141,15 @@ export default function TasksScreen() {
       for (const id of succeededIds) next.delete(id);
       return next;
     });
-    setMe((prev) =>
-      prev
-        ? {
-            ...prev,
-            currentBalance: data.newBalance,
-            pointsSubmittedToday: data.dailyTotal,
-            recurringPointsSubmittedToday: data.recurringDailyTotal,
-          }
-        : prev,
-    );
+    // Write through the shared cache so the drawer's caps update optimistically too.
+    if (me) {
+      profileCache.set({
+        ...me,
+        currentBalance: data.newBalance,
+        pointsSubmittedToday: data.dailyTotal,
+        recurringPointsSubmittedToday: data.recurringDailyTotal,
+      });
+    }
   }
 
   function handleSubmit() {

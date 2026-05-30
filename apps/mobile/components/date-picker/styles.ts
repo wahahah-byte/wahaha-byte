@@ -1,0 +1,125 @@
+import { StyleSheet } from "react-native";
+
+// Shared styles for DatePicker, MonthGrid, and the year overlay.
+export const styles = StyleSheet.create({
+  trigger: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 3,
+  },
+  // Pill chip for new-task quick-add bar (sized to match priority chip).
+  triggerCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderTopWidth: 1,
+    padding: 12,
+    boxShadow: "0px -8px 32px rgba(0, 0, 0, 0.4)",
+    elevation: 18,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  headerLabel: {
+    fontSize: 11,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+  },
+  navBtn: {
+    width: 40,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navArrow: {
+    fontSize: 20,
+    fontWeight: "600",
+    lineHeight: 22,
+  },
+  daysRow: {
+    flexDirection: "row",
+    marginBottom: 2,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  cell: {
+    width: `${100 / 7}%`,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  yearOverlay: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    top: 30,
+    borderWidth: 1,
+    borderRadius: 3,
+    padding: 12,
+    boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.4)",
+  },
+  yearHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  yearGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 4,
+    flex: 1,
+  },
+  yearCell: {
+    width: "30%",
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  footer: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 3,
+  },
+  footerBtnText: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+});

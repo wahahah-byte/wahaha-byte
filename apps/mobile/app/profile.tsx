@@ -4,14 +4,12 @@ import {
   Image,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import Svg, { Circle, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { UserProfile } from "@wahaha/shared";
@@ -20,28 +18,21 @@ import { ProfilePictureUpload } from "@/components/profile-picture-upload";
 import { ThemedText } from "@/components/themed-text";
 import { useColors } from "@/hooks/use-colors";
 import { useAvatarsEnabled } from "@/hooks/use-avatars-enabled";
-
-// Discord-style extras persisted locally per-user until a backend lands.
-interface ProfileExtras {
-  bannerUri: string | null;
-  displayName: string;
-  bio: string;
-  accentColor: string;
-}
-
-const ACCENT_COLORS = [
-  "#7c5cf0", "#5b8be0", "#3e9b87", "#d97757",
-  "#c97a07", "#d83232", "#a04ec9", "#6b7280",
-] as const;
-
-const DEFAULT_EXTRAS: ProfileExtras = {
-  bannerUri: null,
-  displayName: "",
-  bio: "",
-  accentColor: ACCENT_COLORS[0],
-};
-
-const storageKey = (userId: string) => `wb-profile-extras:${userId}`;
+import {
+  ACCENT_COLORS,
+  DEFAULT_EXTRAS,
+  storageKey,
+  type ProfileExtras,
+} from "@/lib/profile-extras";
+import {
+  Field,
+  FooterTab,
+  Section,
+  SettingsIcon,
+  ShopIcon,
+  Stat,
+} from "@/components/profile/profile-parts";
+import { styles } from "@/components/profile/styles";
 
 export default function ProfileScreen() {
   const c = useColors();
@@ -339,193 +330,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-function Section({ title, children, c }: { title: string; children: React.ReactNode; c: ReturnType<typeof useColors> }) {
-  return (
-    <View style={{ gap: 8 }}>
-      <ThemedText style={{ color: c.fgSubtle, fontSize: 9, letterSpacing: 1.8, textTransform: "uppercase", fontWeight: "600" }}>
-        {title}
-      </ThemedText>
-      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.borderHairline }]}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function Field({ label, value, c }: { label: string; value: string; c: ReturnType<typeof useColors> }) {
-  return (
-    <View style={{ gap: 2, marginBottom: 8 }}>
-      <ThemedText style={{ color: c.fgSubtle, fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase" }}>
-        {label}
-      </ThemedText>
-      <ThemedText style={{ color: c.fg, fontSize: 12 }}>{value}</ThemedText>
-    </View>
-  );
-}
-
-function Stat({ label, value, c }: { label: string; value: string; c: ReturnType<typeof useColors> }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <ThemedText style={{ color: c.fgSubtle, fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase" }}>
-        {label}
-      </ThemedText>
-      <ThemedText style={{ color: c.fg, fontSize: 16, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
-        {value}
-      </ThemedText>
-    </View>
-  );
-}
-
-function FooterTab({
-  label, icon, onPress, c,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-  c: ReturnType<typeof useColors>;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.footerTab,
-        { backgroundColor: pressed ? c.overlayHover : "transparent" },
-      ]}
-      accessibilityLabel={label}
-    >
-      {icon}
-      <ThemedText
-        style={{
-          fontSize: 9,
-          color: c.fgMuted,
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          fontWeight: "600",
-        }}
-      >
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
-function SettingsIcon({ color }: { color: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <Circle cx={12} cy={12} r={3} />
-      <Path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 8.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03Z" />
-    </Svg>
-  );
-}
-
-function ShopIcon({ color }: { color: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M5 8h14l-1 12H6L5 8Z" />
-      <Path d="M9 8V6a3 3 0 0 1 6 0v2" />
-    </Svg>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1 },
-  headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
-  bannerWrap: {
-    borderRadius: 8,
-    borderWidth: 1,
-    position: "relative",
-  },
-  banner: {
-    width: "100%",
-    aspectRatio: 16 / 5,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bannerImg: { width: "100%", height: "100%", resizeMode: "cover" },
-  bannerRemove: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarOverlap: {
-    // -56 cancels the parent ScrollView gap (20) + ~36px overlap (50% of 72px avatar).
-    marginTop: -56,
-    marginLeft: 12,
-    alignSelf: "flex-start",
-    marginBottom: -8,
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 6,
-    padding: 14,
-  },
-  divider: { height: 1, marginVertical: 2 },
-  nameInput: {
-    fontSize: 18,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-    padding: 0,
-  },
-  bioInput: {
-    fontSize: 12,
-    lineHeight: 18,
-    minHeight: 54,
-    padding: 0,
-    textAlignVertical: "top",
-  },
-  bioReadOnly: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  editBtn: {
-    paddingVertical: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  swatchRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  swatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-  },
-  statGrid: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  footerNav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-  },
-  footerTab: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingTop: 8,
-  },
-});

@@ -10,6 +10,7 @@ import {
 } from "@wahaha/shared";
 import { taskCache } from "@/lib/task-cache";
 import { equippedCache } from "@/lib/equipped-cache";
+import { profileCache } from "@/lib/profile-cache";
 import { taskEvents } from "@/lib/task-events";
 
 const TOKEN_KEY = "auth_token";
@@ -71,5 +72,6 @@ export async function signOut() {
   await clearToken();
   taskCache.clear();
   equippedCache.clear();
+  profileCache.clear();
   taskEvents.emitRefreshRequested();
 }
