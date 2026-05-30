@@ -12,15 +12,15 @@ import { Link, router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 
 import { authApi, saveToken } from "@/lib/api";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { useColors } from "@/hooks/use-colors";
 
 // Opens the deployed web privacy policy in the device's in-app browser. Mobile
 // doesn't bundle the policy itself (it's Termly-generated HTML that lives in the
 // Next.js static export); hosting it once on the web and linking from here keeps
 // it editable in one place.
 const PRIVACY_URL = "https://wahahah-byte.github.io/wahaha-byte/privacy";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { useColors } from "@/hooks/use-colors";
 
 // Mobile sign-in screen — mirrors web /login layout.
 export default function LoginScreen() {

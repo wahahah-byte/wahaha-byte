@@ -91,6 +91,18 @@ export function SwipeableRow({
   const nextProgress = swipeCtx?.get(nextId) ?? null;
   const openRowId = swipeCtx?.openRowId ?? null;
 
+  // Snap closed whenever this row's identity changes (e.g. the SectionList cell
+  // is reused for a different task) and, on unmount-while-open (e.g. the row is
+  // archived/removed straight out of an open swipe), release the shared open
+  // flag so a re-mounted or neighbouring row can't inherit a stale "open".
+  useEffect(() => {
+    tx.value = 0;
+    setRowOpen(false);
+    return () => {
+      if (openRowId && openRowId.value === rowId) openRowId.value = null;
+    };
+  }, [rowId, tx, openRowId]);
+
   // Auto-close when another row opens or closeAll fires.
   useAnimatedReaction(
     () => openRowId?.value ?? null,

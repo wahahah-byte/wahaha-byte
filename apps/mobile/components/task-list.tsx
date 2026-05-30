@@ -7,11 +7,6 @@ import {
   UIManager,
   View,
 } from "react-native";
-
-// Enable LayoutAnimation on Android (iOS supports it natively).
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { useFocusEffect } from "expo-router";
 
 import {
@@ -37,6 +32,11 @@ import { styles } from "@/components/task-list/styles";
 import { useTaskListActions } from "@/hooks/use-task-list-actions";
 import { useTaskListSections } from "@/hooks/use-task-list-sections";
 
+// Enable LayoutAnimation on Android (iOS supports it natively).
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 interface Props {
   filters?: TaskFilterParams;
   emptyText?: string;
@@ -60,6 +60,8 @@ interface Props {
   bankingIds?: Set<string>;
   // Routines-only: swap priority dot for check-in checkbox.
   useCheckinCheckbox?: boolean;
+  // Archive-only: render one flat list with no Active/Completed split or collapse.
+  flat?: boolean;
 }
 
 export function TaskList({
@@ -77,6 +79,7 @@ export function TaskList({
   submittedTaskIds,
   bankingIds,
   useCheckinCheckbox,
+  flat,
 }: Props) {
   const c = useColors();
   const undo = useUndo();
@@ -353,6 +356,7 @@ export function TaskList({
     submittedTaskIds,
     uncompletedCollapsed,
     recentCheckinTs,
+    flat,
   });
 
   async function onRefresh() {

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import {
   buildListItems,
   chunkListItems,
+  completedSort,
   isCheckedInThisCycle,
   sep,
   type GroupMode,
@@ -20,6 +21,8 @@ interface SectionsArgs {
   submittedTaskIds?: Set<string>;
   uncompletedCollapsed: boolean;
   recentCheckinTs: Map<string, number>;
+  // One unsegmented list — no Active/Completed split or collapse toggle (Archive).
+  flat?: boolean;
 }
 
 export interface TaskListSection {
@@ -40,9 +43,21 @@ export function useTaskListSections({
   submittedTaskIds,
   uncompletedCollapsed,
   recentCheckinTs,
+  flat,
 }: SectionsArgs): { sections: TaskListSection[]; showCollapse: boolean; activeCount: number } {
   return useMemo(() => {
     const base = preFilter ? tasks.filter(preFilter) : tasks;
+
+    // Flat mode (Archive): a single unlabeled section, no Active/Completed split.
+    if (flat) {
+      const sorted = [...base].sort(completedSort(submittedTaskIds ?? new Set()));
+      return {
+        sections: sorted.length ? [{ key: "__flat", label: "", data: sorted }] : [],
+        showCollapse: false,
+        activeCount: 0,
+      };
+    }
+
     const items = buildListItems({
       tasks: base,
       activeFilter,
@@ -105,5 +120,5 @@ export function useTaskListSections({
         };
       });
     return { sections: mapped, showCollapse, activeCount };
-  }, [tasks, activeFilter, groupMode, sortMode, preFilter, splitCheckedIn, submittedTaskIds, uncompletedCollapsed, recentCheckinTs]);
+  }, [tasks, activeFilter, groupMode, sortMode, preFilter, splitCheckedIn, submittedTaskIds, uncompletedCollapsed, recentCheckinTs, flat]);
 }

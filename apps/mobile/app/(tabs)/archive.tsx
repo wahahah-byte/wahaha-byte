@@ -23,6 +23,7 @@ export default function ArchiveScreen() {
         <TaskList
           filters={{ isArchived: true }}
           activeFilter="all"
+          flat
           emptyText="Nothing archived."
         />
       </View>

@@ -13,14 +13,14 @@ import { Link, router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
-// Opens the deployed web privacy policy in the device's in-app browser. Single
-// source of truth lives in the Next.js static export.
-const PRIVACY_URL = "https://wahahah-byte.github.io/wahaha-byte/privacy";
-
 import { authApi, saveToken } from "@/lib/api";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
+
+// Opens the deployed web privacy policy in the device's in-app browser. Single
+// source of truth lives in the Next.js static export.
+const PRIVACY_URL = "https://wahahah-byte.github.io/wahaha-byte/privacy";
 
 // Mirrors server-side MinimumAgeYears in RegisterUserHandler.
 const MIN_AGE_YEARS = 13;

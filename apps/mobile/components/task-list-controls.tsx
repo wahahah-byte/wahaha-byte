@@ -34,8 +34,6 @@ interface Props {
 // stable across rerenders; height is item-count × row + header so we can offset
 // above the button without measuring the menu itself.
 const MENU_WIDTH = 168;
-const MENU_HEADER_H = 30;
-const MENU_ITEM_H = 38;
 const MENU_GAP_FROM_BUTTON = 8;
 
 function SortIcon({ color }: { color: string }) {
@@ -82,7 +80,6 @@ export function TaskListControls({
   }
 
   const items = open === "sort" ? SORT_OPTIONS : GROUP_OPTIONS;
-  const menuH = MENU_HEADER_H + items.length * MENU_ITEM_H;
   // Right-align the menu to the button so it never clips off-screen on the right,
   // and stay 6px inside the viewport on the left.
   const screenW = Dimensions.get("window").width;
