@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   canCheckInNow,
   CATEGORY_COLOR,
+  isCheckedInThisCycle,
   PRIORITY_DOT,
 } from "@wahaha/shared";
 import { CustomLogModal } from "@/components/custom-log-modal";
@@ -132,9 +133,14 @@ export default function TaskDetailScreen() {
   const dateLabel = task.completedAt ? fmtFull(task.completedAt) : fmtShort(task.dueDate);
 
   // Computed before any early return so hook order stays stable.
+  // `!isCheckedInThisCycle` guards the non-daily case: after a check-in,
+  // canCheckInNow re-opens the wide pre-due window the very next day, which would
+  // otherwise resurface the slider for a cycle that's already done. Mirrors
+  // task-row's `canCheckInThisCycle`.
   const canCheckIn =
     task.status === "pending" &&
     task.isRecurring &&
+    !isCheckedInThisCycle(task) &&
     canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
   if (canCheckIn) d.sliderEverShownRef.current = true;
   const renderSlider = canCheckIn || d.sliderEverShownRef.current;

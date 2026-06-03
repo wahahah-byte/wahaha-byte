@@ -11,6 +11,9 @@ export const FRAME_PAD = 1;
 export const FRAME_BORDER = 1;
 // 150ms long-press starts drag (tap=equip, hold=drag).
 export const LONG_PRESS_MS = 150;
+// Keep holding still (no drag movement) this long after the press is recognised
+// and the sell screen opens — a deliberate "tap and hold for a few seconds" hold.
+export const LONG_PRESS_SELL_MS = 650;
 export const DRAG_TAP_TOLERANCE = 8;
 
 // Grid dimensions threaded into the collision helpers.

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -20,6 +20,7 @@ import {
   GRID_COLS,
   GRID_ROWS,
   LONG_PRESS_MS,
+  LONG_PRESS_SELL_MS,
 } from "@/lib/avatar-grid";
 
 interface InventoryCardProps {
@@ -55,12 +56,32 @@ export function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onSellRequ
   const dragStartX = useSharedValue(inv.positionX ?? 0);
   const dragStartY = useSharedValue(inv.positionY ?? 0);
   // Flips true the moment a drag actually moves the finger past a small threshold.
-  // If a long-press fires + ends without movement, we treat that as a sell request.
+  // While it stays false (finger held still), the hold-to-sell timer is allowed to
+  // fire; any real movement cancels that timer and the gesture becomes a reposition.
   const dragMoved = useSharedValue(false);
   useEffect(() => {
     cellX.value = inv.positionX ?? 0;
     cellY.value = inv.positionY ?? 0;
   }, [inv.positionX, inv.positionY, cellX, cellY]);
+
+  // Hold-to-sell timer: armed once the press is recognised, fires the sell screen
+  // while the finger is still down (no drag movement). Cancelled the moment the
+  // user actually drags, or releases early, or the card unmounts.
+  const sellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function clearSellTimer() {
+    if (sellTimerRef.current) {
+      clearTimeout(sellTimerRef.current);
+      sellTimerRef.current = null;
+    }
+  }
+  function armSellTimer() {
+    clearSellTimer();
+    sellTimerRef.current = setTimeout(() => {
+      sellTimerRef.current = null;
+      onSellRequest();
+    }, LONG_PRESS_SELL_MS);
+  }
+  useEffect(() => () => clearSellTimer(), []);
 
   const pan = Gesture.Pan()
     .activateAfterLongPress(LONG_PRESS_MS)
@@ -70,12 +91,16 @@ export function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onSellRequ
       dragStartY.value = cellY.value;
       dragMoved.value = false;
       runOnJS(onDragStart)();
+      // Start counting down to the sell screen; a drag (below) cancels it.
+      runOnJS(armSellTimer)();
     })
     .onUpdate((e) => {
       "worklet";
       // Anything beyond a small jitter counts as a real drag — anything below = stationary long-press.
       if (!dragMoved.value && (Math.abs(e.translationX) > 4 || Math.abs(e.translationY) > 4)) {
         dragMoved.value = true;
+        // Real drag — this is a reposition, not a sell.
+        runOnJS(clearSellTimer)();
       }
       // Snap-to-cell with 70% hysteresis.
       const curDCol = cellX.value - dragStartX.value;
@@ -100,10 +125,11 @@ export function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onSellRequ
     })
     .onEnd(() => {
       "worklet";
-      // Long-press without movement = sell intent. Bail out of the drop logic so we don't
-      // accidentally persist a no-op move + fire the parent's "dropped at origin" handler.
+      // Released without dragging: either the hold-to-sell timer already fired
+      // (sheet is open) or the user let go before it elapsed. Either way there's
+      // no move to persist — just stop the pending timer and bail.
       if (!dragMoved.value) {
-        runOnJS(onSellRequest)();
+        runOnJS(clearSellTimer)();
         return;
       }
       const targetX = cellX.value;
@@ -111,6 +137,12 @@ export function InventoryCard({ inv, busy, dimmed, isDragging, onTap, onSellRequ
       const origX = dragStartX.value;
       const origY = dragStartY.value;
       runOnJS(handleDropEnd)(targetX, targetY, origX, origY);
+    })
+    .onFinalize(() => {
+      "worklet";
+      // Cancellation (e.g. a parent scroll claims the gesture) skips onEnd — make
+      // sure a pending sell never fires after the finger has already left.
+      runOnJS(clearSellTimer)();
     });
 
   function handleDropEnd(targetX: number, targetY: number, origX: number, origY: number) {
