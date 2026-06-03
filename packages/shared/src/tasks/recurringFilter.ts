@@ -1,5 +1,5 @@
 import type { TaskDto } from "../api/tasks";
-import { canCheckInNow, isOverdue } from "../time/dateUtils";
+import { canCheckInNow, isCycleClosed, isOverdue, todayLocalKey } from "../time/dateUtils";
 
 /**
  * Recurring (Routines) tab filter. Mirrors web's `tabMatches` in
@@ -24,16 +24,26 @@ export function recurringTabMatches(task: TaskDto, tab: string): boolean {
 
 /**
  * True when a recurring task has been checked-in for its current cycle and is
- * now waiting for the next window to open. Uses canCheckInNow as the canonical
- * "cycle is currently open" predicate — the inverse, with an !isOverdue guard,
- * uniquely identifies "done this cycle, waiting for next window."
+ * now waiting for the next due date to come around.
  *
- * Previously this used `today < dueDate` as a proxy, which mis-classified
- * optimistic check-ins on overdue daily tasks: getNextDueDate(yesterday,
- * "daily") = today, and today < today is false → the row stayed in Active.
+ * After a check-in the server advances dueDate to the next occurrence, so a
+ * future dueDate (today < due) means the current cycle is already satisfied.
+ * We classify on that, NOT on `!canCheckInNow`: for non-daily rules the
+ * check-in window opens a full period before the due date (e.g. a weekly task
+ * can be logged any day of its week). The check-in lands exactly on the new
+ * cycle's prevStart, so the day after, canCheckInNow re-opens and the row
+ * bounced back to Active even though the next due date was days away. Anchoring
+ * on `today < dueDate` keeps weekly/biweekly/monthly routines parked in
+ * "Checked In" until they're actually due again, matching daily behaviour.
+ *
+ * The trailing lastCheckInDate-is-today check covers the optimistic check-in on
+ * an overdue task: getNextDueDate(yesterday, "daily") = today, so today === due
+ * (not <). It was still checked in this cycle, today, so it stays in Checked In
+ * for the rest of the day.
  */
 export function isCheckedInThisCycle(task: TaskDto): boolean {
   if (!task.lastCheckInDate || !task.dueDate || !task.recurrenceRule) return false;
   if (isOverdue(task.dueDate)) return false;
-  return !canCheckInNow(task.dueDate, task.recurrenceRule, task.lastCheckInDate);
+  if (isCycleClosed(task.dueDate, task.lastCheckInDate)) return true;
+  return task.lastCheckInDate.split("T")[0] === todayLocalKey();
 }

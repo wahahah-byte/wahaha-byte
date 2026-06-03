@@ -129,6 +129,33 @@ export function isHairSlot(slot: string | undefined | null): boolean {
   return slot === "HAIR" || slot === "HAIR_FRONT" || slot === "HAIR_BACK";
 }
 
+// Cross-slot equip conflicts: returns true when equipping `newSlot` should
+// auto-unequip an item currently in `existingSlot`. Same-slot duplicates are
+// handled separately (the server + each client drop those directly), so this
+// only matches DIFFERENT slots that visually conflict. Mirrors ShouldDropOnEquip
+// in wahaha.API/Repositories/UserInventoryRepository.cs and the web copy in
+// apps/web/src/app/avatar/page.tsx — keep all three in sync.
+//
+// Groups:
+//   - Outfit: OVERALL/BODY (full-body) conflict with TOP/BOTTOM (partial); partials
+//     coexist with each other but not with a full-body item.
+//   - Hair:   HAIR / HAIR_FRONT / HAIR_BACK — only one hair style at a time.
+//   - Hat:    HAT / HEAD (legacy) — only one head covering at a time.
+export function shouldDropOnEquip(
+  newSlot: string | undefined | null,
+  existingSlot: string | undefined | null,
+): boolean {
+  if (!newSlot || !existingSlot || newSlot === existingSlot) return false;
+  const isFull = (s: string) => s === "OVERALL" || s === "BODY";
+  const isPartial = (s: string) => s === "TOP" || s === "BOTTOM";
+  if (isFull(newSlot) && (isFull(existingSlot) || isPartial(existingSlot))) return true;
+  if (isPartial(newSlot) && isFull(existingSlot)) return true;
+  if (isHairSlot(newSlot) && isHairSlot(existingSlot)) return true;
+  const isHat = (s: string) => s === "HAT" || s === "HEAD";
+  if (isHat(newSlot) && isHat(existingSlot)) return true;
+  return false;
+}
+
 // Weapons share one "held by chibi" group across HAND / WEAPON_FRONT / WEAPON_BACK / OFFHAND.
 export function isWeaponSlot(slot: string | undefined | null): boolean {
   return slot === "HAND"

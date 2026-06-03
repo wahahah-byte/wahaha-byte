@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   RefreshControl,
   SectionList,
-  UIManager,
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -32,10 +30,9 @@ import { styles } from "@/components/task-list/styles";
 import { useTaskListActions } from "@/hooks/use-task-list-actions";
 import { useTaskListSections } from "@/hooks/use-task-list-sections";
 
-// Enable LayoutAnimation on Android (iOS supports it natively).
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// LayoutAnimation no longer needs to be enabled manually: it's on by default
+// under the New Architecture, and setLayoutAnimationEnabledExperimental is a
+// no-op there (it warned when called).
 
 interface Props {
   filters?: TaskFilterParams;

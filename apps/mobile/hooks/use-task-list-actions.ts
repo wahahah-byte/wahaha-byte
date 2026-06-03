@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { LayoutAnimation, Platform } from "react-native";
+import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 import {
@@ -7,6 +8,7 @@ import {
   getNextDueDate,
   getPrevPeriodStart,
   isOverdue,
+  isStartBlockedByOverdue,
   parseLocalDate,
   todayLocalKey,
   willStreakResetOnCheckIn,
@@ -257,15 +259,35 @@ export function useTaskListActions({
     }
   }
 
+  // Send the user to the edit modal with a reschedule prompt instead of a
+  // silent failed start.
+  function routeToReschedule(taskId: string) {
+    router.push({ pathname: "/edit-task/[id]", params: { id: taskId, reschedule: "1" } });
+  }
+
   // pending → in_progress.
   async function handleStart(task: TaskDto) {
+    // The server refuses to start tasks overdue past the penalty threshold
+    // ("Reschedule it first"). Predict that here so we open the edit modal
+    // directly rather than firing a doomed request that reverts silently.
+    if (isStartBlockedByOverdue(task)) {
+      routeToReschedule(task.taskId);
+      return;
+    }
     setTasks((prev) =>
       prev.map((t) => (t.taskId === task.taskId ? { ...t, status: "in_progress" } : t))
     );
     const res = await tasksApi.start(task.taskId);
     if (res.error) {
-      setError(res.error);
+      // Roll back the optimistic in_progress patch.
       await fetchTasks();
+      // Reactive fallback for edge cases the client predicate missed (clock /
+      // timezone drift): the server still asks to reschedule → open the modal.
+      if (/reschedule/i.test(res.error)) {
+        routeToReschedule(task.taskId);
+        return;
+      }
+      setError(res.error);
     }
   }
 

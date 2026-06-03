@@ -17,7 +17,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { type UserProfile } from "@wahaha/shared";
-import { getToken, signOut } from "@/lib/api";
+import { getToken } from "@/lib/api";
+import { signOut } from "@/lib/session";
 import { profileCache } from "@/lib/profile-cache";
 import { useTheme } from "@/context/theme-context";
 import { useColors } from "@/hooks/use-colors";

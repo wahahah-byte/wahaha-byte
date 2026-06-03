@@ -7,6 +7,7 @@ import {
   isHairSlot,
   isTwoHanded,
   isWeaponSlot,
+  shouldDropOnEquip,
   type UserInventoryDto,
 } from "@wahaha/shared";
 import { avatarApi } from "@/lib/api";
@@ -109,6 +110,11 @@ export function useAvatarInventory() {
           // All other weapon-slot combos (HAND / WEAPON_FRONT / WEAPON_BACK) stay mutex.
           return { ...r, isEquipped: false };
         }
+        // Cross-slot mutex outside the weapon family: only one hair at a time, and
+        // outfit (OVERALL/BODY ↔ TOP/BOTTOM) + hat (HAT/HEAD) groups. Mirrors the
+        // server's EquipAsync so the just-unequipped item disappears immediately
+        // instead of lingering until the next reload.
+        if (shouldDropOnEquip(slot, rSlot)) return { ...r, isEquipped: false };
         return r;
       }),
     );

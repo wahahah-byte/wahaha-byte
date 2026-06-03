@@ -61,6 +61,9 @@ interface Props {
   submitLabel?: string;
   onSubmit: (values: TaskFormValues) => Promise<string | null>;
   onCancel?: () => void;
+  // Optional informational banner shown above the form (e.g. a prompt to
+  // reschedule an overdue task before it can be started).
+  notice?: string;
   // Edit-from-detail-sheet hides the avatar hero to leave more vertical
   // room for fields inside the constrained sheet height.
   hideAvatar?: boolean;
@@ -77,6 +80,7 @@ export function TaskForm({
   submitLabel = "Create",
   onSubmit,
   onCancel,
+  notice,
   hideAvatar = false,
   ScrollComponent = ScrollView,
 }: Props) {
@@ -130,7 +134,7 @@ export function TaskForm({
   useEffect(() => {
     if (isRecurring) return;
     const cap = maxPointsFor(category);
-    if (pointValue > cap) setPointValue(cap);
+    setPointValue((v) => (v > cap ? cap : v));
   }, [category, isRecurring]);
 
   const PRIORITIES: { key: PriorityKey; label: string; color: string; bg: string }[] = [
@@ -178,6 +182,28 @@ export function TaskForm({
         {avatarsEnabled && !hideAvatar ? (
           <View style={styles.avatarHero}>
             <ChibiAvatar equipped={equipped} height={140} />
+          </View>
+        ) : null}
+
+        {notice ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: c.warningBg,
+              borderColor: c.warningBorder,
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              marginBottom: 14,
+            }}
+          >
+            <ThemedText style={{ fontSize: 13, color: c.warning }}>↻</ThemedText>
+            <ThemedText style={{ flex: 1, fontSize: 12, lineHeight: 17, color: c.warning }}>
+              {notice}
+            </ThemedText>
           </View>
         ) : null}
 

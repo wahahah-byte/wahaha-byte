@@ -10,7 +10,7 @@ import { ThemedView } from "@/components/themed-view";
 import { useColors } from "@/hooks/use-colors";
 
 export default function EditTaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, reschedule } = useLocalSearchParams<{ id: string; reschedule?: string }>();
   const c = useColors();
   const [task, setTask] = useState<TaskDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +82,7 @@ export default function EditTaskScreen() {
     <TaskForm
       initial={initial}
       submitLabel="Save"
+      notice={reschedule ? "This task is overdue and can't be started. Pick a new due date to reschedule it." : undefined}
       onSubmit={handleSubmit}
       onCancel={() => router.back()}
     />

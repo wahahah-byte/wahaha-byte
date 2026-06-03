@@ -33,9 +33,10 @@ export function ShopItemDetailsModal({
 }: Props) {
   const [autoEquip, setAutoEquip] = useState(false);
   // Reset auto-equip toggle on item change.
+  const itemId = item?.itemId;
   useEffect(() => {
-    if (item) setAutoEquip(false);
-  }, [item?.itemId]);
+    if (itemId) setAutoEquip(false);
+  }, [itemId]);
 
   if (!item) {
     return (

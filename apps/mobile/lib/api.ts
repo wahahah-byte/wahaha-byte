@@ -8,11 +8,6 @@ import {
   createUsersApi,
   type UserProfile,
 } from "@wahaha/shared";
-import { taskCache } from "@/lib/task-cache";
-import { equippedCache } from "@/lib/equipped-cache";
-import { profileCache } from "@/lib/profile-cache";
-import { taskEvents } from "@/lib/task-events";
-
 const TOKEN_KEY = "auth_token";
 
 export const apiClient = createApiClient({
@@ -63,15 +58,5 @@ export async function getToken() {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
 
-// Single entry point for both sign-out and account-deletion: drops the token, wipes
-// every cache that holds per-user data (tasks, equipped avatar), and broadcasts a
-// refresh so screens hosting live state re-fetch and discover the absent token. Use
-// this instead of `clearToken()` from sign-out paths so a previous user's tasks /
-// avatar can't linger after the next render.
-export async function signOut() {
-  await clearToken();
-  taskCache.clear();
-  equippedCache.clear();
-  profileCache.clear();
-  taskEvents.emitRefreshRequested();
-}
+// signOut() lives in lib/session.ts so the per-user caches it wipes can import the
+// API clients they revalidate against without forming a require cycle with api.ts.

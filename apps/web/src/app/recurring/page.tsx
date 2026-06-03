@@ -12,7 +12,7 @@ import { useOverdueRestart } from "@/hooks/useOverdueRestart";
 import { useSaveTask } from "@/hooks/useSaveTask";
 import { NavIconList, NavIconRepeat, NavIconArchive } from "@/components/NavIcons";
 import { buildSidebarFilterGroups } from "@/lib/sidebarGroups";
-import { canCheckInNow, isOverdue, sumTodayCycleCounter } from "@/lib/dateUtils";
+import { canCheckInNow, isCycleClosed, isOverdue, sumTodayCycleCounter, todayLocalKey } from "@/lib/dateUtils";
 import { RECURRING_FILTERS } from "@/lib/constants";
 import { useToast } from "@/context/ToastContext";
 import CategoryCapsTooltip from "@/components/CategoryCapsTooltip";
@@ -240,12 +240,17 @@ function Recurring() {
     }
   };
 
-  // True when user has done current period and next window hasn't opened.
-  // !canCheckInNow + !isOverdue guard handles optimistic edge where next dueDate lands on today.
+  // True when user has done current period and the next due date hasn't arrived.
+  // Anchored on `today < dueDate` (via isCycleClosed) so non-daily routines stay
+  // parked until they're due again — for weekly/biweekly/monthly the check-in
+  // window re-opens a full period early, which would otherwise bounce a just-
+  // checked-in row back to Active the next day. The lastCheckInDate-is-today
+  // tail covers the optimistic overdue edge where next dueDate lands on today.
   function isCheckedInThisCycle(t: TaskDto): boolean {
     if (!t.lastCheckInDate || !t.dueDate || !t.recurrenceRule) return false;
     if (isOverdue(t.dueDate)) return false;
-    return !canCheckInNow(t.dueDate, t.recurrenceRule, t.lastCheckInDate);
+    if (isCycleClosed(t.dueDate, t.lastCheckInDate)) return true;
+    return t.lastCheckInDate.split("T")[0] === todayLocalKey();
   }
 
   function buildListItemsForFilter(filterValue: string): (TaskDto | Sep)[] {

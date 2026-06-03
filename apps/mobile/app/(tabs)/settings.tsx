@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View, type PressableProps } from "react-native";
 import { router } from "expo-router";
 
-import { signOut, usersApi } from "@/lib/api";
+import { usersApi } from "@/lib/api";
+import { signOut } from "@/lib/session";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { DeleteAccountModal } from "@/components/delete-account-modal";

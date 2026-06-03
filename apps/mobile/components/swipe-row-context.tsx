@@ -38,10 +38,12 @@ export function SwipeRowProvider({ children }: { children: ReactNode }) {
     openRowId.value = null;
   }, [openRowId]);
 
-  const value = useMemo(
-    () => ({ register, unregister, get, openRowId, closeAll }),
-    [register, unregister, get, openRowId, closeAll, version]
-  );
+  const value = useMemo(() => {
+    // Read `version` so this memo recomputes when the row map mutates (register/
+    // unregister bump it), handing consumers a fresh object that re-runs get().
+    void version;
+    return { register, unregister, get, openRowId, closeAll };
+  }, [register, unregister, get, openRowId, closeAll, version]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

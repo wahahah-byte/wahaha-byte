@@ -175,6 +175,7 @@ function TaskRowImpl({
   const canCheckInThisCycle =
     item.isRecurring &&
     !overdueRecurring &&
+    !checkedInThisCycle &&
     canCheckInNow(item.dueDate, item.recurrenceRule, item.lastCheckInDate);
   // Non-recurring swipe action gating.
   const canStart = !item.isRecurring && item.status === "pending";
