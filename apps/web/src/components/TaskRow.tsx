@@ -507,7 +507,7 @@ function TaskRowImpl({
           </button>
         )}
 
-        {onArchive && isCompleted && !task.isArchived && (
+        {onArchive && isCompleted && !task.isArchived && !task.isRecurring && isSubmitted && (
           <button
             onClick={() => onArchive(task)}
             title="Archive"
@@ -1158,7 +1158,7 @@ function TaskRowImpl({
             </svg>
           </button>
         )}
-        {onArchive && isCompleted && !task.isArchived && (
+        {onArchive && isCompleted && !task.isArchived && !task.isRecurring && isSubmitted && (
           <button
             onClick={(e) => { e.stopPropagation(); onArchive(task); }}
             title="Archive"

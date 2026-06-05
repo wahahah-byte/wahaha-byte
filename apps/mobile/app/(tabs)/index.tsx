@@ -117,6 +117,21 @@ export default function TasksScreen() {
     }
   }, [activeFilter, selectedIds.size]);
 
+  // Drop any selected task that left the list (archived/deleted) so the submit
+  // bar's count and visibility don't go stale.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(loadedTasks.map((t) => t.taskId));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (live.has(id)) next.add(id); else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [loadedTasks]);
+
   async function doSubmit() {
     if (selectedIds.size === 0 || remaining <= 0) return;
     const ids = [...selectedIds];

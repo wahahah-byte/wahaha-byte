@@ -532,11 +532,23 @@ export function useTaskActions({
 
   const handleArchive = useEvent(async function handleArchive(task: TaskDto) {
     const snapshot = task;
+    // Prune from submit selection/staging too, else the submit bar keeps counting
+    // the now-removed task (mirrors handleDelete).
+    const wasStaged = stagedTaskIds.includes(task.taskId);
+    const wasSelected = selectedIds.has(task.taskId);
+    if (wasStaged && task.pointValue) updateStaged(-task.pointValue);
+    setStagedTaskIds((prev) => prev.filter((id) => id !== task.taskId));
+    setSelectedIds((prev) => { const n = new Set(prev); n.delete(task.taskId); return n; });
     setTasks((prev) => prev.filter((t) => t.taskId !== task.taskId));
     if (!isAuthenticated) return;
     const { error } = await tasksApi.archive(task.taskId);
     if (error) {
       setTasks((prev) => [snapshot, ...prev]);
+      if (wasStaged) {
+        setStagedTaskIds((prev) => [...prev, task.taskId]);
+        if (task.pointValue) updateStaged(task.pointValue);
+      }
+      if (wasSelected) setSelectedIds((prev) => { const n = new Set(prev); n.add(task.taskId); return n; });
       setError(error);
     }
   });

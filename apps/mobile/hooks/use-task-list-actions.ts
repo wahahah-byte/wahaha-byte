@@ -137,12 +137,16 @@ export function useTaskListActions({
         createdAt: new Date().toISOString(),
         cycleType: "checkin",
       };
+      // Whether the user already undid this check-in (e.g. via the leading
+      // checkbox) before the server responded — if so, don't pop a stale toast.
+      let stillCheckedIn = false;
       setTasks((prev) => prev.map((t) => {
         if (t.taskId !== task.taskId) return t;
         // Race-aware: skip state restore if user has since undone.
         if (t.lastCheckInDate == null || t.lastCheckInDate === "") {
           return { ...t, recentCycles: [newCycle, ...(t.recentCycles ?? [])] };
         }
+        stillCheckedIn = true;
         return {
           ...t,
           dueDate: data.nextDueDate ?? t.dueDate,
@@ -151,6 +155,17 @@ export function useTaskListActions({
           recentCycles: [newCycle, ...(t.recentCycles ?? [])],
         };
       }));
+      // Offer an undo window for the fresh check-in. Unlike delete, the action
+      // is already committed server-side, so onCommit is a no-op and Undo just
+      // reverses it via the same path as the inline checkbox undo.
+      if (stillCheckedIn) {
+        undo.arm({
+          prefix: "Checked in",
+          subject: task.title,
+          onUndo: () => { void performUndoCheckIn(task.taskId, data.cycleId); },
+          onCommit: () => {},
+        });
+      }
     }
   }
 
@@ -242,6 +257,8 @@ export function useTaskListActions({
   // Within-day inline undo from leading checkbox.
   async function handleUndoCheckIn(task: TaskDto, cycleId: number) {
     if (!tryClaimAction(task.taskId)) return;
+    // Dismiss any "Checked in" toast for this task so it can't fire a second undo.
+    undo.clear();
     await performUndoCheckIn(task.taskId, cycleId);
   }
   // Mirror latest closure into ref.
