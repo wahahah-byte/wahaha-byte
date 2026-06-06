@@ -264,7 +264,9 @@ function PillButton({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, paddingTop: 64, gap: 16 },
+  // flexGrow (not flex:1) so the content fills the screen when short but is allowed
+  // to exceed the viewport and scroll when tall. flex:1 here would clamp it and kill scrolling.
+  container: { flexGrow: 1, padding: 16, paddingTop: 64, paddingBottom: 40, gap: 16 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   pill: {
     paddingHorizontal: 16,
