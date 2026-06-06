@@ -10,10 +10,27 @@ import {
 } from "@wahaha/shared";
 const TOKEN_KEY = "auth_token";
 
+// Collapses a burst of concurrent 401s (e.g. tasks + profile firing at once on an
+// expired token) into a single sign-out so we don't clear caches / emit refresh N times.
+let sessionExpiring: Promise<void> | null = null;
+async function handleSessionExpired() {
+  // No token means we're already signed out — a 401 here is expected, not a session
+  // that just expired, so there's nothing to tear down.
+  if (!(await AsyncStorage.getItem(TOKEN_KEY))) return;
+  if (sessionExpiring) return sessionExpiring;
+  // Lazy require to avoid a static cycle: session.ts imports from this module.
+  const { signOut } = require("@/lib/session") as typeof import("@/lib/session");
+  sessionExpiring = signOut().finally(() => {
+    sessionExpiring = null;
+  });
+  return sessionExpiring;
+}
+
 export const apiClient = createApiClient({
   baseUrl: process.env.EXPO_PUBLIC_API_URL!,
   getToken: () => AsyncStorage.getItem(TOKEN_KEY),
   getTimezoneOffset: () => new Date().getTimezoneOffset(),
+  onUnauthorized: handleSessionExpired,
 });
 
 export const authApi = createAuthApi(apiClient);

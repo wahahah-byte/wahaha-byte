@@ -6,6 +6,11 @@ export interface ApiConfig {
   baseUrl: string;
   getToken?: () => string | null | Promise<string | null>;
   getTimezoneOffset?: () => number;
+  // Fired when an authenticated request comes back 401 — i.e. the token is
+  // missing/expired/invalid. Lets the host clear the stale session instead of
+  // silently rendering empty data. Never fired for unauthenticated requests
+  // (e.g. login/register), so bad-credentials 401s don't trigger it.
+  onUnauthorized?: () => void | Promise<void>;
 }
 
 export interface AuthOpts {
@@ -57,6 +62,7 @@ async function formDataRequest<T>(
     const msg = e instanceof Error ? e.message : "Network error";
     return { data: null, error: msg, status: 0 };
   }
+  if (res.status === 401) await config.onUnauthorized?.();
   if (!res.ok) return { data: null, error: await parseError(res), status: res.status };
   if (res.status === 204) return { data: null as T, error: null };
   try {
@@ -82,6 +88,9 @@ async function apiFetch<T>(
     return { data: null, error: msg, status: 0 };
   }
 
+  // Only authenticated requests can signal an expired/invalid session; an
+  // unauthenticated 401 (e.g. wrong login credentials) is the caller's concern.
+  if (auth && res.status === 401) await config.onUnauthorized?.();
   if (!res.ok) {
     return { data: null, error: await parseError(res), status: res.status };
   }

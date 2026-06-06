@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View, type PressableProps } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View, type PressableProps } from "react-native";
 import { router } from "expo-router";
 
 import { usersApi } from "@/lib/api";
 import { signOut } from "@/lib/session";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { BuildInfo } from "@/components/build-info";
 import { DeleteAccountModal } from "@/components/delete-account-modal";
 import { useColors } from "@/hooks/use-colors";
 import { useTheme } from "@/context/theme-context";
@@ -41,7 +42,11 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
       <ThemedText
         style={{
           fontSize: 11, color: c.fg, fontWeight: "600",
@@ -91,6 +96,8 @@ export default function SettingsScreen() {
         Looking for profile customization? Open the account menu → Profile.
       </ThemedText>
 
+      <BuildInfo />
+
       <View
         style={[
           styles.dangerZone,
@@ -137,6 +144,7 @@ export default function SettingsScreen() {
           </ThemedText>
         </Pressable>
       </View>
+      </ScrollView>
 
       <DeleteAccountModal
         visible={deleteOpen}
