@@ -29,11 +29,207 @@
 					"sink": {
 						"type": "AzureSqlSink",
 						"writeBehavior": "insert",
-						"sqlWriterUseTableLock": false
+						"sqlWriterUseTableLock": false,
+						"tableOption": "autoCreate",
+						"disableMetricsCollection": false
 					},
 					"enableStaging": false,
 					"translator": {
 						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "product_id",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "product_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "product_name",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "product_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "category",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "category",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "discounted_price",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "discounted_price",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "actual_price",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "actual_price",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "discount_percentage",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "discount_percentage",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "rating",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "rating",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "rating_count",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "rating_count",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "about_product",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "about_product",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "user_id",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "user_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "user_name",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "user_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "review_id",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "review_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "review_title",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "review_title",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "review_content",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "review_content",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "img_link",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "img_link",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "product_link",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "product_link",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
 						"typeConversion": true,
 						"typeConversionSettings": {
 							"allowDataTruncation": true,
