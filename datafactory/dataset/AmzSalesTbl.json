@@ -7,7 +7,72 @@
 		},
 		"annotations": [],
 		"type": "AzureSqlTable",
-		"schema": [],
+		"schema": [
+			{
+				"name": "product_id",
+				"type": "nvarchar"
+			},
+			{
+				"name": "product_name",
+				"type": "nvarchar"
+			},
+			{
+				"name": "category",
+				"type": "nvarchar"
+			},
+			{
+				"name": "discounted_price",
+				"type": "nvarchar"
+			},
+			{
+				"name": "actual_price",
+				"type": "nvarchar"
+			},
+			{
+				"name": "discount_percentage",
+				"type": "nvarchar"
+			},
+			{
+				"name": "rating",
+				"type": "nvarchar"
+			},
+			{
+				"name": "rating_count",
+				"type": "nvarchar"
+			},
+			{
+				"name": "about_product",
+				"type": "nvarchar"
+			},
+			{
+				"name": "user_id",
+				"type": "nvarchar"
+			},
+			{
+				"name": "user_name",
+				"type": "nvarchar"
+			},
+			{
+				"name": "review_id",
+				"type": "nvarchar"
+			},
+			{
+				"name": "review_title",
+				"type": "nvarchar"
+			},
+			{
+				"name": "review_content",
+				"type": "nvarchar"
+			},
+			{
+				"name": "img_link",
+				"type": "nvarchar"
+			},
+			{
+				"name": "product_link",
+				"type": "nvarchar"
+			}
+		],
 		"typeProperties": {
 			"schema": "dbo",
 			"table": "amz_sales"
