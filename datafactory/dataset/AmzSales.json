@@ -1,0 +1,88 @@
+{
+	"name": "AmzSales",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "InputBlob",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "amazon.csv",
+				"container": "input"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "product_id",
+				"type": "String"
+			},
+			{
+				"name": "product_name",
+				"type": "String"
+			},
+			{
+				"name": "category",
+				"type": "String"
+			},
+			{
+				"name": "discounted_price",
+				"type": "String"
+			},
+			{
+				"name": "actual_price",
+				"type": "String"
+			},
+			{
+				"name": "discount_percentage",
+				"type": "String"
+			},
+			{
+				"name": "rating",
+				"type": "String"
+			},
+			{
+				"name": "rating_count",
+				"type": "String"
+			},
+			{
+				"name": "about_product",
+				"type": "String"
+			},
+			{
+				"name": "user_id",
+				"type": "String"
+			},
+			{
+				"name": "user_name",
+				"type": "String"
+			},
+			{
+				"name": "review_id",
+				"type": "String"
+			},
+			{
+				"name": "review_title",
+				"type": "String"
+			},
+			{
+				"name": "review_content",
+				"type": "String"
+			},
+			{
+				"name": "img_link",
+				"type": "String"
+			},
+			{
+				"name": "product_link",
+				"type": "String"
+			}
+		]
+	}
+}
